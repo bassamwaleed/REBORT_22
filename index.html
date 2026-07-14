@@ -1,0 +1,504 @@
+<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>تقرير صيانة معدات - كنتروليكسا (Controlexa)</title>
+    
+    <!-- Tailwind CSS -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    
+    <!-- Google Fonts: Cairo for Arabic -->
+    <link href="https://fonts.googleapis.com/css2?family=Cairo:wght@300;400;600;700;800&display=swap" rel="stylesheet">
+    
+    <!-- FontAwesome for Icons -->
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+
+    <!-- html2pdf.js for PDF Generation -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/html2pdf.js/0.10.1/html2pdf.bundle.min.js"></script>
+
+    <script>
+        tailwind.config = {
+            theme: {
+                extend: {
+                    fontFamily: {
+                        sans: ['Cairo', 'sans-serif'],
+                    },
+                    colors: {
+                        primary: '#1e293b', // Dark slate/grey for Controlexa
+                        secondary: '#0ea5e9', // Electric blue/cyan for lightning accent
+                    }
+                }
+            }
+        }
+    </script>
+
+    <style>
+        body {
+            font-family: 'Cairo', sans-serif;
+            background-color: #f3f4f6;
+        }
+        
+        /* A4 Paper Styling for the report preview */
+        .a4-paper {
+            width: 210mm;
+            min-height: 297mm;
+            padding: 20mm;
+            margin: 0 auto;
+            background: white;
+            box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -1px rgba(0, 0, 0, 0.06);
+        }
+
+        @media (max-width: 768px) {
+            .a4-paper {
+                width: 100%;
+                min-height: auto;
+                padding: 15px;
+            }
+        }
+
+        /* Print Specific Styles */
+        @media print {
+            body {
+                background: white;
+            }
+            #input-section, #header-nav {
+                display: none;
+            }
+            .a4-paper {
+                box-shadow: none;
+                margin: 0;
+                padding: 0;
+                width: 100%;
+            }
+        }
+    </style>
+</head>
+<body class="text-gray-800 antialiased">
+
+    <!-- Navbar -->
+    <nav id="header-nav" class="bg-primary text-white shadow-md p-4 border-b-4 border-secondary">
+        <div class="container mx-auto flex items-center justify-between">
+            <div class="flex items-center gap-3">
+                <i class="fa-solid fa-bolt text-secondary text-3xl"></i>
+                <div>
+                    <h1 class="text-xl font-bold tracking-wide">CONTROLEXA | كنتروليكسا</h1>
+                    <p class="text-xs font-semibold text-gray-300 mt-1">نظام تقارير الصيانة والإصلاح</p>
+                </div>
+            </div>
+            <div class="text-sm font-bold text-secondary hidden md:block text-left">
+                كهرباء باور • كنترول • ميكانيكا • هيدروليك<br>
+                <span class="text-xs text-white opacity-80 font-normal">Precision Control. Reliable Power.</span>
+                <div class="text-white mt-1 text-xs" dir="ltr"><i class="fa-solid fa-phone mr-1"></i> 01068379161</div>
+            </div>
+        </div>
+    </nav>
+
+    <main class="container mx-auto p-4 md:p-6 lg:p-8 flex flex-col gap-8 mb-20">
+
+        <!-- Input Section -->
+        <section id="input-section" class="bg-white rounded-xl shadow-lg p-6 border-t-4 border-secondary">
+            <div class="mb-6 border-b pb-4">
+                <h2 class="text-2xl font-bold text-primary flex items-center gap-2">
+                    <i class="fa-solid fa-pen-to-square"></i>
+                    إدخال بيانات التقرير
+                </h2>
+                <p class="text-gray-500 text-sm mt-1">يرجى ملء كافة تفاصيل المعدة والإصلاحات بدقة لإصدار التقرير.</p>
+            </div>
+
+            <form id="report-form" class="grid grid-cols-1 md:grid-cols-2 gap-6">
+                
+                <!-- General Info -->
+                <div class="space-y-4 md:col-span-2 grid grid-cols-1 md:grid-cols-3 gap-4">
+                    <div>
+                        <label class="block text-sm font-semibold text-gray-700 mb-1">اسم المشروع / الموقع <span class="text-red-500">*</span></label>
+                        <input type="text" id="in-project" required class="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary focus:border-primary outline-none transition" placeholder="مثال: موقع العاصمة الإدارية">
+                    </div>
+                    <div>
+                        <label class="block text-sm font-semibold text-gray-700 mb-1">التاريخ <span class="text-red-500">*</span></label>
+                        <input type="date" id="in-date" required class="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary focus:border-primary outline-none transition">
+                    </div>
+                    <div>
+                        <label class="block text-sm font-semibold text-gray-700 mb-1">رقم التقرير</label>
+                        <input type="text" id="in-report-num" class="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary focus:border-primary outline-none transition" placeholder="مثال: REP-2026-001">
+                    </div>
+                </div>
+
+                <hr class="md:col-span-2 my-2">
+
+                <!-- Equipment Details -->
+                <div class="space-y-4 md:col-span-2 grid grid-cols-1 md:grid-cols-2 gap-4">
+                    <div>
+                        <label class="block text-sm font-semibold text-gray-700 mb-1">اسم المعدة <span class="text-red-500">*</span></label>
+                        <input type="text" id="in-equipment" required class="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary focus:border-primary outline-none transition" placeholder="مثال: لودر كاترپيلار, حفار...">
+                    </div>
+                    <div>
+                        <label class="block text-sm font-semibold text-gray-700 mb-1">كود/رقم المعدة <span class="text-red-500">*</span></label>
+                        <input type="text" id="in-eq-code" required class="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary focus:border-primary outline-none transition" placeholder="مثال: L-405">
+                    </div>
+                </div>
+
+                <!-- Issue Details -->
+                <div class="md:col-span-2">
+                    <label class="block text-sm font-semibold text-gray-700 mb-1">وصف العطل / المشكلة (البيانات) <span class="text-red-500">*</span></label>
+                    <textarea id="in-issue" rows="3" required class="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary focus:border-primary outline-none transition" placeholder="اشرح المشكلة أو العطل الذي حدث للمعدة..."></textarea>
+                </div>
+
+                <!-- Repairs Done -->
+                <div class="md:col-span-2">
+                    <label class="block text-sm font-semibold text-gray-700 mb-1">الإصلاحات التي تمت (العمل المنجز) <span class="text-red-500">*</span></label>
+                    <textarea id="in-repairs" rows="4" required class="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary focus:border-primary outline-none transition" placeholder="اكتب بالتفصيل خطوات الإصلاح التي قام بها الفنيون..."></textarea>
+                </div>
+
+                <!-- Spare parts & Notes -->
+                <div>
+                    <label class="block text-sm font-semibold text-gray-700 mb-1">قطع الغيار المستخدمة</label>
+                    <textarea id="in-parts" rows="3" class="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary focus:border-primary outline-none transition" placeholder="اكتب قطع الغيار إن وجدت..."></textarea>
+                </div>
+                <div>
+                    <label class="block text-sm font-semibold text-gray-700 mb-1">ملاحظات إضافية / توصيات</label>
+                    <textarea id="in-notes" rows="3" class="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary focus:border-primary outline-none transition" placeholder="ملاحظات للإدارة أو توصيات لتجنب العطل مستقبلاً..."></textarea>
+                </div>
+
+                <!-- Personnel -->
+                <div class="md:col-span-2 grid grid-cols-1 md:grid-cols-2 gap-4 mt-2">
+                    <div>
+                        <label class="block text-sm font-semibold text-gray-700 mb-1">اسم الفني / الميكانيكي <span class="text-red-500">*</span></label>
+                        <input type="text" id="in-tech" required class="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary focus:border-primary outline-none transition" placeholder="اسم منفذ الإصلاح">
+                    </div>
+                    <div>
+                        <label class="block text-sm font-semibold text-gray-700 mb-1">المهندس المشرف</label>
+                        <input type="text" id="in-eng" class="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary focus:border-primary outline-none transition" placeholder="اسم المهندس المسؤول">
+                    </div>
+                </div>
+
+                <!-- Submit Button -->
+                <div class="md:col-span-2 mt-6 flex gap-4">
+                    <button type="submit" class="bg-primary hover:bg-blue-800 text-white font-bold py-3 px-8 rounded-lg shadow-lg transition duration-200 flex items-center gap-2">
+                        <i class="fa-solid fa-file-invoice"></i>
+                        إنشاء التقرير
+                    </button>
+                    <button type="button" onclick="clearForm()" class="bg-gray-200 hover:bg-gray-300 text-gray-800 font-bold py-3 px-8 rounded-lg shadow transition duration-200 flex items-center gap-2">
+                        <i class="fa-solid fa-eraser"></i>
+                        مسح البيانات
+                    </button>
+                </div>
+            </form>
+        </section>
+
+        <!-- Output / Report Preview Section (Hidden by default) -->
+        <section id="output-section" class="hidden flex-col items-center gap-4">
+            
+            <!-- Actions for PDF -->
+            <div class="w-full max-w-4xl flex flex-col md:flex-row justify-between items-center bg-white p-4 rounded-lg shadow-md border-r-4 border-green-500 gap-4">
+                <p class="font-bold text-green-700 flex items-center gap-2">
+                    <i class="fa-solid fa-circle-check"></i>
+                    تم إنشاء التقرير بنجاح!
+                </p>
+                <div class="flex flex-wrap gap-2 justify-end">
+                    <button onclick="startNewReport()" class="bg-blue-600 hover:bg-blue-700 text-white py-2 px-4 rounded-md transition flex items-center gap-2 text-sm shadow">
+                        <i class="fa-solid fa-plus"></i> تقرير جديد
+                    </button>
+                    <button onclick="editReport()" class="bg-gray-600 hover:bg-gray-700 text-white py-2 px-4 rounded-md transition flex items-center gap-2 text-sm shadow">
+                        <i class="fa-solid fa-pen"></i> تعديل
+                    </button>
+                    <button onclick="exportToWord()" class="bg-blue-900 hover:bg-blue-950 text-white py-2 px-4 rounded-md transition font-bold flex items-center gap-2 shadow-lg">
+                        <i class="fa-solid fa-file-word"></i> وورد
+                    </button>
+                    <button onclick="downloadPDF()" class="bg-red-600 hover:bg-red-700 text-white py-2 px-4 rounded-md transition font-bold flex items-center gap-2 shadow-lg">
+                        <i class="fa-solid fa-file-pdf"></i> PDF
+                    </button>
+                </div>
+            </div>
+
+            <!-- The Actual A4 Report to be converted to PDF -->
+            <div class="overflow-x-auto w-full pb-10">
+                <div id="pdf-content" class="a4-paper relative">
+                    
+                    <!-- Report Header -->
+                    <div class="flex justify-between items-start border-b-4 border-primary pb-6 mb-6">
+                        <div class="flex items-center gap-4">
+                            <div class="text-primary flex items-center justify-center border-4 border-primary w-20 h-20 rounded-xl relative bg-gray-50 shadow-inner">
+                                <span class="text-5xl font-black tracking-tighter" style="font-family: sans-serif;">CX</span>
+                                <i class="fa-solid fa-bolt text-secondary absolute text-2xl" style="top: 50%; left: 50%; transform: translate(-50%, -50%); text-shadow: 0 0 5px rgba(14,165,233,0.8);"></i>
+                            </div>
+                            <div>
+                                <h1 class="text-3xl font-black text-primary tracking-widest uppercase">Controlexa</h1>
+                                <h2 class="text-xl font-bold text-gray-800">كنتروليكسا</h2>
+                                <p class="text-sm text-gray-600 font-bold mt-1">كهرباء باور | كنترول | ميكانيكا | هيدروليك</p>
+                                <p class="text-xs text-secondary font-bold mt-1">Precision Control. Reliable Power.</p>
+                            </div>
+                        </div>
+                        <div class="text-left bg-gray-50 p-4 rounded-lg border shadow-sm min-w-[200px]">
+                            <p class="text-sm font-bold text-gray-700 mb-2">تاريخ التقرير: <span id="out-date" class="font-normal"></span></p>
+                            <p class="text-sm font-bold text-gray-700 mb-3">رقم التقرير: <span id="out-report-num" class="font-normal text-red-600"></span></p>
+                            <div class="pt-2 border-t border-gray-200">
+                                <p class="text-xs font-bold text-gray-800" dir="ltr"><i class="fa-solid fa-phone text-secondary mr-1"></i> 01068379161</p>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Section 1: Project & Equipment Info -->
+                    <div class="bg-gray-50 border border-gray-200 rounded-lg p-4 mb-6">
+                        <h3 class="text-lg font-bold text-primary border-b pb-2 mb-3"><i class="fa-solid fa-truck-monster ml-2"></i>البيانات الأساسية</h3>
+                        <div class="grid grid-cols-2 gap-4">
+                            <div>
+                                <p class="text-sm text-gray-500 mb-1">اسم المشروع / الموقع:</p>
+                                <p class="font-bold text-gray-800" id="out-project"></p>
+                            </div>
+                            <div>
+                                <p class="text-sm text-gray-500 mb-1">اسم المعدة:</p>
+                                <p class="font-bold text-gray-800" id="out-equipment"></p>
+                            </div>
+                            <div>
+                                <p class="text-sm text-gray-500 mb-1">كود / رقم المعدة:</p>
+                                <p class="font-bold inline-block bg-yellow-100 text-yellow-800 px-2 py-1 rounded" id="out-eq-code"></p>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Section 2: Issue & Repairs -->
+                    <div class="mb-6 space-y-6">
+                        
+                        <div>
+                            <h3 class="text-lg font-bold text-red-700 border-b pb-2 mb-3"><i class="fa-solid fa-triangle-exclamation ml-2"></i>وصف العطل / المشكلة</h3>
+                            <div class="bg-red-50 border border-red-100 p-4 rounded-lg min-h-[80px]">
+                                <p class="text-gray-800 whitespace-pre-wrap leading-relaxed" id="out-issue"></p>
+                            </div>
+                        </div>
+
+                        <div>
+                            <h3 class="text-lg font-bold text-green-700 border-b pb-2 mb-3"><i class="fa-solid fa-wrench ml-2"></i>الإصلاحات التي تمت (العمل المنجز)</h3>
+                            <div class="bg-green-50 border border-green-100 p-4 rounded-lg min-h-[120px]">
+                                <p class="text-gray-800 whitespace-pre-wrap leading-relaxed" id="out-repairs"></p>
+                            </div>
+                        </div>
+
+                    </div>
+
+                    <!-- Section 3: Parts & Notes -->
+                    <div class="grid grid-cols-2 gap-6 mb-8">
+                        <div>
+                            <h3 class="text-md font-bold text-primary border-b pb-2 mb-3"><i class="fa-solid fa-cogs ml-2"></i>قطع الغيار المستخدمة</h3>
+                            <div class="bg-gray-50 border border-gray-200 p-3 rounded-lg min-h-[100px]">
+                                <p class="text-gray-700 whitespace-pre-wrap text-sm leading-relaxed" id="out-parts"></p>
+                            </div>
+                        </div>
+                        <div>
+                            <h3 class="text-md font-bold text-primary border-b pb-2 mb-3"><i class="fa-solid fa-clipboard-list ml-2"></i>ملاحظات وتوصيات</h3>
+                            <div class="bg-gray-50 border border-gray-200 p-3 rounded-lg min-h-[100px]">
+                                <p class="text-gray-700 whitespace-pre-wrap text-sm leading-relaxed" id="out-notes"></p>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Signatures -->
+                    <div class="mt-12 pt-8 border-t-2 border-gray-200 relative z-10">
+                        <div class="grid grid-cols-3 gap-4 text-center">
+                            <div>
+                                <p class="font-bold text-gray-700 mb-12">الفني / الميكانيكي</p>
+                                <p class="text-gray-800 border-t border-dashed border-gray-400 pt-2 inline-block min-w-[150px]" id="out-tech"></p>
+                            </div>
+                            <div>
+                                <p class="font-bold text-gray-700 mb-12">المهندس المشرف</p>
+                                <p class="text-gray-800 border-t border-dashed border-gray-400 pt-2 inline-block min-w-[150px]" id="out-eng"></p>
+                            </div>
+                            <div>
+                                <p class="font-bold text-gray-700 mb-12">اعتماد الإدارة</p>
+                                <p class="text-gray-800 border-t border-dashed border-gray-400 pt-2 inline-block min-w-[150px]"></p>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Watermark -->
+                    <div class="absolute inset-0 flex items-center justify-center pointer-events-none z-0 overflow-hidden">
+                        <div class="opacity-[0.03] text-[250px] font-black tracking-tighter" style="font-family: sans-serif;">CX</div>
+                    </div>
+
+                    <!-- Footer Text -->
+                    <div class="mt-16 text-center relative z-10 border-t border-gray-200 pt-6">
+                        <p class="text-sm font-bold text-primary opacity-90">كنتروليكسا.. إحكام السيطرة، كفاءة الطاقة.</p>
+                        <p class="text-sm font-bold text-secondary opacity-90 mt-1 mb-2">حيث تلتقي الدقة بالقوة.</p>
+                        <p class="text-sm font-bold text-gray-600" dir="ltr"><i class="fa-solid fa-phone"></i> 01068379161</p>
+                    </div>
+
+                </div>
+            </div>
+        </section>
+
+    </main>
+
+    <script>
+        // Set today's date automatically in the form
+        document.addEventListener('DOMContentLoaded', () => {
+            const today = new Date().toISOString().split('T')[0];
+            document.getElementById('in-date').value = today;
+            
+            // Generate a random report number format
+            const randomNum = Math.floor(1000 + Math.random() * 9000);
+            document.getElementById('in-report-num').value = `REP-${new Date().getFullYear()}-${randomNum}`;
+        });
+
+        // Handle Form Submission
+        document.getElementById('report-form').addEventListener('submit', function(e) {
+            e.preventDefault(); // Prevent page reload
+
+            // Get Values
+            const date = document.getElementById('in-date').value;
+            const reportNum = document.getElementById('in-report-num').value || 'غير محدد';
+            const project = document.getElementById('in-project').value;
+            const equipment = document.getElementById('in-equipment').value;
+            const eqCode = document.getElementById('in-eq-code').value;
+            const issue = document.getElementById('in-issue').value;
+            const repairs = document.getElementById('in-repairs').value;
+            const parts = document.getElementById('in-parts').value || 'لا يوجد';
+            const notes = document.getElementById('in-notes').value || 'لا توجد ملاحظات';
+            const tech = document.getElementById('in-tech').value;
+            const eng = document.getElementById('in-eng').value || 'ــــــــــــــ';
+
+            // Set Values in Report Preview
+            document.getElementById('out-date').innerText = date;
+            document.getElementById('out-report-num').innerText = reportNum;
+            document.getElementById('out-project').innerText = project;
+            document.getElementById('out-equipment').innerText = equipment;
+            document.getElementById('out-eq-code').innerText = eqCode;
+            document.getElementById('out-issue').innerText = issue;
+            document.getElementById('out-repairs').innerText = repairs;
+            document.getElementById('out-parts').innerText = parts;
+            document.getElementById('out-notes').innerText = notes;
+            document.getElementById('out-tech').innerText = tech;
+            document.getElementById('out-eng').innerText = eng;
+
+            // UI Changes: Hide Form, Show Report
+            document.getElementById('input-section').classList.add('hidden');
+            document.getElementById('output-section').classList.remove('hidden');
+            document.getElementById('output-section').classList.add('flex');
+            
+            // Scroll to top smoothly
+            window.scrollTo({ top: 0, behavior: 'smooth' });
+        });
+
+        // Edit Report Button
+        function editReport() {
+            document.getElementById('output-section').classList.add('hidden');
+            document.getElementById('output-section').classList.remove('flex');
+            document.getElementById('input-section').classList.remove('hidden');
+        }
+
+        // Clear Form
+        function clearForm() {
+            if(confirm('هل أنت متأكد من مسح جميع البيانات المدخلة؟')) {
+                document.getElementById('report-form').reset();
+                const today = new Date().toISOString().split('T')[0];
+                document.getElementById('in-date').value = today;
+                const randomNum = Math.floor(1000 + Math.random() * 9000);
+                document.getElementById('in-report-num').value = `REP-${new Date().getFullYear()}-${randomNum}`;
+            }
+        }
+
+        // Generate PDF using html2pdf
+        function downloadPDF() {
+            // Select the element to convert
+            const element = document.getElementById('pdf-content');
+            const reportNum = document.getElementById('in-report-num').value || 'تقرير';
+            const equipName = document.getElementById('in-equipment').value || 'معدة';
+            
+            // Customize filename
+            const fileName = `تقرير_صيانة_${equipName}_${reportNum}.pdf`;
+
+            // Setup options
+            const opt = {
+                margin:       [0, 0, 0, 0], // Margin in mm [top, left, bottom, right]
+                filename:     fileName,
+                image:        { type: 'jpeg', quality: 0.98 },
+                html2canvas:  { scale: 2, useCORS: true, logging: false },
+                jsPDF:        { unit: 'mm', format: 'a4', orientation: 'portrait' }
+            };
+
+            // Loading state on button
+            const btn = document.querySelector('button[onclick="downloadPDF()"]');
+            const originalContent = btn.innerHTML;
+            btn.innerHTML = '<i class="fa-solid fa-spinner fa-spin"></i> جاري التحميل...';
+            btn.disabled = true;
+
+            // Generate
+            html2pdf().set(opt).from(element).save().then(() => {
+                // Restore button state
+                btn.innerHTML = originalContent;
+                btn.disabled = false;
+            }).catch(err => {
+                console.error("PDF Generation Error:", err);
+                alert("حدث خطأ أثناء إنشاء ملف PDF.");
+                btn.innerHTML = originalContent;
+                btn.disabled = false;
+            });
+        }
+
+        // Start New Report
+        function startNewReport() {
+            // Reset form
+            document.getElementById('report-form').reset();
+            
+            // Set date and new random number
+            const today = new Date().toISOString().split('T')[0];
+            document.getElementById('in-date').value = today;
+            const randomNum = Math.floor(1000 + Math.random() * 9000);
+            document.getElementById('in-report-num').value = `REP-${new Date().getFullYear()}-${randomNum}`;
+            
+            // Switch UI
+            document.getElementById('output-section').classList.add('hidden');
+            document.getElementById('output-section').classList.remove('flex');
+            document.getElementById('input-section').classList.remove('hidden');
+            
+            window.scrollTo({ top: 0, behavior: 'smooth' });
+        }
+
+        // Export to Word (.doc)
+        function exportToWord() {
+            const reportNum = document.getElementById('in-report-num').value || 'تقرير';
+            const equipName = document.getElementById('in-equipment').value || 'معدة';
+            const filename = `تقرير_صيانة_${equipName}_${reportNum}.doc`;
+            
+            // Get HTML content
+            const element = document.getElementById('pdf-content').cloneNode(true);
+            
+            // Basic styles for Word to keep the Arabic format looking acceptable
+            const preHtml = `<html xmlns:o='urn:schemas-microsoft-com:office:office' xmlns:w='urn:schemas-microsoft-com:office:word' xmlns='http://www.w3.org/TR/REC-html40'>
+            <head><meta charset='utf-8'><title>Export HTML To Doc</title>
+            <style>
+                body { font-family: 'Cairo', 'Arial', sans-serif; direction: rtl; text-align: right; }
+                h1, h2, h3 { color: #1e293b; margin-bottom: 10px; }
+                p { margin: 5px 0; }
+                .font-bold { font-weight: bold; }
+                .text-primary { color: #1e293b; }
+                .text-secondary { color: #0ea5e9; }
+                .text-red-600 { color: #dc2626; }
+                .text-red-700 { color: #b91c1c; }
+                .text-green-700 { color: #15803d; }
+                .bg-gray-50 { background-color: #f9fafb; padding: 15px; border: 1px solid #e5e7eb; margin-bottom: 15px; }
+            </style>
+            </head><body>`;
+            
+            const postHtml = "</body></html>";
+            const html = preHtml + element.innerHTML + postHtml;
+
+            // Create blob and download link
+            const blob = new Blob(['\ufeff', html], { type: 'application/msword' });
+            const url = 'data:application/vnd.ms-word;charset=utf-8,' + encodeURIComponent(html);
+            const downloadLink = document.createElement("a");
+
+            document.body.appendChild(downloadLink);
+            
+            if(navigator.msSaveOrOpenBlob){
+                navigator.msSaveOrOpenBlob(blob, filename); // For IE/Edge
+            } else {
+                downloadLink.href = url;
+                downloadLink.download = filename;
+                downloadLink.click(); // For modern browsers
+            }
+            
+            document.body.removeChild(downloadLink);
+        }
+    </script>
+</body>
+</html>
