@@ -1,9 +1,10 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { initializeApp } from 'firebase/app';
-import { getAuth, signInAnonymously, onAuthStateChanged, updateProfile } from 'firebase/auth';
-import { getFirestore, collection, onSnapshot, addDoc, deleteDoc, doc, serverTimestamp } from 'firebase/firestore';
-import { MapPin, Navigation, Car, User, MessageCircle, ShieldCheck, X, CheckCircle2, Loader2, Trash2, Send, LogOut, Bell } from 'lucide-react';
+import { getAuth, createUserWithEmailAndPassword, signInWithEmailAndPassword, onAuthStateChanged, updateProfile, signOut } from 'firebase/auth';
+import { getFirestore, collection, onSnapshot, addDoc, deleteDoc, doc, setDoc, getDoc, serverTimestamp } from 'firebase/firestore';
+import { MapPin, Navigation, Car, User, MessageCircle, ShieldCheck, X, CheckCircle2, Loader2, Trash2, Send, LogOut, Bell, Phone, Mail, Lock } from 'lucide-react';
 
+// إعدادات فايربيز
 const firebaseConfig = {
   apiKey: "AIzaSyC3JM11miWda_leIk0LPViRNVdSZRCQ8N8",
   authDomain: "khodnimaak.firebaseapp.com",
@@ -18,15 +19,21 @@ const auth = getAuth(app);
 const db = getFirestore(app);
 const APP_COLLECTION_NAME = 'khodni_maak_trips';
 const CHATS_COLLECTION = 'khodni_maak_messages';
+const USERS_COLLECTION = 'khodni_maak_users';
 
 export default function App() {
+  // حالات المستخدم
   const [user, setUser] = useState(null);
-  const [userName, setUserName] = useState('');
-  const [isNameSet, setIsNameSet] = useState(false);
-  
-  const [trips, setTrips] = useState([]);
+  const [userData, setUserData] = useState(null); // لتخزين رقم الموبايل والبيانات الإضافية
   const [loading, setLoading] = useState(true);
   
+  // حالات تسجيل الدخول
+  const [isLoginMode, setIsLoginMode] = useState(true);
+  const [authForm, setAuthForm] = useState({ name: '', email: '', password: '', phone: '' });
+  const [authLoading, setAuthLoading] = useState(false);
+  
+  // حالات التطبيق
+  const [trips, setTrips] = useState([]);
   const [filterType, setFilterType] = useState('all');
   const [searchFrom, setSearchFrom] = useState('');
   const [searchTo, setSearchTo] = useState('');
@@ -47,36 +54,36 @@ export default function App() {
     type: 'request', from: '', to: '', date: '', time: '', seats: 1, cost: '', notes: ''
   });
 
+  // مراقبة حالة تسجيل الدخول
   useEffect(() => {
-    const initApp = async () => {
-      try {
-        await signInAnonymously(auth);
-      } catch (error) {
-        console.error("Auth error:", error);
-        setLoading(false);
-      }
-    };
-    initApp();
-    
-    const unsubscribe = onAuthStateChanged(auth, (currentUser) => {
+    const unsubscribe = onAuthStateChanged(auth, async (currentUser) => {
       if (currentUser) {
+        // لو مسجل دخول كمجهول (من الكود القديم)، اعمل تسجيل خروج عشان يطلب إيميل
+        if (currentUser.isAnonymous) {
+          await signOut(auth);
+          setUser(null);
+          setLoading(false);
+          return;
+        }
+        
         setUser(currentUser);
-        const savedName = localStorage.getItem('khodnimaak_username');
-        if (currentUser.displayName || savedName) {
-          setUserName(currentUser.displayName || savedName);
-          setIsNameSet(true);
+        // جلب رقم الموبايل من قاعدة البيانات
+        const userDoc = await getDoc(doc(db, USERS_COLLECTION, currentUser.uid));
+        if (userDoc.exists()) {
+          setUserData(userDoc.data());
         }
       } else {
         setUser(null);
-        setIsNameSet(false);
+        setUserData(null);
       }
       setLoading(false);
     });
     return () => unsubscribe();
   }, []);
 
+  // جلب الرحلات
   useEffect(() => {
-    if (!user || !isNameSet) return;
+    if (!user) return;
     const tripsPath = collection(db, APP_COLLECTION_NAME);
     const unsubscribe = onSnapshot(tripsPath, (snapshot) => {
       const tripsData = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
@@ -84,12 +91,12 @@ export default function App() {
       setTrips(tripsData);
     });
     return () => unsubscribe();
-  }, [user, isNameSet]);
+  }, [user]);
 
+  // جلب صندوق الرسائل
   useEffect(() => {
-    if (!user || !isNameSet) return;
+    if (!user) return;
     const msgsPath = collection(db, CHATS_COLLECTION);
-    
     const unsubscribe = onSnapshot(msgsPath, (snapshot) => {
       const allMsgs = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
       const myMsgs = allMsgs.filter(m => m.senderId === user.uid || m.receiverId === user.uid);
@@ -102,20 +109,16 @@ export default function App() {
         
         if (!inboxMap.has(chatId) || inboxMap.get(chatId).createdAt?.toMillis() < msg.createdAt?.toMillis()) {
           inboxMap.set(chatId, {
-            chatId,
-            tripId: msg.tripId,
-            otherPersonId,
-            otherPersonName,
-            lastMessage: msg.text,
-            createdAt: msg.createdAt
+            chatId, tripId: msg.tripId, otherPersonId, otherPersonName, lastMessage: msg.text, createdAt: msg.createdAt
           });
         }
       });
       setMyInbox(Array.from(inboxMap.values()).sort((a, b) => b.createdAt?.toMillis() - a.createdAt?.toMillis()));
     });
     return () => unsubscribe();
-  }, [user, isNameSet]);
+  }, [user]);
 
+  // جلب رسائل الشات النشط
   useEffect(() => {
     if (!user || !activeChat) return;
     const msgsPath = collection(db, CHATS_COLLECTION);
@@ -123,8 +126,7 @@ export default function App() {
       const allMsgs = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
       const currentChatMsgs = allMsgs.filter(m => 
         m.tripId === activeChat.tripId && 
-        ((m.senderId === user.uid && m.receiverId === activeChat.otherPersonId) || 
-         (m.senderId === activeChat.otherPersonId && m.receiverId === user.uid))
+        ((m.senderId === user.uid && m.receiverId === activeChat.otherPersonId) || (m.senderId === activeChat.otherPersonId && m.receiverId === user.uid))
       );
       currentChatMsgs.sort((a, b) => (a.createdAt?.toMillis() || 0) - (b.createdAt?.toMillis() || 0));
       setMessages(currentChatMsgs);
@@ -133,25 +135,39 @@ export default function App() {
     return () => unsubscribe();
   }, [user, activeChat]);
 
-  const handleSetName = async (e) => {
+  // دالة التسجيل والدخول
+  const handleAuth = async (e) => {
     e.preventDefault();
-    if (!userName.trim()) return;
-    setIsSubmitting(true);
+    setAuthLoading(true);
     try {
-      await updateProfile(user, { displayName: userName });
-      localStorage.setItem('khodnimaak_username', userName);
-      setIsNameSet(true);
+      if (isLoginMode) {
+        await signInWithEmailAndPassword(auth, authForm.email, authForm.password);
+      } else {
+        if (!authForm.name || !authForm.phone) {
+          alert("برجاء إدخال الاسم ورقم الموبايل");
+          setAuthLoading(false);
+          return;
+        }
+        const userCred = await createUserWithEmailAndPassword(auth, authForm.email, authForm.password);
+        await updateProfile(userCred.user, { displayName: authForm.name });
+        // حفظ رقم الموبايل في قاعدة البيانات
+        await setDoc(doc(db, USERS_COLLECTION, userCred.user.uid), {
+          phone: authForm.phone,
+          name: authForm.name,
+          email: authForm.email
+        });
+        setUserData({ phone: authForm.phone });
+      }
     } catch (error) {
-      console.error("Error setting name:", error);
+      console.error(error);
+      alert(error.message.includes('email-already-in-use') ? 'هذا الإيميل مسجل مسبقاً' : 'حدث خطأ، تأكد من صحة البيانات.');
     } finally {
-      setIsSubmitting(false);
+      setAuthLoading(false);
     }
   };
 
-  const handleLogout = () => {
-    localStorage.removeItem('khodnimaak_username');
-    setIsNameSet(false);
-    setUserName('');
+  const handleLogout = async () => {
+    await signOut(auth);
   };
 
   const triggerToast = (msg) => {
@@ -160,6 +176,7 @@ export default function App() {
     setTimeout(() => setShowToast(false), 3000);
   };
 
+  // نشر الرحلة (مع إضافة رقم الموبايل للرحلة)
   const handleAddTrip = async (e) => {
     e.preventDefault();
     setIsSubmitting(true);
@@ -167,7 +184,8 @@ export default function App() {
       await addDoc(collection(db, APP_COLLECTION_NAME), {
         ...newTrip,
         userId: user.uid,
-        userName: userName,
+        userName: user.displayName,
+        userPhone: userData?.phone || '', // ربط رقم الموبايل بالرحلة
         verified: true,
         createdAt: serverTimestamp()
       });
@@ -192,44 +210,60 @@ export default function App() {
     if (!newMessage.trim() || !activeChat) return;
     try {
       await addDoc(collection(db, CHATS_COLLECTION), {
-        tripId: activeChat.tripId,
-        text: newMessage,
-        senderId: user.uid,
-        senderName: userName,
-        receiverId: activeChat.otherPersonId,
-        receiverName: activeChat.otherPersonName,
-        createdAt: serverTimestamp()
+        tripId: activeChat.tripId, text: newMessage, senderId: user.uid, senderName: user.displayName,
+        receiverId: activeChat.otherPersonId, receiverName: activeChat.otherPersonName, createdAt: serverTimestamp()
       });
       setNewMessage('');
     } catch (error) {
-      console.error("Error sending:", error);
+      console.error(error);
     }
-  };
-
-  const openChatFromTrip = (trip) => {
-    setActiveChat({
-      tripId: trip.id,
-      otherPersonId: trip.userId,
-      otherPersonName: trip.userName,
-      tripInfo: `${trip.from} ➔ ${trip.to}`
-    });
   };
 
   if (loading) return <div className="min-h-screen flex justify-center items-center bg-gray-50"><Loader2 size={50} className="animate-spin text-blue-600" /></div>;
 
-  if (!isNameSet || !user) {
+  // شاشة تسجيل الدخول / إنشاء حساب
+  if (!user) {
     return (
       <div dir="rtl" className="min-h-screen bg-gray-50 flex items-center justify-center p-4">
-        <div className="bg-white p-8 rounded-3xl shadow-xl max-w-md w-full text-center border-t-4 border-blue-600">
+        <div className="bg-white p-8 rounded-3xl shadow-xl max-w-md w-full border-t-4 border-blue-600">
           <div className="bg-blue-100 text-blue-600 w-20 h-20 rounded-full flex items-center justify-center mx-auto mb-6"><Car size={40} /></div>
-          <h1 className="text-2xl font-bold mb-2">مرحباً بك في "خدني معاك"</h1>
-          <p className="text-gray-500 mb-8">أدخل اسمك لنبدأ رحلتك</p>
-          <form onSubmit={handleSetName} className="space-y-4">
-            <input type="text" required placeholder="اسمك الكامل" value={userName} onChange={(e) => setUserName(e.target.value)} className="w-full bg-gray-50 border border-gray-200 rounded-xl py-4 px-4 text-center font-bold outline-none focus:ring-2 focus:ring-blue-500" />
-            <button type="submit" disabled={isSubmitting} className="w-full bg-blue-600 text-white py-4 rounded-xl font-bold text-lg hover:bg-blue-700 shadow-lg flex justify-center items-center gap-2">
-              {isSubmitting ? <Loader2 className="animate-spin" /> : 'دخول للموقع'}
+          <h1 className="text-2xl font-bold mb-2 text-center">خدني معاك</h1>
+          <p className="text-gray-500 mb-8 text-center">{isLoginMode ? 'سجل دخولك للمتابعة' : 'أنشئ حسابك الجديد'}</p>
+          
+          <form onSubmit={handleAuth} className="space-y-4">
+            {!isLoginMode && (
+              <>
+                <div className="relative">
+                  <User size={20} className="absolute right-4 top-4 text-gray-400" />
+                  <input type="text" required placeholder="الاسم الكامل" value={authForm.name} onChange={e => setAuthForm({...authForm, name: e.target.value})} className="w-full bg-gray-50 border rounded-xl py-3 px-12 outline-none focus:ring-2 focus:ring-blue-500 font-bold" />
+                </div>
+                <div className="relative">
+                  <Phone size={20} className="absolute right-4 top-4 text-gray-400" />
+                  <input type="tel" required placeholder="رقم الموبايل" value={authForm.phone} onChange={e => setAuthForm({...authForm, phone: e.target.value})} className="w-full bg-gray-50 border rounded-xl py-3 px-12 outline-none focus:ring-2 focus:ring-blue-500 font-bold text-left" dir="ltr" />
+                </div>
+              </>
+            )}
+            
+            <div className="relative">
+              <Mail size={20} className="absolute right-4 top-4 text-gray-400" />
+              <input type="email" required placeholder="البريد الإلكتروني" value={authForm.email} onChange={e => setAuthForm({...authForm, email: e.target.value})} className="w-full bg-gray-50 border rounded-xl py-3 px-12 outline-none focus:ring-2 focus:ring-blue-500 font-bold text-left" dir="ltr" />
+            </div>
+            
+            <div className="relative">
+              <Lock size={20} className="absolute right-4 top-4 text-gray-400" />
+              <input type="password" required placeholder="كلمة المرور (6 أحرف على الأقل)" value={authForm.password} onChange={e => setAuthForm({...authForm, password: e.target.value})} className="w-full bg-gray-50 border rounded-xl py-3 px-12 outline-none focus:ring-2 focus:ring-blue-500 font-bold text-left" dir="ltr" />
+            </div>
+
+            <button type="submit" disabled={authLoading} className="w-full bg-blue-600 text-white py-4 rounded-xl font-bold text-lg hover:bg-blue-700 shadow-lg flex justify-center items-center gap-2">
+              {authLoading ? <Loader2 className="animate-spin" /> : (isLoginMode ? 'دخول' : 'تسجيل حساب جديد')}
             </button>
           </form>
+
+          <div className="mt-6 text-center">
+            <button onClick={() => setIsLoginMode(!isLoginMode)} className="text-blue-600 font-bold text-sm hover:underline">
+              {isLoginMode ? 'ليس لديك حساب؟ أنشئ حساباً الآن' : 'لديك حساب بالفعل؟ سجل دخولك'}
+            </button>
+          </div>
         </div>
       </div>
     );
@@ -248,7 +282,7 @@ export default function App() {
             <div>
               <span className="font-extrabold text-2xl">خدني معاك</span>
               <div className="flex items-center gap-2 mt-1">
-                <span className="text-[11px] text-blue-600 font-bold">مرحباً، {userName}</span>
+                <span className="text-[11px] text-blue-600 font-bold">مرحباً، {user.displayName}</span>
                 <button onClick={handleLogout} className="text-[10px] text-red-500 font-bold flex items-center gap-1"><LogOut size={10} /> خروج</button>
               </div>
             </div>
@@ -268,6 +302,7 @@ export default function App() {
       <main className="flex-1 max-w-7xl mx-auto px-4 py-8 w-full">
         <div className="bg-gradient-to-r from-blue-700 to-indigo-900 rounded-3xl p-6 mb-8 text-white shadow-xl">
           <h1 className="text-2xl font-extrabold mb-2">إلى أين تتجه اليوم؟</h1>
+          <p className="text-blue-100 text-sm mb-6">ابحث، تواصل، وسافر بأمان وتكلفة أقل.</p>
           <div className="bg-white/10 p-1.5 rounded-2xl flex flex-col sm:flex-row gap-1.5 mt-4">
             <div className="flex-1 flex items-center bg-white rounded-xl px-3 py-2.5">
               <MapPin className="text-blue-500 ml-2" size={18} />
@@ -290,12 +325,13 @@ export default function App() {
           <div className="text-center py-20 bg-white rounded-3xl border border-gray-200 shadow-sm"><h3 className="text-xl font-bold text-gray-700 mb-2">لا توجد رحلات حالياً</h3></div>
         ) : (
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-            {filteredTrips.map(trip => (
-              <div key={trip.id} className="bg-white rounded-2xl p-5 shadow-sm border relative">
-                {user.uid === trip.userId && <button onClick={() => handleDeleteTrip(trip.id)} className="absolute top-4 left-4 p-2 bg-red-50 text-red-600 rounded-full"><Trash2 size={16} /></button>}
+            {filteredTrips.map(trip => {
+              const isOwner = user.uid === trip.userId;
+              return (
+              <div key={trip.id} className="bg-white rounded-2xl p-5 shadow-sm border relative flex flex-col">
+                {isOwner && <button onClick={() => handleDeleteTrip(trip.id)} className="absolute top-4 left-4 p-2 bg-red-50 text-red-600 rounded-full"><Trash2 size={16} /></button>}
                 
                 <div className="flex items-center gap-3 mb-4 border-b pb-4">
-                  {/* إزالة الصورة العشوائية واستخدام أيقونة مستخدم احترافية */}
                   <div className="w-12 h-12 rounded-full bg-blue-50 flex items-center justify-center border border-blue-100">
                     <User size={24} className="text-blue-500" />
                   </div>
@@ -308,7 +344,7 @@ export default function App() {
                   </div>
                 </div>
                 
-                <div className="mb-4">
+                <div className="mb-4 flex-1">
                   <p className="text-sm font-bold text-gray-800 flex items-center gap-2"><span className="w-2 h-2 bg-blue-500 rounded-full"></span> {trip.from}</p>
                   <div className="w-px h-4 bg-gray-300 mr-1 my-1"></div>
                   <p className="text-sm font-bold text-gray-800 flex items-center gap-2"><span className="w-2 h-2 bg-red-500 rounded-full"></span> {trip.to}</p>
@@ -317,20 +353,34 @@ export default function App() {
                   <span>العدد: {trip.seats}</span>
                   {trip.cost && <span>المساهمة: {trip.cost} ج</span>}
                 </div>
-                {user.uid !== trip.userId ? (
-                  <button onClick={() => openChatFromTrip(trip)} className="w-full bg-gray-900 text-white py-2.5 rounded-xl font-bold flex justify-center gap-2 text-sm"><MessageCircle size={16} /> تواصل مع {trip.userName.split(' ')[0]}</button>
-                ) : (
-                  <div className="w-full bg-gray-100 text-gray-500 py-2.5 rounded-xl font-bold text-center text-sm">هذه رحلتك</div>
-                )}
+                
+                <div className="mt-auto">
+                  {!isOwner ? (
+                    <div className="flex gap-2">
+                      {/* زر الشات */}
+                      <button onClick={() => openChatFromTrip(trip)} className="flex-1 bg-gray-900 text-white py-2.5 rounded-xl font-bold flex justify-center items-center gap-2 text-sm hover:bg-gray-800">
+                        <MessageCircle size={16} /> شات
+                      </button>
+                      {/* زر الاتصال السريع */}
+                      {trip.userPhone && (
+                        <a href={`tel:${trip.userPhone}`} className="flex-1 bg-green-600 text-white py-2.5 rounded-xl font-bold flex justify-center items-center gap-2 text-sm hover:bg-green-700">
+                          <Phone size={16} /> اتصال
+                        </a>
+                      )}
+                    </div>
+                  ) : (
+                    <div className="w-full bg-gray-100 text-gray-500 py-2.5 rounded-xl font-bold text-center text-sm">هذه رحلتك</div>
+                  )}
+                </div>
               </div>
-            ))}
+            )})}
           </div>
         )}
       </main>
 
       <button onClick={() => setShowAddModal(true)} className="md:hidden fixed bottom-6 left-6 bg-blue-600 text-white p-4 rounded-full shadow-lg z-40"><Navigation size={24} /></button>
 
-      {/* صندوق الرسائل (Inbox) */}
+      {/* مودال الشات وإضافة الرحلات تبقى كما هي */}
       {showInbox && (
         <div className="fixed inset-0 bg-black/60 backdrop-blur-sm z-50 flex justify-center items-end sm:items-center p-0 sm:p-4">
           <div className="bg-white w-full h-[80vh] sm:h-[600px] sm:max-w-md rounded-t-3xl sm:rounded-3xl shadow-2xl flex flex-col">
@@ -354,7 +404,6 @@ export default function App() {
         </div>
       )}
 
-      {/* شاشة الشات المباشر */}
       {activeChat && (
         <div className="fixed inset-0 bg-black/60 backdrop-blur-sm z-[60] flex justify-center items-end sm:items-center p-0 sm:p-4">
           <div className="bg-white w-full h-[85vh] sm:h-auto sm:max-h-[600px] sm:max-w-md rounded-t-3xl sm:rounded-3xl shadow-2xl flex flex-col">
@@ -388,7 +437,6 @@ export default function App() {
         </div>
       )}
 
-      {/* مودال إضافة الرحلة */}
       {showAddModal && (
         <div className="fixed inset-0 bg-black/60 backdrop-blur-sm z-50 flex justify-center items-center p-4">
           <div className="bg-white rounded-3xl w-full max-w-lg shadow-2xl">
