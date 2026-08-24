@@ -2,7 +2,7 @@ import React, { useState, useEffect, useRef } from 'react';
 import { initializeApp } from 'firebase/app';
 import { getAuth, createUserWithEmailAndPassword, signInWithEmailAndPassword, signInAnonymously, onAuthStateChanged, updateProfile, signOut } from 'firebase/auth';
 import { getFirestore, collection, onSnapshot, addDoc, deleteDoc, updateDoc, doc, setDoc, getDoc, serverTimestamp } from 'firebase/firestore';
-import { MapPin, Navigation, Car, User, MessageCircle, ShieldCheck, X, CheckCircle2, Loader2, Trash2, Send, LogOut, Bell, Phone, Mail, Lock, LogIn, AlertCircle, Settings, Moon, Sun, Info, History, Star, Play, CheckSquare, Megaphone, Calendar, Clock, ChevronLeft, Wallet } from 'lucide-react';
+import { MapPin, Navigation, Car, User, MessageCircle, ShieldCheck, X, CheckCircle2, Loader2, Trash2, Send, LogOut, Bell, Phone, Mail, Lock, LogIn, AlertCircle, Settings, Moon, Sun, Info, History, Star, Play, CheckSquare, Megaphone, Calendar, Clock, ChevronLeft, Wallet, Sparkles, ArrowRight } from 'lucide-react';
 
 // إعدادات فايربيز 
 const firebaseConfig = {
@@ -296,7 +296,6 @@ export default function App() {
   const filteredTrips = allTrips.filter(t => (filterType === 'all' || t.type === filterType) && (t.from?.includes(searchFrom) && t.to?.includes(searchTo)));
   const myOwnTrips = realTrips.filter(t => t.userId === user?.uid);
 
-  // تحديث جذري: الاعتماد الكلي على isDarkMode بدلاً من ترك المتصفح يعكس الألوان بمزاجه
   const bgMain = isDarkMode ? 'bg-slate-900 text-slate-100' : 'bg-slate-50 text-slate-800';
   const bgCard = isDarkMode ? 'bg-slate-800 border-slate-700' : 'bg-white border-slate-200';
   const bgInput = isDarkMode ? 'bg-slate-700 border-slate-600 text-white placeholder-slate-400 focus:bg-slate-600' : 'bg-slate-50 border-slate-200 text-slate-900 focus:bg-white';
@@ -308,9 +307,7 @@ export default function App() {
   if (!user) {
     return (
       <div dir="rtl" className={`min-h-screen flex items-center justify-center p-4 transition-colors ${bgMain} bg-[url('data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHdpZHRoPSI0MCIgaGVpZ2h0PSI0MCI+PGRlZnM+PHBhdHRlcm4gaWQ9InBhdHRlcm4iIHdpZHRoPSI0MCIgaGVpZ2h0PSI0MCIgcGF0dGVyblVuaXRzPSJ1c2VyU3BhY2VPblVzZSI+PHBhdGggZD0iTTAgMGg0MHY0MEgweiIgZmlsbD0ibm9uZSIvPjxjaXJjbGUgY3g9IjIwIiBjeT0iMjAiIHI9IjEiIGZpbGw9InJnYmEoMTU2LCAxNjMsIDE3NSwgMC4yKSIvPjwvcGF0dGVybj48L2RlZnM+PHJlY3Qgd2lkdGg9IjEwMCUiIGhlaWdodD0iMTAwJSIgZmlsbD0idXJsKCNwYXR0ZXJuKSIvPjwvc3ZnPg==')]`}>
-        {/* كود لمنع متصفحات الموبايل من تدمير الألوان في الوضع الليلي الإجباري */}
         <style dangerouslySetInnerHTML={{__html: `:root { color-scheme: light dark; }`}} />
-        
         <div className={`${bgCard} p-8 sm:p-10 rounded-3xl shadow-2xl max-w-md w-full border-t-8 border-indigo-600 relative overflow-hidden`}>
           <div className="absolute top-0 right-0 w-32 h-32 bg-indigo-500 rounded-full blur-3xl opacity-10 transform translate-x-1/2 -translate-y-1/2"></div>
           
@@ -546,7 +543,7 @@ export default function App() {
         </div>
       </header>
 
-      {/* الإعلانات المتحركة */}
+      {/* الإعلانات المتحركة الصغيرة فوق */}
       <div className={`overflow-hidden relative h-9 flex items-center justify-center transition-colors text-xs sm:text-sm font-medium ${isDarkMode ? 'bg-indigo-950 text-indigo-200' : 'bg-indigo-50 text-indigo-700'}`}>
         {ANNOUNCEMENTS.map((ad, index) => (
           <div
@@ -563,29 +560,41 @@ export default function App() {
 
       <main className="flex-1 max-w-7xl mx-auto px-4 py-6 w-full pb-28 md:pb-6">
         
-        {/* قسم البحث */}
-        <div className="bg-gradient-to-br from-indigo-600 via-blue-700 to-indigo-900 rounded-[2rem] p-6 sm:p-10 mb-8 text-white shadow-xl relative overflow-hidden">
-          <div className="absolute top-0 right-0 w-64 h-64 bg-white opacity-5 rounded-full blur-3xl transform translate-x-1/3 -translate-y-1/3"></div>
-          <div className="absolute bottom-0 left-0 w-40 h-40 bg-indigo-400 opacity-20 rounded-full blur-2xl transform -translate-x-1/2 translate-y-1/2"></div>
+        {/* البانر التفاعلي الجديد (بدلاً من حقول البحث الصامتة) */}
+        <div className="bg-gradient-to-br from-indigo-600 via-blue-700 to-indigo-900 rounded-[2.5rem] p-7 sm:p-10 mb-8 text-white shadow-xl relative overflow-hidden">
+          <div className="absolute top-0 right-0 w-72 h-72 bg-white opacity-5 rounded-full blur-3xl transform translate-x-1/3 -translate-y-1/3"></div>
+          <div className="absolute bottom-0 left-0 w-48 h-48 bg-indigo-400 opacity-20 rounded-full blur-2xl transform -translate-x-1/2 translate-y-1/2"></div>
           
           <div className="relative z-10 max-w-2xl">
-            <h1 className="text-3xl sm:text-4xl font-black mb-3">إلى أين تتجه اليوم؟</h1>
-            <p className="text-indigo-100 text-sm sm:text-base mb-8 font-medium">ابحث، تواصل، وسافر بأمان وتكلفة أقل مع رفقاء طريقك.</p>
-            
-            <div className="bg-white/10 backdrop-blur-md p-2 rounded-2xl flex flex-col sm:flex-row gap-2 shadow-inner">
-              <div className={`flex-1 flex items-center rounded-xl px-4 py-3.5 transition-colors ${isDarkMode ? 'bg-slate-800' : 'bg-white'}`}>
-                <MapPin className="text-indigo-500 ml-3" size={20} />
-                <input type="text" placeholder="من (مثال: رمسيس)" value={searchFrom} onChange={(e) => setSearchFrom(e.target.value)} className={`bg-transparent border-none w-full outline-none font-bold placeholder-slate-400 ${isDarkMode ? 'text-white' : 'text-slate-800'}`} />
-              </div>
-              <div className={`flex-1 flex items-center rounded-xl px-4 py-3.5 transition-colors ${isDarkMode ? 'bg-slate-800' : 'bg-white'}`}>
-                <Navigation className="text-rose-500 ml-3" size={20} />
-                <input type="text" placeholder="إلى (مثال: المنصورة)" value={searchTo} onChange={(e) => setSearchTo(e.target.value)} className={`bg-transparent border-none w-full outline-none font-bold placeholder-slate-400 ${isDarkMode ? 'text-white' : 'text-slate-800'}`} />
-              </div>
+            <div className="inline-flex items-center gap-2 bg-white/10 backdrop-blur-md px-3.5 py-1.5 rounded-full text-xs font-bold mb-4 border border-white/10 text-indigo-100">
+              <Sparkles size={14} className="text-amber-300 animate-spin"/> السفر بقى أبسط وأوفر في مصر
             </div>
+            <h1 className="text-3xl sm:text-4xl font-black mb-3 leading-tight">شارك رحلتك، واجعل كل مشوار أسهل</h1>
+            <p className="text-indigo-100 text-sm sm:text-base mb-6 font-medium leading-relaxed">
+              سواء معاك عربية وعايز توفر تكاليف البنزين، أو مسافر ومحتاج توصيلة مريحة وآمنة.. "خدني معاك" بيجمعكم في طريق واحد.
+            </p>
+            
+            <button 
+              onClick={() => requireAuth(() => setShowAddModal(true))} 
+              className="bg-white text-indigo-700 font-extrabold px-6 py-3.5 rounded-2xl shadow-lg hover:bg-indigo-50 transition-all flex items-center gap-2 transform active:scale-95">
+              <Car size={20}/> انشر رحلتك أو اطلب توصيلة الآن <ArrowRight size={16} className="rtl:rotate-180"/>
+            </button>
           </div>
         </div>
 
-        {/* أزرار الفلترة بالتصميم المميز للألوان */}
+        {/* شريط البحث السريع المطور */}
+        <div className={`p-4 rounded-2xl shadow-sm border mb-8 flex flex-col sm:flex-row gap-3 ${isDarkMode ? 'bg-slate-800 border-slate-700' : 'bg-white border-slate-200'}`}>
+          <div className={`flex-1 flex items-center px-4 py-3 rounded-xl border ${isDarkMode ? 'bg-slate-700/50 border-slate-600' : 'bg-slate-50 border-slate-200'}`}>
+            <MapPin className="text-indigo-500 ml-3" size={20} />
+            <input type="text" placeholder="ابحث بنقطة التحرك (من...)" value={searchFrom} onChange={(e) => setSearchFrom(e.target.value)} className={`bg-transparent border-none w-full outline-none font-bold placeholder-slate-400 ${isDarkMode ? 'text-white' : 'text-slate-800'}`} />
+          </div>
+          <div className={`flex-1 flex items-center px-4 py-3 rounded-xl border ${isDarkMode ? 'bg-slate-700/50 border-slate-600' : 'bg-slate-50 border-slate-200'}`}>
+            <Navigation className="text-rose-500 ml-3" size={20} />
+            <input type="text" placeholder="ابحث بنقطة الوصول (إلى...)" value={searchTo} onChange={(e) => setSearchTo(e.target.value)} className={`bg-transparent border-none w-full outline-none font-bold placeholder-slate-400 ${isDarkMode ? 'text-white' : 'text-slate-800'}`} />
+          </div>
+        </div>
+
+        {/* أزرار الفلترة */}
         <div className={`flex gap-2 p-1.5 mb-8 max-w-lg mx-auto rounded-2xl shadow-inner ${isDarkMode ? 'bg-slate-800' : 'bg-slate-100'}`}>
           <button 
             onClick={() => setFilterType('all')} 
@@ -633,7 +642,6 @@ export default function App() {
                       <h3 className={`font-bold text-sm flex items-center gap-1 ${isDarkMode ? 'text-white' : 'text-slate-800'}`}>
                         {trip.userName} {trip.verified && <ShieldCheck size={16} className="text-blue-500" />}
                       </h3>
-                      {/* البادج: لون مميز بناءً على نوع الرحلة */}
                       <span className={`inline-block mt-1 text-[10px] font-bold px-2 py-0.5 rounded-md ${trip.type === 'offer' ? (isDarkMode ? 'bg-emerald-900/40 text-emerald-400' : 'bg-emerald-100 text-emerald-800') : (isDarkMode ? 'bg-orange-900/40 text-orange-400' : 'bg-orange-100 text-orange-800')}`}>
                         {trip.type === 'offer' ? 'سائق (يعرض توصيلة)' : 'راكب (يطلب توصيلة)'}
                       </span>
@@ -646,13 +654,13 @@ export default function App() {
                   </div>
                 </div>
 
-                {/* الوقت والتاريخ بشكل منظم */}
+                {/* الوقت والتاريخ */}
                 <div className={`flex items-center gap-5 text-xs font-bold px-4 py-2.5 rounded-xl mb-5 ${isDarkMode ? 'bg-slate-700/40 text-slate-300' : 'bg-slate-50 text-slate-600'}`}>
                   <div className="flex items-center gap-1.5"><Calendar size={15} className="text-indigo-500"/> {trip.date}</div>
                   <div className="flex items-center gap-1.5"><Clock size={15} className="text-amber-500"/> {trip.time}</div>
                 </div>
                 
-                {/* مسار الرحلة بتصميم مضبوط المسافات */}
+                {/* مسار الرحلة */}
                 <div className="relative mb-6 flex-1">
                   <div className={`absolute right-[7px] top-2 bottom-2 w-0.5 ${isDarkMode ? 'bg-slate-600' : 'bg-slate-200'}`}></div>
                   
@@ -667,7 +675,7 @@ export default function App() {
                   </div>
                 </div>
                 
-                {/* التفاصيل المالية والمقاعد */}
+                {/* التفاصيل والمقاعد */}
                 <div className="flex gap-3 mb-5">
                   <div className={`flex-1 flex flex-col justify-center items-center py-2.5 rounded-xl border ${isDarkMode ? 'bg-slate-700/30 border-slate-600' : 'bg-slate-50 border-slate-100'}`}>
                      <span className="text-[10px] text-slate-400 mb-1">العدد المطلوب</span>
@@ -681,7 +689,7 @@ export default function App() {
                   )}
                 </div>
                 
-                {/* الأزرار (رسالة - اتصال) تظهر دائماً أثناء إتاحة الرحلة */}
+                {/* الأزرار */}
                 <div className="mt-auto">
                   {isOwner ? (
                     <div className={`w-full py-3.5 rounded-xl font-bold text-center text-sm border border-dashed ${isDarkMode ? 'bg-slate-700/50 text-slate-400 border-slate-600' : 'bg-slate-50 text-slate-500 border-slate-200'}`}>
@@ -714,7 +722,6 @@ export default function App() {
                         <MessageCircle size={18} /> رسالة
                       </button>
                       
-                      {/* زر الاتصال يظل ظاهراً مع التعامل مع الرحلات الوهمية أو المفقود منها الرقم */}
                       <button onClick={() => requireAuth(() => {
                         if (trip.isDummy) {
                           triggerToast('هذه رحلة تجريبية للعرض فقط 😅');
@@ -735,7 +742,7 @@ export default function App() {
         )}
       </main>
 
-      {/* زر الإضافة العائم (FAB) */}
+      {/* زر الإضافة العائم */}
       <button 
         onClick={() => requireAuth(() => setShowAddModal(true))} 
         className="md:hidden fixed bottom-8 left-6 w-14 h-14 bg-indigo-600 text-white rounded-full flex items-center justify-center shadow-xl shadow-indigo-500/40 z-40 transform active:scale-95 transition-transform">
