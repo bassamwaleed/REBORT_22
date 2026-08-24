@@ -4,7 +4,7 @@ import { getAuth, createUserWithEmailAndPassword, signInWithEmailAndPassword, si
 import { getFirestore, collection, onSnapshot, addDoc, deleteDoc, updateDoc, doc, setDoc, getDoc, serverTimestamp } from 'firebase/firestore';
 import { MapPin, Navigation, Car, User, MessageCircle, ShieldCheck, X, CheckCircle2, Loader2, Trash2, Send, LogOut, Bell, Phone, Mail, Lock, LogIn, AlertCircle, Settings, Moon, Sun, Info, History, Star, Play, CheckSquare, Megaphone, Calendar, Clock, ChevronLeft, Wallet, Sparkles, ArrowRight, Shield, Crown } from 'lucide-react';
 
-// إعدادات فايربيز
+// إعدادات فايربيز 
 const firebaseConfig = {
   apiKey: "AIzaSyC3JM11miWda_leIk0LPViRNVdSZRCQ8N8",
   authDomain: "khodnimaak.firebaseapp.com",
@@ -19,8 +19,6 @@ const auth = getAuth(app);
 const db = getFirestore(app);
 const APP_COLLECTION_NAME = 'khodni_maak_trips';
 const USERS_COLLECTION = 'khodni_maak_users';
-
-// --- الإيميل الخاص بصاحب التطبيق (الأدمن الوحيد) ---
 const ADMIN_EMAIL = "bassamwaleed2000@gmail.com".toLowerCase();
 
 // داتا وهمية للبريزنتيشن 
@@ -52,7 +50,7 @@ export default function App() {
   const [showInbox, setShowInbox] = useState(false);
   const [showSettings, setShowSettings] = useState(false); 
   const [showMyTrips, setShowMyTrips] = useState(false); 
-  const [showAdminPanel, setShowAdminPanel] = useState(false); // شاشة الأدمن
+  const [showAdminPanel, setShowAdminPanel] = useState(false); 
   
   const [showToast, setShowToast] = useState(false);
   const [toastMessage, setToastMessage] = useState('');
@@ -63,12 +61,11 @@ export default function App() {
   
   const [announcements, setAnnouncements] = useState([
     "🚀 جاري تحديث وتطوير البرنامج باستمرار لخدمتكم",
-    "🇪🇬 بأيدي شباب مصريين.. تطبيق خدني معاك بيسهل مشوارك",
-    "✨ بنوفرلك السهولة، الراحة، والأمان في كل رحلة",
-    "💰 شارك رحلتك ووفر بنزينك مع ركاب في نفس طريقك"
+    "🇪🇬 بأيدي شباب مصريين.. تطبيق خدني معاك بيسهل مشوارك"
   ]);
   const [currentAdIndex, setCurrentAdIndex] = useState(0);
-  const [newAdText, setNewAdText] = useState(''); // لإضافة إعلان جديد من الأدمن
+  const [newAdText, setNewAdText] = useState(''); 
+  const [broadcastMsg, setBroadcastMsg] = useState(''); // حالة رسالة الأدمن للجميع
 
   const [allUsers, setAllUsers] = useState([]);
 
@@ -82,6 +79,7 @@ export default function App() {
     type: 'request', from: '', to: '', date: '', time: '', seats: 1, cost: '', notes: ''
   });
 
+  // جلب الإعلانات من فايربيز
   useEffect(() => {
     const settingsDocRef = doc(db, 'app_settings', 'announcements');
     const unsubscribe = onSnapshot(settingsDocRef, (docSnap) => {
@@ -119,18 +117,19 @@ export default function App() {
     localStorage.setItem('khodnimaak_theme', newTheme ? 'dark' : 'light');
   };
 
+  // مراقبة المستخدم وفحص الأدمن بالإيميل
   useEffect(() => {
     const unsubscribe = onAuthStateChanged(auth, async (currentUser) => {
       if (currentUser) {
         setUser(currentUser);
         if (currentUser.isAnonymous) {
           setIsGuest(true);
-          setIsAdmin(false);
           setUserData({ name: 'زائر', isVerified: false, rating: 0, totalRatings: 0 });
+          setIsAdmin(false);
         } else {
           setIsGuest(false);
           
-          // التحقق من الإيميل: هل هو إيميل الأدمن؟ (تجاهل حالة الأحرف)
+          // التحقق من إيميل الإدارة
           const isUserAdmin = currentUser.email && currentUser.email.toLowerCase() === ADMIN_EMAIL;
           setIsAdmin(isUserAdmin);
 
@@ -155,6 +154,7 @@ export default function App() {
     return () => unsubscribe();
   }, []);
 
+  // جلب الرحلات
   useEffect(() => {
     if (!user) return;
     const tripsPath = collection(db, APP_COLLECTION_NAME);
@@ -165,6 +165,7 @@ export default function App() {
     return () => unsubscribe();
   }, [user]);
 
+  // جلب صندوق الرسائل
   useEffect(() => {
     if (!user || isGuest) return;
     const myInboxPath = collection(db, `inbox_${user.uid}`);
@@ -176,6 +177,7 @@ export default function App() {
     return () => unsubscribe();
   }, [user, isGuest]);
 
+  // جلب الشات
   useEffect(() => {
     if (!user || !activeChat || isGuest) return;
     const chatId = activeChat.chatId;
@@ -189,6 +191,7 @@ export default function App() {
     return () => unsubscribe();
   }, [user, activeChat, isGuest]);
 
+  // جلب كل المستخدمين للأدمن فقط
   useEffect(() => {
     if (!user || !isAdmin || !showAdminPanel) return;
     const usersPath = collection(db, USERS_COLLECTION);
@@ -199,6 +202,7 @@ export default function App() {
     return () => unsubscribe();
   }, [user, isAdmin, showAdminPanel]);
 
+  // --- دوال الأدمن ---
   const adminAddAnnouncement = async () => {
     if (!newAdText.trim()) return;
     const newAdsList = [...announcements, newAdText.trim()];
@@ -222,6 +226,47 @@ export default function App() {
     triggerToast(!currentStatus ? 'تم توثيق الحساب ✅' : 'تم سحب التوثيق ❌');
   };
 
+  // إرسال إشعار للجميع في صندوق الرسائل
+  const adminSendBroadcastMessage = async () => {
+    if (!broadcastMsg.trim() || allUsers.length === 0) return;
+    setIsSubmitting(true);
+    try {
+      const sysName = "إدارة خدني معاك 👑";
+      // عمل حلقة للمرور على جميع المستخدمين
+      const promises = allUsers.map(async (u) => {
+        const chatId = `sys_admin_to_${u.id}`; // كود محادثة خاص بالإدارة
+        
+        // إضافة الرسالة في صندوق الوارد للمستخدم
+        await setDoc(doc(db, `inbox_${u.id}`, chatId), {
+          chatId: chatId,
+          tripId: 'system',
+          otherPersonId: 'admin',
+          otherPersonName: sysName,
+          lastMessage: broadcastMsg,
+          createdAt: serverTimestamp()
+        });
+
+        // إضافة نص الرسالة في الشات نفسه
+        await addDoc(collection(db, `chats_${chatId}`), {
+          text: broadcastMsg,
+          senderId: 'admin',
+          senderName: sysName,
+          createdAt: serverTimestamp()
+        });
+      });
+
+      await Promise.all(promises);
+      setBroadcastMsg('');
+      triggerToast('تم إرسال الإشعار لجميع المستخدمين بنجاح! 🚀');
+    } catch (error) {
+      console.error(error);
+      alert('حدث خطأ أثناء إرسال الإشعار.');
+    } finally {
+      setIsSubmitting(false);
+    }
+  };
+
+  // دوال التطبيق العادية
   const handleAuth = async (e) => {
     e.preventDefault();
     setAuthLoading(true);
@@ -362,7 +407,6 @@ export default function App() {
   const filteredTrips = allTrips.filter(t => (filterType === 'all' || t.type === filterType) && (t.from?.includes(searchFrom) && t.to?.includes(searchTo)));
   const myOwnTrips = realTrips.filter(t => t.userId === user?.uid);
 
-  // دالة رسم النجوم التراكمية
   const renderStars = (rating = 0, total = 0) => {
     if (!total || total === 0) {
       return <span className="text-[11px] text-slate-400 font-bold">جديد ✨</span>;
@@ -394,6 +438,7 @@ export default function App() {
 
   if (loading) return <div className={`min-h-screen flex justify-center items-center ${bgMain}`}><Loader2 size={50} className="animate-spin text-indigo-600" /></div>;
 
+  // شاشة المصادقة
   if (!user) {
     return (
       <div dir="rtl" className={`min-h-screen flex items-center justify-center p-4 transition-colors ${bgMain} bg-[url('data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHdpZHRoPSI0MCIgaGVpZ2h0PSI0MCI+PGRlZnM+PHBhdHRlcm4gaWQ9InBhdHRlcm4iIHdpZHRoPSI0MCIgaGVpZ2h0PSI0MCIgcGF0dGVyblVuaXRzPSJ1c2VyU3BhY2VPblVzZSI+PHBhdGggZD0iTTAgMGg0MHY0MEgweiIgZmlsbD0ibm9uZSIvPjxjaXJjbGUgY3g9IjIwIiBjeT0iMjAiIHI9IjEiIGZpbGw9InJnYmEoMTU2LCAxNjMsIDE3NSwgMC4yKSIvPjwvcGF0dGVybj48L2RlZnM+PHJlY3Qgd2lkdGg9IjEwMCUiIGhlaWdodD0iMTAwJSIgZmlsbD0idXJsKCNwYXR0ZXJuKSIvPjwvc3ZnPg==')]`}>
@@ -453,7 +498,17 @@ export default function App() {
     <div dir="rtl" className={`min-h-screen flex flex-col relative transition-colors duration-300 ${bgMain}`}>
       <style dangerouslySetInnerHTML={{__html: `:root { color-scheme: light dark; }`}} />
       
-      {/* إشعارات النظام (Toasts & Notices) */}
+      {systemNotice && (
+        <div className="fixed inset-0 bg-black/80 backdrop-blur-sm z-[100] flex justify-center items-center p-4">
+          <div className={`${bgModal} rounded-3xl p-8 max-w-sm w-full text-center shadow-2xl border border-indigo-500/30 transform scale-105 transition-transform`}>
+            <div className="bg-indigo-100 w-20 h-20 rounded-full flex items-center justify-center mx-auto mb-5 animate-bounce"><Megaphone size={40} className="text-indigo-600" /></div>
+            <h2 className="text-2xl font-black mb-3 text-indigo-500">{systemNotice.title}</h2>
+            <p className={`mb-8 leading-relaxed font-medium ${isDarkMode ? 'text-slate-400' : 'text-slate-500'}`}>{systemNotice.body}</p>
+            <button onClick={closeSystemNotice} className="w-full py-3.5 bg-indigo-600 text-white rounded-2xl font-bold hover:bg-indigo-700 transition-colors shadow-lg shadow-indigo-500/30">فهمت، شكراً!</button>
+          </div>
+        </div>
+      )}
+
       {showToast && (
         <div className="fixed top-24 left-1/2 transform -translate-x-1/2 z-[60] bg-indigo-600 text-white px-6 py-3.5 rounded-full shadow-xl flex items-center gap-3 animate-fade-in-down border border-indigo-400/30">
           <CheckCircle2 size={20} /><p className="text-sm font-bold whitespace-nowrap">{toastMessage}</p>
@@ -485,6 +540,25 @@ export default function App() {
             
             <div className={`flex-1 overflow-y-auto p-6 space-y-8 ${isDarkMode ? 'bg-slate-900' : 'bg-slate-50'}`}>
               
+              {/* إرسال إشعارات (Inbox Broadcast) */}
+              <div className={`p-5 rounded-2xl border ${bgCard}`}>
+                <h3 className="font-bold text-lg mb-4 flex items-center gap-2"><Bell size={18} className="text-rose-500"/> إرسال إشعار للمستخدمين (صندوق الوارد)</h3>
+                <textarea 
+                  value={broadcastMsg} 
+                  onChange={(e) => setBroadcastMsg(e.target.value)} 
+                  placeholder="اكتب الإشعار هنا وسيصل لجميع المسجلين كرسالة إدارية..." 
+                  className={`w-full border p-3.5 rounded-xl resize-none font-medium outline-none focus:ring-2 focus:ring-indigo-500 transition-colors mb-3 ${bgInput}`}
+                  rows="3"
+                ></textarea>
+                <button 
+                  onClick={adminSendBroadcastMessage} 
+                  disabled={isSubmitting || !broadcastMsg.trim()} 
+                  className="w-full bg-rose-600 text-white py-3 rounded-xl font-bold hover:bg-rose-700 flex justify-center items-center gap-2 disabled:opacity-50"
+                >
+                  {isSubmitting ? <Loader2 className="animate-spin" size={18} /> : <Send size={18} />} إرسال الإشعار للجميع
+                </button>
+              </div>
+
               <div className={`p-5 rounded-2xl border ${bgCard}`}>
                 <h3 className="font-bold text-lg mb-4 flex items-center gap-2"><Megaphone size={18} className="text-indigo-500"/> إدارة شريط الإعلانات</h3>
                 <div className="flex gap-2 mb-4">
@@ -519,18 +593,13 @@ export default function App() {
                   }
                 </div>
               </div>
-              
-              <div className="p-4 bg-blue-50 dark:bg-blue-900/20 text-blue-600 dark:text-blue-400 rounded-xl text-sm font-bold flex items-center gap-2">
-                <Info size={18}/> 
-                <span>كأدمن، تمتلك الآن صلاحية حذف أي رحلة لأي مستخدم من الصفحة الرئيسية مباشرة.</span>
-              </div>
 
             </div>
           </div>
         </div>
       )}
 
-      {/* نافذة الإعدادات */}
+      {/* الإعدادات */}
       {showSettings && (
         <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-sm z-[70] flex justify-end">
           <div className={`${bgModal} w-full sm:w-[400px] h-full shadow-2xl flex flex-col animate-fade-in-right`}>
@@ -574,7 +643,7 @@ export default function App() {
                   <span className="font-bold text-sm">سياسة التطبيق</span>
                 </div>
                 <p className={`text-xs leading-relaxed ${isDarkMode ? 'text-slate-400' : 'text-slate-500'}`}>
-                  نعمل على توفير بيئة آمنة. يرجى الالتزام بالآداب العامة أثناء الرحلات. الإدارة غير مسؤولة عن أي تعاملات مادية خارج التطبيق.
+                  نعمل على توفير بيئة آمنة. يرجى الالتزام بالآداب العامة. الإدارة غير مسؤولة عن أي تعاملات مادية خارج التطبيق.
                 </p>
               </div>
             </div>
@@ -595,7 +664,7 @@ export default function App() {
         </div>
       )}
 
-      {/* نافذة سجل رحلاتي */}
+      {/* سجل رحلاتي */}
       {showMyTrips && !isGuest && (
         <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-sm z-[65] flex justify-center items-end sm:items-center p-0 sm:p-4">
           <div className={`${bgModal} w-full h-[85vh] sm:h-[650px] sm:max-w-xl rounded-t-[2rem] sm:rounded-3xl shadow-2xl flex flex-col overflow-hidden`}>
@@ -614,7 +683,7 @@ export default function App() {
                   <div key={trip.id} className={`p-5 rounded-2xl shadow-sm border relative flex flex-col ${bgCard}`}>
                     <div className="flex justify-between items-start mb-4">
                       <span className={`text-xs font-bold px-3 py-1.5 rounded-lg ${trip.type === 'offer' ? (isDarkMode ? 'bg-emerald-900/30 text-emerald-400' : 'bg-emerald-100 text-emerald-800') : (isDarkMode ? 'bg-amber-900/30 text-amber-400' : 'bg-amber-100 text-amber-800')}`}>
-                        {trip.type === 'offer' ? 'أنا سائق' : 'أنا راكب'}
+                        {trip.type === 'offer' ? 'أنا سائق (معي سيارة)' : 'أنا راكب'}
                       </span>
                       <span className={`text-xs font-bold px-3 py-1.5 rounded-lg ${trip.status === 'completed' ? (isDarkMode ? 'bg-slate-700 text-slate-300' : 'bg-slate-100 text-slate-600') : trip.status === 'in_progress' ? (isDarkMode ? 'bg-indigo-900/30 text-indigo-400' : 'bg-indigo-100 text-indigo-700') : (isDarkMode ? 'bg-blue-900/30 text-blue-400' : 'bg-blue-50 text-blue-600')}`}>
                         {trip.status === 'completed' ? 'مكتملة ✅' : trip.status === 'in_progress' ? 'في الطريق 🚗' : 'متاحة الآن'}
@@ -688,7 +757,7 @@ export default function App() {
         </div>
       </header>
 
-      {/* الإعلانات المتحركة (Marquee) */}
+      {/* الإعلانات المتحركة الصغيرة */}
       <div className={`overflow-hidden relative h-9 flex items-center justify-center transition-colors text-xs sm:text-sm font-medium ${isDarkMode ? 'bg-indigo-950 text-indigo-200' : 'bg-indigo-50 text-indigo-700'}`}>
         {announcements.map((ad, index) => (
           <div
@@ -705,7 +774,7 @@ export default function App() {
 
       <main className="flex-1 max-w-7xl mx-auto px-4 py-6 w-full pb-28 md:pb-6">
         
-        {/* البانر التفاعلي */}
+        {/* البانر التفاعلي الجديد */}
         <div className="bg-gradient-to-br from-indigo-600 via-blue-700 to-indigo-900 rounded-[2.5rem] p-7 sm:p-10 mb-8 text-white shadow-xl relative overflow-hidden">
           <div className="absolute top-0 right-0 w-72 h-72 bg-white opacity-5 rounded-full blur-3xl transform translate-x-1/3 -translate-y-1/3"></div>
           <div className="absolute bottom-0 left-0 w-48 h-48 bg-indigo-400 opacity-20 rounded-full blur-2xl transform -translate-x-1/2 translate-y-1/2"></div>
@@ -718,6 +787,7 @@ export default function App() {
             <p className="text-indigo-100 text-sm sm:text-base mb-6 font-medium leading-relaxed">
               سواء معاك عربية وعايز توفر تكاليف البنزين، أو مسافر ومحتاج توصيلة مريحة وآمنة.. "خدني معاك" بيجمعكم في طريق واحد.
             </p>
+            
             <button 
               onClick={() => requireAuth(() => setShowAddModal(true))} 
               className="bg-white text-indigo-700 font-extrabold px-6 py-3.5 rounded-2xl shadow-lg hover:bg-indigo-50 transition-all flex items-center gap-2 transform active:scale-95">
@@ -726,7 +796,7 @@ export default function App() {
           </div>
         </div>
 
-        {/* شريط البحث */}
+        {/* شريط البحث السريع */}
         <div className={`p-4 rounded-2xl shadow-sm border mb-8 flex flex-col sm:flex-row gap-3 ${isDarkMode ? 'bg-slate-800 border-slate-700' : 'bg-white border-slate-200'}`}>
           <div className={`flex-1 flex items-center px-4 py-3 rounded-xl border ${isDarkMode ? 'bg-slate-700/50 border-slate-600' : 'bg-slate-50 border-slate-200'}`}>
             <MapPin className="text-indigo-500 ml-3" size={20} />
@@ -745,7 +815,7 @@ export default function App() {
           <button onClick={() => setFilterType('request')} className={`flex-1 py-2.5 text-sm font-bold rounded-xl transition-all shadow-sm ${filterType === 'request' ? 'bg-orange-500 text-white' : (isDarkMode ? 'bg-slate-800 text-slate-400' : 'bg-white text-slate-500 hover:bg-slate-50')}`}>ركاب 🙋‍♂️</button>
         </div>
 
-        {/* قائمة الرحلات الرئيسية */}
+        {/* قائمة الرحلات */}
         {filteredTrips.length === 0 ? (
           <div className={`text-center py-24 rounded-[2rem] border-2 border-dashed flex flex-col items-center justify-center ${isDarkMode ? 'border-slate-700 bg-slate-800/50' : 'border-slate-200 bg-slate-50/50'}`}>
              <div className={`w-20 h-20 rounded-full flex items-center justify-center mb-4 ${isDarkMode ? 'bg-slate-700' : 'bg-slate-200'}`}><Car size={32} className="text-slate-400"/></div>
@@ -761,7 +831,6 @@ export default function App() {
               const isClosedForPublic = (isInProgress || isCompleted) && !isOwner;
               const isPassenger = myInbox.some(chat => chat.tripId === trip.id);
               
-              // كأدمن يقدر يحذف أي رحلة
               const canDelete = isOwner || isAdmin;
               
               return (
@@ -794,7 +863,7 @@ export default function App() {
                     </div>
                   </div>
                   
-                  {/* حالة الرحلة لغير صاحبها */}
+                  {/* حالة الرحلة */}
                   <div className={`text-[10px] font-bold px-2.5 py-1 rounded-lg border ${isCompleted ? (isDarkMode ? 'bg-slate-700 text-slate-300 border-slate-600' : 'bg-slate-100 text-slate-600 border-slate-200') : isInProgress ? (isDarkMode ? 'bg-amber-900/30 text-amber-400 border-amber-800 animate-pulse' : 'bg-amber-50 text-amber-600 border-amber-200 animate-pulse') : (isDarkMode ? 'bg-indigo-900/30 text-indigo-400 border-indigo-800' : 'bg-indigo-50 text-indigo-600 border-indigo-100')}`}>
                     {isCompleted ? 'مكتملة' : isInProgress ? 'في الطريق' : 'متاحة'}
                   </div>
@@ -893,7 +962,7 @@ export default function App() {
         <Navigation size={24} />
       </button>
 
-      {/* شاشة الإنبوكس */}
+      {/* الإنبوكس */}
       {showInbox && !isGuest && (
         <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-sm z-50 flex justify-center items-end sm:items-center p-0 sm:p-4">
           <div className={`${bgModal} w-full h-[80vh] sm:h-[600px] sm:max-w-md rounded-t-[2rem] sm:rounded-3xl shadow-2xl flex flex-col overflow-hidden`}>
@@ -911,7 +980,11 @@ export default function App() {
                 myInbox.map(chat => (
                   <div key={chat.chatId} onClick={() => { setShowInbox(false); setActiveChat(chat); }} className={`p-4 rounded-2xl shadow-sm mb-3 cursor-pointer border transition-all ${bgCard} ${isDarkMode ? 'hover:border-indigo-500' : 'hover:border-indigo-300'}`}>
                     <div className="flex items-center gap-3">
-                       <div className="w-10 h-10 bg-indigo-100 text-indigo-600 rounded-full flex items-center justify-center font-bold">{chat.otherPersonName.charAt(0)}</div>
+                       {chat.otherPersonId === 'admin' ? (
+                         <div className="w-10 h-10 bg-rose-100 text-rose-600 rounded-full flex items-center justify-center font-bold"><Crown size={20}/></div>
+                       ) : (
+                         <div className="w-10 h-10 bg-indigo-100 text-indigo-600 rounded-full flex items-center justify-center font-bold">{chat.otherPersonName.charAt(0)}</div>
+                       )}
                        <div>
                         <h4 className={`font-bold text-sm ${isDarkMode ? 'text-white' : 'text-slate-900'}`}>{chat.otherPersonName}</h4>
                         <p className={`text-xs line-clamp-1 mt-1 ${isDarkMode ? 'text-slate-400' : 'text-slate-500'}`}>{chat.lastMessage}</p>
@@ -925,24 +998,25 @@ export default function App() {
         </div>
       )}
 
-      {/* شاشة الشات المباشر */}
+      {/* الشات */}
       {activeChat && !isGuest && (
         <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-sm z-[60] flex justify-center items-end sm:items-center p-0 sm:p-4">
           <div className={`${bgModal} w-full h-[85vh] sm:h-[600px] sm:max-w-md rounded-t-[2rem] sm:rounded-3xl shadow-2xl flex flex-col overflow-hidden`}>
-            <div className="bg-indigo-600 text-white p-4 flex items-center gap-3">
-              <button onClick={() => setActiveChat(null)} className="p-2 hover:bg-indigo-700 rounded-full transition-colors"><ChevronLeft size={24} /></button>
-              <div className="w-10 h-10 bg-white/20 rounded-full flex items-center justify-center"><User size={20}/></div>
+            <div className={`text-white p-4 flex items-center gap-3 ${activeChat.otherPersonId === 'admin' ? 'bg-rose-600' : 'bg-indigo-600'}`}>
+              <button onClick={() => setActiveChat(null)} className={`p-2 rounded-full transition-colors ${activeChat.otherPersonId === 'admin' ? 'hover:bg-rose-700' : 'hover:bg-indigo-700'}`}><ChevronLeft size={24} /></button>
+              <div className="w-10 h-10 bg-white/20 rounded-full flex items-center justify-center">{activeChat.otherPersonId === 'admin' ? <Crown size={20}/> : <User size={20}/>}</div>
               <div className="flex-1">
                 <h3 className="font-bold text-sm leading-tight">{activeChat.otherPersonName}</h3>
-                {activeChat.tripInfo && <span className="text-[10px] text-indigo-200 leading-tight block">{activeChat.tripInfo}</span>}
+                {activeChat.tripInfo && activeChat.tripInfo !== 'system' && <span className="text-[10px] text-indigo-200 leading-tight block">{activeChat.tripInfo}</span>}
               </div>
             </div>
             <div className={`flex-1 overflow-y-auto p-4 space-y-4 ${isDarkMode ? 'bg-slate-900/80' : 'bg-slate-100'} bg-[url('data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHdpZHRoPSI0MCIgaGVpZ2h0PSI0MCI+PGRlZnM+PHBhdHRlcm4gaWQ9InBhdHRlcm4iIHdpZHRoPSI0MCIgaGVpZ2h0PSI0MCIgcGF0dGVyblVuaXRzPSJ1c2VyU3BhY2VPblVzZSI+PHBhdGggZD0iTTAgMGg0MHY0MEgweiIgZmlsbD0ibm9uZSIvPjxjaXJjbGUgY3g9IjIwIiBjeT0iMjAiIHI9IjEiIGZpbGw9InJnYmEoMTU2LCAxNjMsIDE3NSwgMC4xKSIvPjwvcGF0dGVybj48L2RlZnM+PHJlY3Qgd2lkdGg9IjEwMCUiIGhlaWdodD0iMTAwJSIgZmlsbD0idXJsKCNwYXR0ZXJuKSIvPjwvc3ZnPg==')]`}>
               {messages.map(msg => {
                 const isMe = msg.senderId === user.uid;
+                const isAdminMsg = msg.senderId === 'admin';
                 return (
                   <div key={msg.id} className={`flex ${isMe ? 'justify-end' : 'justify-start'}`}>
-                    <div className={`max-w-[80%] p-3 rounded-2xl text-sm shadow-sm ${isMe ? 'bg-indigo-600 text-white rounded-tl-sm' : (isDarkMode ? 'bg-slate-800 text-white border border-slate-700 rounded-tr-sm' : 'bg-white border border-slate-200 text-slate-800 rounded-tr-sm')}`}>
+                    <div className={`max-w-[80%] p-3 rounded-2xl text-sm shadow-sm ${isMe ? 'bg-indigo-600 text-white rounded-tl-sm' : (isAdminMsg ? 'bg-rose-100 text-rose-900 border border-rose-200 rounded-tr-sm' : (isDarkMode ? 'bg-slate-800 text-white border border-slate-700 rounded-tr-sm' : 'bg-white border border-slate-200 text-slate-800 rounded-tr-sm'))}`}>
                       {msg.text}
                     </div>
                   </div>
@@ -951,16 +1025,20 @@ export default function App() {
               <div ref={messagesEndRef} />
             </div>
             <div className={`p-4 border-t ${isDarkMode ? 'bg-slate-800 border-slate-700' : 'bg-white border-slate-200'}`}>
-              <form onSubmit={handleSendMessage} className="flex gap-2 items-center">
-                <input type="text" value={newMessage} onChange={(e) => setNewMessage(e.target.value)} placeholder="اكتب رسالة..." className={`flex-1 rounded-2xl px-4 py-3.5 text-sm outline-none focus:ring-2 focus:ring-indigo-500 transition-colors ${bgInput}`} />
-                <button type="submit" disabled={!newMessage.trim()} className="bg-indigo-600 text-white w-12 h-12 flex items-center justify-center rounded-2xl hover:bg-indigo-700 disabled:opacity-50 disabled:bg-slate-400 transition-all shadow-md"><Send size={20} className="rtl:rotate-180" /></button>
-              </form>
+              {activeChat.otherPersonId === 'admin' ? (
+                <div className="text-center text-xs font-bold text-slate-400">هذه رسالة إدارية رسمية للمعلومية فقط.</div>
+              ) : (
+                <form onSubmit={handleSendMessage} className="flex gap-2 items-center">
+                  <input type="text" value={newMessage} onChange={(e) => setNewMessage(e.target.value)} placeholder="اكتب رسالة..." className={`flex-1 rounded-2xl px-4 py-3.5 text-sm outline-none focus:ring-2 focus:ring-indigo-500 transition-colors ${bgInput}`} />
+                  <button type="submit" disabled={!newMessage.trim()} className="bg-indigo-600 text-white w-12 h-12 flex items-center justify-center rounded-2xl hover:bg-indigo-700 disabled:opacity-50 disabled:bg-slate-400 transition-all shadow-md"><Send size={20} className="rtl:rotate-180" /></button>
+                </form>
+              )}
             </div>
           </div>
         </div>
       )}
 
-      {/* شاشة الإضافة بكروت التصميم الجديد */}
+      {/* شاشة الإضافة */}
       {showAddModal && !isGuest && (
         <div className="fixed inset-0 bg-slate-900/70 backdrop-blur-sm z-50 flex justify-center items-center p-4">
           <div className={`${bgModal} rounded-[2rem] w-full max-w-lg shadow-2xl border overflow-hidden ${isDarkMode ? 'border-slate-700' : 'border-slate-100'}`}>
@@ -971,6 +1049,7 @@ export default function App() {
             <div className="p-6 max-h-[75vh] overflow-y-auto custom-scrollbar">
               <form onSubmit={handleAddTrip} className="space-y-6">
                 
+                {/* اختيار النوع */}
                 <div>
                   <label className={`block text-sm font-bold mb-3 ${isDarkMode ? 'text-slate-300' : 'text-slate-700'}`}>أنت مسافر بصفتك؟</label>
                   <div className="grid grid-cols-2 gap-4">
