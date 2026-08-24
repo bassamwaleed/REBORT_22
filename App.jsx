@@ -5,28 +5,28 @@ import { getFirestore, collection, onSnapshot, addDoc, deleteDoc, doc, serverTim
 import { MapPin, Navigation, Car, User, Bell, Search, Calendar, Clock, MessageCircle, ShieldCheck, ArrowRight, Menu, X, CheckCircle2, Loader2, ExternalLink, Trash2, Wallet, Filter, Send } from 'lucide-react';
 
 // ==========================================
-// 1. إعداد Firebase الحقيقي
+// 1. إعداد Firebase 
+// (تم وضع بيانات وهمية مؤقتاً لكي لا تظهر صفحة بيضاء، يجب استبدالها ببياناتك لاحقاً)
 // ==========================================
-// في مشروعك الحقيقي على Github/Vercel، يجب استبدال هذه المتغيرات
-// بمتغيرات البيئة (Environment Variables) الخاصة بك من موقع Firebase
 const firebaseConfig = {
-  // قم باستبدال هذه القيم بقيم مشروعك الحقيقي من Firebase لاحقاً
-  // apiKey: import.meta.env.VITE_FIREBASE_API_KEY,
-  // authDomain: import.meta.env.VITE_FIREBASE_AUTH_DOMAIN,
-  // projectId: import.meta.env.VITE_FIREBASE_PROJECT_ID,
-  // storageBucket: import.meta.env.VITE_FIREBASE_STORAGE_BUCKET,
-  // messagingSenderId: import.meta.env.VITE_FIREBASE_MESSAGING_SENDER_ID,
-  // appId: import.meta.env.VITE_FIREBASE_APP_ID
-  
-  // -- هذا السطر مؤقت ليعمل داخل هذه البيئة التجريبية --
-  ...(typeof __firebase_config !== 'undefined' ? JSON.parse(__firebase_config) : {})
+  apiKey: import.meta.env.VITE_FIREBASE_API_KEY || "dummy-api-key-12345",
+  authDomain: import.meta.env.VITE_FIREBASE_AUTH_DOMAIN || "dummy-domain.firebaseapp.com",
+  projectId: import.meta.env.VITE_FIREBASE_PROJECT_ID || "dummy-project",
+  storageBucket: import.meta.env.VITE_FIREBASE_STORAGE_BUCKET || "dummy-bucket.appspot.com",
+  messagingSenderId: import.meta.env.VITE_FIREBASE_MESSAGING_SENDER_ID || "123456789",
+  appId: import.meta.env.VITE_FIREBASE_APP_ID || "1:123456789:web:abcdef123456"
 };
 
-const app = initializeApp(firebaseConfig);
-const auth = getAuth(app);
-const db = getFirestore(app);
+// تهيئة قاعدة البيانات بأمان لتجنب انهيار التطبيق
+let app, auth, db;
+try {
+  app = initializeApp(firebaseConfig);
+  auth = getAuth(app);
+  db = getFirestore(app);
+} catch (error) {
+  console.error("Firebase init error", error);
+}
 
-// اسم التطبيق لقاعدة البيانات
 const APP_COLLECTION_NAME = 'khodni_maak_trips';
 
 export default function App() {
@@ -64,19 +64,17 @@ export default function App() {
   // ==========================================
   
   useEffect(() => {
-    // تسجيل الدخول المجهول (ليتمكن المستخدم من القراءة والكتابة بدون إجبار على عمل حساب مبدئياً)
+    if (!auth) {
+      setLoading(false);
+      return;
+    }
+
     const initAuth = async () => {
       try {
-        // في البيئة التجريبية نستخدم التوكن، في المشروع الحقيقي نستخدم signInAnonymously مباشرة
-        if (typeof __initial_auth_token !== 'undefined' && __initial_auth_token) {
-          import('firebase/auth').then(({ signInWithCustomToken }) => {
-            signInWithCustomToken(auth, __initial_auth_token);
-          });
-        } else {
-          await signInAnonymously(auth);
-        }
+        await signInAnonymously(auth);
       } catch (error) {
         console.error("Authentication error:", error);
+        setLoading(false);
       }
     };
     initAuth();
@@ -92,44 +90,42 @@ export default function App() {
 
   // جلب الرحلات
   useEffect(() => {
-    if (!user || !isNameSet) return;
+    if (!user || !isNameSet || !db) return;
     
-    // مسار البيانات (في مشروعك الخاص يمكنك تغيير المسار ليكون collection(db, 'trips') مباشرة)
-    const tripsPath = typeof __app_id !== 'undefined' 
-      ? collection(db, 'artifacts', __app_id, 'public', 'data', APP_COLLECTION_NAME)
-      : collection(db, APP_COLLECTION_NAME);
-      
-    const unsubscribe = onSnapshot(tripsPath, (snapshot) => {
-      const tripsData = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
-      tripsData.sort((a, b) => (b.createdAt?.toMillis() || 0) - (a.createdAt?.toMillis() || 0));
-      setTrips(tripsData);
+    try {
+      const tripsPath = collection(db, APP_COLLECTION_NAME);
+      const unsubscribe = onSnapshot(tripsPath, (snapshot) => {
+        const tripsData = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+        tripsData.sort((a, b) => (b.createdAt?.toMillis() || 0) - (a.createdAt?.toMillis() || 0));
+        setTrips(tripsData);
+        setLoading(false);
+      }, (error) => {
+        console.error("Error fetching trips:", error);
+        setLoading(false);
+      });
+      return () => unsubscribe();
+    } catch (e) {
+      console.error(e);
       setLoading(false);
-    }, (error) => {
-      console.error("Error fetching trips:", error);
-      setLoading(false);
-    });
-    
-    return () => unsubscribe();
+    }
   }, [user, isNameSet]);
 
   // جلب رسائل المحادثة
   useEffect(() => {
-    if (!user || !activeChat) return;
+    if (!user || !activeChat || !db) return;
 
-    const chatId = activeChat.tripId + '_' + (user.uid < activeChat.ownerId ? user.uid + '_' + activeChat.ownerId : activeChat.ownerId + '_' + user.uid);
-    const msgsPath = typeof __app_id !== 'undefined'
-      ? collection(db, 'artifacts', __app_id, 'public', 'data', `chats_${chatId}`)
-      : collection(db, `chats_${chatId}`);
-    
-    const unsubscribe = onSnapshot(msgsPath, (snapshot) => {
-      const msgsData = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
-      msgsData.sort((a, b) => (a.createdAt?.toMillis() || 0) - (b.createdAt?.toMillis() || 0));
-      setMessages(msgsData);
+    try {
+      const chatId = activeChat.tripId + '_' + (user.uid < activeChat.ownerId ? user.uid + '_' + activeChat.ownerId : activeChat.ownerId + '_' + user.uid);
+      const msgsPath = collection(db, `chats_${chatId}`);
       
-      setTimeout(() => messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' }), 100);
-    });
-
-    return () => unsubscribe();
+      const unsubscribe = onSnapshot(msgsPath, (snapshot) => {
+        const msgsData = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+        msgsData.sort((a, b) => (a.createdAt?.toMillis() || 0) - (b.createdAt?.toMillis() || 0));
+        setMessages(msgsData);
+        setTimeout(() => messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' }), 100);
+      });
+      return () => unsubscribe();
+    } catch(e) {}
   }, [user, activeChat]);
 
   // ==========================================
@@ -138,7 +134,7 @@ export default function App() {
 
   const handleSetName = async (e) => {
     e.preventDefault();
-    if (!userName.trim()) return;
+    if (!userName.trim() || !user) return;
     try {
       await updateProfile(user, { displayName: userName });
       setIsNameSet(true);
@@ -161,11 +157,9 @@ export default function App() {
     
     setIsSubmitting(true);
     try {
-      const tripsPath = typeof __app_id !== 'undefined' 
-      ? collection(db, 'artifacts', __app_id, 'public', 'data', APP_COLLECTION_NAME)
-      : collection(db, APP_COLLECTION_NAME);
-
-      const avatarUrl = `https://api.dicebear.com/7.x/avataaars/svg?seed=${user.uid}`; // خدمة صور رمزية مجانية وموثوقة
+      if(!db) throw new Error("Database not connected");
+      const tripsPath = collection(db, APP_COLLECTION_NAME);
+      const avatarUrl = `https://api.dicebear.com/7.x/avataaars/svg?seed=${user.uid}`;
       
       await addDoc(tripsPath, {
         ...newTrip,
@@ -181,19 +175,16 @@ export default function App() {
       setNewTrip({ type: 'request', from: '', to: '', date: '', time: '', seats: 1, cost: '', notes: '' });
     } catch (error) {
       console.error(error);
-      alert('حدث خطأ أثناء النشر.');
+      alert('حدث خطأ. تأكد من إعدادات قاعدة البيانات.');
     } finally {
       setIsSubmitting(false);
     }
   };
 
   const handleDeleteTrip = async (tripId) => {
-    if (!window.confirm('هل أنت متأكد من حذف هذه الرحلة؟')) return;
+    if (!window.confirm('هل أنت متأكد من حذف هذه الرحلة؟') || !db) return;
     try {
-      const tripDocPath = typeof __app_id !== 'undefined'
-        ? doc(db, 'artifacts', __app_id, 'public', 'data', APP_COLLECTION_NAME, tripId)
-        : doc(db, APP_COLLECTION_NAME, tripId);
-        
+      const tripDocPath = doc(db, APP_COLLECTION_NAME, tripId);
       await deleteDoc(tripDocPath);
       triggerToast('تم حذف الرحلة.');
     } catch (error) {
@@ -203,14 +194,12 @@ export default function App() {
 
   const handleSendMessage = async (e) => {
     e.preventDefault();
-    if (!newMessage.trim() || !activeChat) return;
-
-    const chatId = activeChat.tripId + '_' + (user.uid < activeChat.ownerId ? user.uid + '_' + activeChat.ownerId : activeChat.ownerId + '_' + user.uid);
-    const msgsPath = typeof __app_id !== 'undefined'
-      ? collection(db, 'artifacts', __app_id, 'public', 'data', `chats_${chatId}`)
-      : collection(db, `chats_${chatId}`);
+    if (!newMessage.trim() || !activeChat || !db) return;
 
     try {
+      const chatId = activeChat.tripId + '_' + (user.uid < activeChat.ownerId ? user.uid + '_' + activeChat.ownerId : activeChat.ownerId + '_' + user.uid);
+      const msgsPath = collection(db, `chats_${chatId}`);
+
       await addDoc(msgsPath, {
         text: newMessage,
         senderId: user.uid,
@@ -227,7 +216,6 @@ export default function App() {
   // 4. واجهة المستخدم (UI)
   // ==========================================
 
-  // شاشة الدخول (Onboarding)
   if (user && !isNameSet) {
     return (
       <div dir="rtl" className="min-h-screen bg-gray-50 flex items-center justify-center p-4 font-sans text-gray-800">
@@ -261,7 +249,6 @@ export default function App() {
 
   return (
     <div dir="rtl" className="min-h-screen bg-gray-50 font-sans text-gray-800 flex flex-col relative">
-      
       {showToast && (
         <div className="fixed top-24 left-1/2 transform -translate-x-1/2 z-[60] bg-gray-900 text-white px-6 py-3 rounded-full shadow-2xl flex items-center gap-3 animate-in fade-in slide-in-from-top-5">
           <CheckCircle2 size={20} className="text-green-400" />
@@ -269,14 +256,13 @@ export default function App() {
         </div>
       )}
 
-      {/* شريط التنقل */}
       <header className="bg-white shadow-sm border-b border-gray-100 sticky top-0 z-40">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 flex justify-between items-center h-20">
           <div className="flex items-center gap-3">
             <div className="bg-gradient-to-br from-blue-600 to-indigo-700 text-white p-2.5 rounded-xl shadow-md"><Car size={28} /></div>
             <div>
               <span className="font-extrabold text-2xl text-gray-900 block leading-none">خدني معاك</span>
-              <span className="text-[11px] text-blue-600 font-bold block mt-1 uppercase">مرحباً، {user?.displayName}</span>
+              <span className="text-[11px] text-blue-600 font-bold block mt-1 uppercase">مرحباً، {user ? user.displayName : 'زائر'}</span>
             </div>
           </div>
           <button onClick={() => setShowAddModal(true)} className="hidden md:flex bg-gray-900 text-white px-6 py-2.5 rounded-xl font-bold hover:bg-gray-800 transition-all shadow-md hover:shadow-lg items-center gap-2">
@@ -285,10 +271,7 @@ export default function App() {
         </div>
       </header>
 
-      {/* المحتوى الرئيسي */}
       <main className="flex-1 max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8 w-full">
-        
-        {/* قسم البحث */}
         <div className="bg-gradient-to-r from-blue-700 to-indigo-900 rounded-3xl p-6 md:p-8 mb-8 text-white shadow-xl relative overflow-hidden flex flex-col md:flex-row items-center justify-between gap-6">
           <div className="relative z-10 w-full md:w-1/2">
             <h1 className="text-3xl font-extrabold mb-2">إلى أين تتجه اليوم؟</h1>
@@ -306,19 +289,18 @@ export default function App() {
           </div>
         </div>
 
-        {/* فلاتر */}
         <div className="flex bg-white shadow-sm border border-gray-200 rounded-xl p-1 mb-6 max-w-md mx-auto">
           <button onClick={() => setFilterType('all')} className={`flex-1 py-2 text-sm font-bold rounded-lg transition-all ${filterType === 'all' ? 'bg-blue-50 text-blue-700' : 'text-gray-500'}`}>الكل</button>
           <button onClick={() => setFilterType('offer')} className={`flex-1 py-2 text-sm font-bold rounded-lg transition-all ${filterType === 'offer' ? 'bg-green-50 text-green-700' : 'text-gray-500'}`}>توصيلات 🚗</button>
           <button onClick={() => setFilterType('request')} className={`flex-1 py-2 text-sm font-bold rounded-lg transition-all ${filterType === 'request' ? 'bg-orange-50 text-orange-700' : 'text-gray-500'}`}>ركاب 🙋‍♂️</button>
         </div>
 
-        {/* عرض الرحلات */}
         {loading ? (
           <div className="flex justify-center py-20"><Loader2 size={40} className="animate-spin text-blue-600" /></div>
         ) : filteredTrips.length === 0 ? (
           <div className="text-center py-20 bg-white rounded-3xl border border-gray-200">
             <h3 className="text-xl font-bold text-gray-700 mb-2">لا توجد رحلات حالياً</h3>
+            <p className="text-sm text-gray-500 mb-4">(سيتم تفعيل حفظ الرحلات فور إضافة إعدادات قاعدة البيانات)</p>
             <button onClick={() => setShowAddModal(true)} className="mt-4 bg-blue-600 text-white px-6 py-2 rounded-xl font-bold">انشر رحلتك الأولى</button>
           </div>
         ) : (
@@ -327,7 +309,6 @@ export default function App() {
               const isOwner = user && trip.userId === user.uid;
               return (
               <div key={trip.id} className="bg-white rounded-2xl p-5 shadow-sm border border-gray-100 relative flex flex-col hover:shadow-md transition-shadow">
-                
                 {isOwner && (
                   <button onClick={() => handleDeleteTrip(trip.id)} className="absolute top-4 left-4 p-2 bg-red-50 text-red-600 rounded-full hover:bg-red-100 z-10"><Trash2 size={16} /></button>
                 )}
@@ -363,21 +344,6 @@ export default function App() {
                   <span>العدد: {trip.seats}</span>
                   {trip.cost && <span>المساهمة: {trip.cost} ج</span>}
                 </div>
-
-                <div className="mt-auto">
-                  {!isOwner ? (
-                    <button 
-                      onClick={() => setActiveChat({ tripId: trip.id, ownerId: trip.userId, ownerName: trip.userName, tripInfo: `${trip.from} ➔ ${trip.to}` })}
-                      className="w-full bg-gray-900 text-white py-2.5 rounded-xl font-bold flex items-center justify-center gap-2 hover:bg-blue-600 transition-colors text-sm"
-                    >
-                      <MessageCircle size={16} /> تواصل مع {trip.userName.split(' ')[0]}
-                    </button>
-                  ) : (
-                    <div className="w-full bg-gray-100 text-gray-500 py-2.5 rounded-xl font-bold text-center text-sm cursor-not-allowed">
-                      هذه رحلتك
-                    </div>
-                  )}
-                </div>
               </div>
             )})}
           </div>
@@ -388,47 +354,6 @@ export default function App() {
         <Navigation size={24} />
       </button>
 
-      {/* نافذة المحادثة */}
-      {activeChat && (
-        <div className="fixed inset-0 bg-black/60 backdrop-blur-sm z-50 flex justify-center items-end sm:items-center p-0 sm:p-4">
-          <div className="bg-white w-full h-[85vh] sm:h-auto sm:max-h-[600px] sm:max-w-md rounded-t-3xl sm:rounded-3xl shadow-2xl flex flex-col animate-in slide-in-from-bottom-full sm:zoom-in-95 duration-300">
-            <div className="bg-gray-900 text-white p-4 flex justify-between items-center rounded-t-3xl">
-              <div>
-                <h3 className="font-bold flex items-center gap-2">
-                  <User size={18} className="text-blue-400"/> {activeChat.ownerName}
-                </h3>
-                <span className="text-xs text-gray-400 line-clamp-1">{activeChat.tripInfo}</span>
-              </div>
-              <button onClick={() => setActiveChat(null)} className="p-2 hover:bg-gray-800 rounded-full text-gray-300"><X size={20} /></button>
-            </div>
-
-            <div className="flex-1 overflow-y-auto p-4 bg-gray-50 space-y-3 custom-scrollbar">
-              <div className="text-center text-xs text-gray-400 my-2">بداية المحادثة</div>
-              {messages.map(msg => {
-                const isMe = msg.senderId === user.uid;
-                return (
-                  <div key={msg.id} className={`flex ${isMe ? 'justify-end' : 'justify-start'}`}>
-                    <div className={`max-w-[80%] p-3 rounded-2xl text-sm ${isMe ? 'bg-blue-600 text-white rounded-tr-sm' : 'bg-white border border-gray-200 text-gray-800 rounded-tl-sm'}`}>
-                      {!isMe && <span className="block text-[10px] text-blue-600 font-bold mb-1">{msg.senderName}</span>}
-                      {msg.text}
-                    </div>
-                  </div>
-                )
-              })}
-              <div ref={messagesEndRef} />
-            </div>
-
-            <div className="p-3 bg-white border-t border-gray-100 rounded-b-3xl">
-              <form onSubmit={handleSendMessage} className="flex gap-2">
-                <input type="text" value={newMessage} onChange={(e) => setNewMessage(e.target.value)} placeholder="اكتب رسالتك..." className="flex-1 bg-gray-100 border-none rounded-full px-4 py-2 text-sm outline-none focus:ring-2 focus:ring-blue-500" />
-                <button type="submit" disabled={!newMessage.trim()} className="bg-blue-600 text-white p-2.5 rounded-full hover:bg-blue-700 disabled:opacity-50 transition-colors"><Send size={18} /></button>
-              </form>
-            </div>
-          </div>
-        </div>
-      )}
-
-      {/* نافذة الإضافة */}
       {showAddModal && (
         <div className="fixed inset-0 bg-black/60 backdrop-blur-sm z-50 flex justify-center items-center p-4">
           <div className="bg-white rounded-3xl w-full max-w-lg shadow-2xl overflow-hidden animate-in zoom-in duration-200">
