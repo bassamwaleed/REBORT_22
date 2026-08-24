@@ -680,7 +680,7 @@ export default function App() {
                   )}
                 </div>
                 
-                {/* الأزرار */}
+                {/* الأزرار (رسالة - اتصال) تظهر دائماً أثناء إتاحة الرحلة */}
                 <div className="mt-auto">
                   {isOwner ? (
                     <div className={`w-full py-3.5 rounded-xl font-bold text-center text-sm border border-dashed ${isDarkMode ? 'bg-slate-700/50 text-slate-400 border-slate-600' : 'bg-slate-50 text-slate-500 border-slate-200'}`}>
@@ -712,11 +712,19 @@ export default function App() {
                       <button onClick={() => openChatFromTrip(trip)} className="flex-1 py-3.5 rounded-xl font-bold flex justify-center items-center gap-2 text-sm bg-slate-900 text-white hover:bg-slate-800 dark:bg-indigo-600 dark:hover:bg-indigo-700 transition-colors shadow-md">
                         <MessageCircle size={18} /> رسالة
                       </button>
-                      {trip.userPhone && !trip.isDummy && (
-                        <button onClick={() => requireAuth(() => window.location.href = `tel:${trip.userPhone}`)} className="flex-1 bg-emerald-500 text-white py-3.5 rounded-xl font-bold flex justify-center items-center gap-2 text-sm hover:bg-emerald-600 transition-colors shadow-md shadow-emerald-500/20">
-                          <Phone size={18} /> اتصال
-                        </button>
-                      )}
+                      
+                      {/* تعديل زر الاتصال ليظل ظاهراً مع التعامل مع الرحلات الوهمية أو المفقود منها الرقم */}
+                      <button onClick={() => requireAuth(() => {
+                        if (trip.isDummy) {
+                          triggerToast('هذه رحلة تجريبية للعرض فقط 😅');
+                        } else if (!trip.userPhone) {
+                          triggerToast('عذراً، رقم الهاتف غير مسجل لهذا المستخدم 📞');
+                        } else {
+                          window.location.href = `tel:${trip.userPhone}`;
+                        }
+                      })} className="flex-1 bg-emerald-500 text-white py-3.5 rounded-xl font-bold flex justify-center items-center gap-2 text-sm hover:bg-emerald-600 transition-colors shadow-md shadow-emerald-500/20">
+                        <Phone size={18} /> اتصال
+                      </button>
                     </div>
                   )}
                 </div>
@@ -726,7 +734,7 @@ export default function App() {
         )}
       </main>
 
-      {/* زر الإضافة العائم (FAB) بعد إصلاح مكانه وحجمه ليتناسب تماماً */}
+      {/* زر الإضافة العائم (FAB) */}
       <button 
         onClick={() => requireAuth(() => setShowAddModal(true))} 
         className="md:hidden fixed bottom-8 left-6 w-14 h-14 bg-indigo-600 text-white rounded-full flex items-center justify-center shadow-xl shadow-indigo-500/40 z-40 transform active:scale-95 transition-transform">
