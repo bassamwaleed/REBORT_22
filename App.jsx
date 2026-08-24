@@ -4,6 +4,7 @@ import { getAuth, createUserWithEmailAndPassword, signInWithEmailAndPassword, si
 import { getFirestore, collection, onSnapshot, addDoc, deleteDoc, updateDoc, doc, setDoc, getDoc, serverTimestamp } from 'firebase/firestore';
 import { MapPin, Navigation, Car, User, MessageCircle, ShieldCheck, X, CheckCircle2, Loader2, Trash2, Send, LogOut, Bell, Phone, Mail, Lock, LogIn, AlertCircle, Settings, Moon, Sun, Info, History, Star, Play, CheckSquare, Megaphone, Calendar, Clock, ChevronLeft, Wallet, Sparkles, ArrowRight, Shield, Crown, Package } from 'lucide-react';
 
+// إعدادات فايربيز 
 const firebaseConfig = {
   apiKey: "AIzaSyC3JM11miWda_leIk0LPViRNVdSZRCQ8N8",
   authDomain: "khodnimaak.firebaseapp.com",
@@ -20,6 +21,7 @@ const APP_COLLECTION_NAME = 'khodni_maak_trips';
 const USERS_COLLECTION = 'khodni_maak_users';
 const ADMIN_EMAIL = "bassamwaleed2000@gmail.com".toLowerCase();
 
+// داتا وهمية للبريزنتيشن 
 const DUMMY_TRIPS = [
   { id: 'dummy_1', type: 'offer', from: 'القاهرة (رمسيس)', to: 'الإسكندرية (محطة مصر)', date: '2026-08-25', time: '08:00 ص', seats: 3, cost: '150', notes: 'عربية مكيفة، رحلة ممتعة إن شاء الله', userId: 'd1', userName: 'أحمد محمود', userPhone: '', verified: true, isDummy: true, status: 'completed', rating: 4.5, totalRatings: 12, createdAt: { toMillis: () => Date.now() - 1000000 } },
   { id: 'dummy_2', type: 'request', from: 'المنصورة', to: 'القاهرة (مدينة نصر)', date: '2026-08-26', time: '10:30 ص', seats: 1, cost: '', notes: 'معايا شنطة سفر واحدة صغيرة', userId: 'd2', userName: 'سارة خالد', userPhone: '', verified: false, isDummy: true, status: 'completed', rating: 5.0, totalRatings: 4, createdAt: { toMillis: () => Date.now() - 2000000 } },
@@ -31,7 +33,7 @@ export default function App() {
   const [user, setUser] = useState(null);
   const [userData, setUserData] = useState(null);
   const [isGuest, setIsGuest] = useState(false);
-  const [isAdmin, setIsAdmin] = useState(false);
+  const [isAdmin, setIsAdmin] = useState(false); // حالة الأدمن
   const [loading, setLoading] = useState(true);
   
   const [isLoginMode, setIsLoginMode] = useState(true);
@@ -55,6 +57,7 @@ export default function App() {
   const [isSubmitting, setIsSubmitting] = useState(false);
   
   const [isDarkMode, setIsDarkMode] = useState(false);
+  const [systemNotice, setSystemNotice] = useState(null);
   
   const [announcements, setAnnouncements] = useState([
     "🚀 جاري تحديث وتطوير البرنامج باستمرار لخدمتكم",
@@ -76,26 +79,32 @@ export default function App() {
     type: 'request', from: '', to: '', date: '', time: '', seats: 1, cost: '', notes: ''
   });
 
+  // البوت الذكي: تغيير حالة الرحلات العشوائية تلقائياً لو الأدمن فاتح الموقع (توقيتات محدثة)
   useEffect(() => {
     if (!isAdmin || realTrips.length === 0) return;
     
     const botInterval = setInterval(() => {
       const now = Date.now();
       realTrips.forEach(async (trip) => {
-        if (trip.isBot && trip.createdAt && trip.createdAt.toMillis) {
+        if (trip.isBot && trip.createdAt) {
           const tripAgeInMinutes = (now - trip.createdAt.toMillis()) / 60000;
+          
+          // بعد 5 دقايق تتحول لـ "في الطريق"
           if (trip.status === 'open' && tripAgeInMinutes >= 5 && tripAgeInMinutes < 35) {
             await updateDoc(doc(db, APP_COLLECTION_NAME, trip.id), { status: 'in_progress' });
-          } else if (trip.status === 'in_progress' && tripAgeInMinutes >= 35) {
+          }
+          // بعد 35 دقيقة (30 دقيقة من بدايتها) تتحول لـ "مكتملة"
+          else if (trip.status === 'in_progress' && tripAgeInMinutes >= 35) {
             await updateDoc(doc(db, APP_COLLECTION_NAME, trip.id), { status: 'completed' });
           }
         }
       });
-    }, 60000);
+    }, 60000); // يفحص كل دقيقة عشان التوقيتات الجديدة أطول
     
     return () => clearInterval(botInterval);
   }, [isAdmin, realTrips]);
 
+  // جلب الإعلانات من فايربيز
   useEffect(() => {
     const settingsDocRef = doc(db, 'app_settings', 'announcements');
     const unsubscribe = onSnapshot(settingsDocRef, (docSnap) => {
@@ -106,6 +115,7 @@ export default function App() {
     return () => unsubscribe();
   }, []);
 
+  // تحريك الإعلانات
   useEffect(() => {
     if (announcements.length <= 1) return;
     const interval = setInterval(() => {
@@ -119,12 +129,20 @@ export default function App() {
     if (savedTheme === 'dark') setIsDarkMode(true);
   }, []);
 
+  const closeSystemNotice = () => {
+    if(systemNotice) {
+      localStorage.setItem('last_seen_version', systemNotice.version);
+      setSystemNotice(null);
+    }
+  };
+
   const toggleTheme = () => {
     const newTheme = !isDarkMode;
     setIsDarkMode(newTheme);
     localStorage.setItem('khodnimaak_theme', newTheme ? 'dark' : 'light');
   };
 
+  // مراقبة المستخدم وفحص الأدمن بالإيميل
   useEffect(() => {
     const unsubscribe = onAuthStateChanged(auth, async (currentUser) => {
       if (currentUser) {
@@ -135,20 +153,19 @@ export default function App() {
           setIsAdmin(false);
         } else {
           setIsGuest(false);
+          
+          // التحقق من إيميل الإدارة حصرياً
           const isUserAdmin = currentUser.email && currentUser.email.toLowerCase() === ADMIN_EMAIL;
           setIsAdmin(isUserAdmin);
 
-          try {
-            const userDoc = await getDoc(doc(db, USERS_COLLECTION, currentUser.uid));
-            if (userDoc.exists()) {
-              setUserData(userDoc.data());
-            } else {
-              const initialData = { name: currentUser.displayName || 'مستخدم', isVerified: false, rating: 0, totalRatings: 0, email: currentUser.email };
-              await setDoc(doc(db, USERS_COLLECTION, currentUser.uid), initialData, { merge: true });
-              setUserData(initialData);
-            }
-          } catch (e) {
-            console.error("Error loading user profile", e);
+          const userDoc = await getDoc(doc(db, USERS_COLLECTION, currentUser.uid));
+          if (userDoc.exists()) {
+            const data = userDoc.data();
+            setUserData(data);
+          } else {
+            const initialData = { name: currentUser.displayName, isVerified: false, rating: 0, totalRatings: 0, email: currentUser.email };
+            await setDoc(doc(db, USERS_COLLECTION, currentUser.uid), initialData, { merge: true });
+            setUserData(initialData);
           }
         }
       } else {
@@ -162,50 +179,55 @@ export default function App() {
     return () => unsubscribe();
   }, []);
 
+  // جلب الرحلات
   useEffect(() => {
     if (!user) return;
     const tripsPath = collection(db, APP_COLLECTION_NAME);
     const unsubscribe = onSnapshot(tripsPath, (snapshot) => {
       const tripsData = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
       setRealTrips(tripsData);
-    }, (err) => console.error("Trips snapshot error:", err));
+    });
     return () => unsubscribe();
   }, [user]);
 
+  // جلب صندوق الرسائل
   useEffect(() => {
     if (!user || isGuest) return;
     const myInboxPath = collection(db, `inbox_${user.uid}`);
     const unsubscribe = onSnapshot(myInboxPath, (snapshot) => {
       const inboxData = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
-      inboxData.sort((a, b) => (b.createdAt?.toMillis ? b.createdAt.toMillis() : 0) - (a.createdAt?.toMillis ? a.createdAt.toMillis() : 0));
+      inboxData.sort((a, b) => (b.createdAt?.toMillis() || 0) - (a.createdAt?.toMillis() || 0));
       setMyInbox(inboxData);
-    }, (err) => console.error("Inbox snapshot error:", err));
+    });
     return () => unsubscribe();
   }, [user, isGuest]);
 
+  // جلب الشات
   useEffect(() => {
     if (!user || !activeChat || isGuest) return;
     const chatId = activeChat.chatId;
     const msgsPath = collection(db, `chats_${chatId}`);
     const unsubscribe = onSnapshot(msgsPath, (snapshot) => {
       const msgsData = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
-      msgsData.sort((a, b) => (a.createdAt?.toMillis ? a.createdAt.toMillis() : 0) - (b.createdAt?.toMillis ? b.createdAt.toMillis() : 0));
+      msgsData.sort((a, b) => (a.createdAt?.toMillis() || 0) - (b.createdAt?.toMillis() || 0));
       setMessages(msgsData);
       setTimeout(() => messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' }), 100);
-    }, (err) => console.error("Messages snapshot error:", err));
+    });
     return () => unsubscribe();
   }, [user, activeChat, isGuest]);
 
+  // جلب كل المستخدمين للأدمن
   useEffect(() => {
     if (!user || !isAdmin || !showAdminPanel) return;
     const usersPath = collection(db, USERS_COLLECTION);
     const unsubscribe = onSnapshot(usersPath, (snapshot) => {
       const uData = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
       setAllUsers(uData);
-    }, (err) => console.error("Users snapshot error:", err));
+    });
     return () => unsubscribe();
   }, [user, isAdmin, showAdminPanel]);
 
+  // --- دوال الأدمن ---
   const adminAddAnnouncement = async () => {
     if (!newAdText.trim()) return;
     const newAdsList = [...announcements, newAdText.trim()];
@@ -254,6 +276,7 @@ export default function App() {
     }
   };
 
+  // توليد رحلة عشوائية لتنشيط التطبيق
   const adminGenerateBotTrip = async () => {
     const cities = ['القاهرة', 'الإسكندرية', 'المنصورة', 'طنطا', 'الزقازيق', 'بنها', 'بورسعيد', 'الإسماعيلية'];
     const names = ['أحمد فتحي', 'محمد كمال', 'سارة علي', 'محمود سعد', 'نورهان فاروق', 'خالد حسام', 'عمر مجدي', 'هدى سمير'];
@@ -274,16 +297,16 @@ export default function App() {
           date: new Date().toISOString().split('T')[0], 
           time: new Date().toLocaleTimeString('ar-EG', {hour: '2-digit', minute:'2-digit'}),
           seats: Math.floor(Math.random() * 3) + 1,
-          cost: '',
+          cost: '', // السعر مخفي كما طلبت
           notes: 'رحلة عشوائية آمنة',
           userId: 'bot_' + Math.floor(Math.random() * 10000),
           userName: randomName,
           userPhone: '',
           verified: Math.random() > 0.3,
-          rating: Number((Math.random() * 2 + 3).toFixed(1)),
+          rating: (Math.random() * 2 + 3).toFixed(1),
           totalRatings: Math.floor(Math.random() * 50) + 1,
           status: 'open',
-          isBot: true,
+          isBot: true, // لتسهيل تتبعها برمجياً
           createdAt: serverTimestamp()
       });
       triggerToast('تم توليد رحلة عشوائية بنجاح 🤖');
@@ -292,6 +315,7 @@ export default function App() {
     }
   };
 
+  // دوال التطبيق العادية
   const handleAuth = async (e) => {
     e.preventDefault();
     setAuthLoading(true);
@@ -353,7 +377,7 @@ export default function App() {
       await addDoc(collection(db, APP_COLLECTION_NAME), {
         ...newTrip,
         userId: user.uid,
-        userName: userData?.name || user.displayName || 'مستخدم',
+        userName: userData?.name || user.displayName,
         userPhone: userData?.phone || '',
         verified: userData?.isVerified || false,
         rating: userData?.rating || 0,
@@ -397,7 +421,7 @@ export default function App() {
     if (!newMessage.trim() || !activeChat || isGuest) return;
     const chatId = activeChat.chatId;
     const msgData = {
-      text: newMessage, senderId: user.uid, senderName: userData?.name || user.displayName || 'مستخدم', createdAt: serverTimestamp()
+      text: newMessage, senderId: user.uid, senderName: userData?.name || user.displayName, createdAt: serverTimestamp()
     };
     try {
       await addDoc(collection(db, `chats_${chatId}`), msgData);
@@ -405,7 +429,7 @@ export default function App() {
         chatId, tripId: activeChat.tripId, otherPersonId: activeChat.otherPersonId, otherPersonName: activeChat.otherPersonName, lastMessage: newMessage, createdAt: serverTimestamp()
       });
       await setDoc(doc(db, `inbox_${activeChat.otherPersonId}`, chatId), {
-        chatId, tripId: activeChat.tripId, otherPersonId: user.uid, otherPersonName: userData?.name || user.displayName || 'مستخدم', lastMessage: newMessage, createdAt: serverTimestamp()
+        chatId, tripId: activeChat.tripId, otherPersonId: user.uid, otherPersonName: userData?.name || user.displayName, lastMessage: newMessage, createdAt: serverTimestamp()
       });
       setNewMessage('');
     } catch (error) {
@@ -421,13 +445,13 @@ export default function App() {
     requireAuth(() => {
       const chatId = trip.id + '_' + (user.uid < trip.userId ? user.uid + '_' + trip.userId : trip.userId + '_' + user.uid);
       setActiveChat({
-        chatId: chatId, tripId: trip.id, otherPersonId: trip.userId, otherPersonName: trip.userName || 'مستخدم', tripInfo: `${trip.from} ➔ ${trip.to}`
+        chatId: chatId, tripId: trip.id, otherPersonId: trip.userId, otherPersonName: trip.userName, tripInfo: `${trip.from} ➔ ${trip.to}`
       });
     });
   };
 
   const allTrips = [...realTrips, ...DUMMY_TRIPS];
-  allTrips.sort((a, b) => (b.createdAt?.toMillis ? b.createdAt.toMillis() : 0) - (a.createdAt?.toMillis ? a.createdAt.toMillis() : 0));
+  allTrips.sort((a, b) => (b.createdAt?.toMillis() || 0) - (a.createdAt?.toMillis() || 0));
 
   const filteredTrips = allTrips.filter(t => (filterType === 'all' || t.type === filterType) && (t.from?.includes(searchFrom) && t.to?.includes(searchTo)));
   const myOwnTrips = realTrips.filter(t => t.userId === user?.uid);
@@ -436,9 +460,8 @@ export default function App() {
     if (!total || total === 0) {
       return <span className="text-[11px] text-slate-400 font-bold">جديد ✨</span>;
     }
-    const numRating = Number(rating) || 0;
-    const fullStars = Math.floor(numRating);
-    const hasHalfStar = numRating % 1 !== 0;
+    const fullStars = Math.floor(rating);
+    const hasHalfStar = rating % 1 !== 0;
     
     return (
       <div className="flex items-center gap-1">
@@ -447,23 +470,25 @@ export default function App() {
             <Star 
               key={i} 
               size={12} 
-              fill={i < fullStars ? "currentColor" : (i === fullStars && hasHalfStar ? "currentColor" : "none")} 
+              fill={i < fullStars ? "currentColor" : (i === fullStars && hasHalfStar ? "url(#half)" : "none")} 
               className={i < fullStars || (i === fullStars && hasHalfStar) ? "text-amber-400" : "text-slate-300 dark:text-slate-600"}
             />
           ))}
         </div>
-        <span className="text-[11px] font-bold text-slate-500 dark:text-slate-400">({numRating.toFixed(1)})</span>
+        <span className="text-[11px] font-bold text-slate-500 dark:text-slate-400">({rating.toFixed(1)})</span>
       </div>
     );
   };
 
   const bgMain = isDarkMode ? 'bg-slate-900 text-slate-100' : 'bg-slate-50 text-slate-800';
   const bgCard = isDarkMode ? 'bg-slate-800 border-slate-700' : 'bg-white border-slate-200';
+  const bgHeader = isDarkMode ? 'bg-slate-900 border-slate-800' : 'bg-white border-slate-100';
   const bgInput = isDarkMode ? 'bg-slate-700 border-slate-600 text-white placeholder-slate-400 focus:bg-slate-600' : 'bg-slate-50 border-slate-200 text-slate-900 focus:bg-white';
   const bgModal = isDarkMode ? 'bg-slate-800 text-white' : 'bg-white text-slate-900';
 
   if (loading) return <div className={`min-h-screen flex justify-center items-center ${bgMain}`}><Loader2 size={50} className="animate-spin text-indigo-600" /></div>;
 
+  // شاشة المصادقة
   if (!user) {
     return (
       <div dir="rtl" className={`min-h-screen flex items-center justify-center p-4 transition-colors ${bgMain} bg-[url('data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHdpZHRoPSI0MCIgaGVpZ2h0PSI0MCI+PGRlZnM+PHBhdHRlcm4gaWQ9InBhdHRlcm4iIHdpZHRoPSI0MCIgaGVpZ2h0PSI0MCIgcGF0dGVyblVuaXRzPSJ1c2VyU3BhY2VPblVzZSI+PHBhdGggZD0iTTAgMGg0MHY0MEgweiIgZmlsbD0ibm9uZSIvPjxjaXJjbGUgY3g9IjIwIiBjeT0iMjAiIHI9IjEiIGZpbGw9InJnYmEoMTU2LCAxNjMsIDE3NSwgMC4yKSIvPjwvcGF0dGVybj48L2RlZnM+PHJlY3Qgd2lkdGg9IjEwMCUiIGhlaWdodD0iMTAwJSIgZmlsbD0idXJsKCNwYXR0ZXJuKSIvPjwvc3ZnPg==')]`}>
@@ -523,6 +548,7 @@ export default function App() {
     <div dir="rtl" className={`min-h-screen flex flex-col relative transition-colors duration-300 ${bgMain}`}>
       <style dangerouslySetInnerHTML={{__html: `:root { color-scheme: light dark; }`}} />
       
+      {/* لوحة تحكم الإدارة (الأدمن) */}
       {showAdminPanel && isAdmin && (
         <div className="fixed inset-0 bg-slate-900/80 backdrop-blur-md z-[80] flex justify-center items-center p-4">
           <div className={`${bgModal} rounded-3xl w-full max-w-2xl h-[85vh] shadow-2xl border flex flex-col ${isDarkMode ? 'border-amber-500/30' : 'border-amber-400'}`}>
@@ -533,6 +559,7 @@ export default function App() {
             
             <div className={`flex-1 overflow-y-auto p-6 space-y-8 ${isDarkMode ? 'bg-slate-900' : 'bg-slate-50'}`}>
               
+              {/* قسم إرسال الإشعارات */}
               <div className={`p-5 rounded-2xl border ${bgCard}`}>
                 <h3 className="font-bold text-lg mb-4 flex items-center gap-2"><Bell size={18} className="text-rose-500"/> إرسال إشعار للمستخدمين (صندوق الوارد)</h3>
                 <textarea 
@@ -551,6 +578,7 @@ export default function App() {
                 </button>
               </div>
 
+              {/* قسم تنشيط التطبيق (البوت) */}
               <div className={`p-5 rounded-2xl border ${bgCard}`}>
                 <div className="flex items-center justify-between mb-4">
                   <h3 className="font-bold text-lg flex items-center gap-2"><Sparkles size={18} className="text-amber-500"/> أدوات تنشيط التطبيق (البوت)</h3>
@@ -564,6 +592,7 @@ export default function App() {
                 </button>
               </div>
 
+              {/* قسم إدارة الإعلانات */}
               <div className={`p-5 rounded-2xl border ${bgCard}`}>
                 <h3 className="font-bold text-lg mb-4 flex items-center gap-2"><Megaphone size={18} className="text-indigo-500"/> إدارة شريط الإعلانات</h3>
                 <div className="flex gap-2 mb-4">
@@ -580,6 +609,7 @@ export default function App() {
                 </div>
               </div>
 
+              {/* قسم توثيق المستخدمين */}
               <div className={`p-5 rounded-2xl border ${bgCard}`}>
                 <h3 className="font-bold text-lg mb-4 flex items-center gap-2"><Shield size={18} className="text-emerald-500"/> توثيق المستخدمين</h3>
                 <div className="space-y-3">
@@ -587,8 +617,8 @@ export default function App() {
                     allUsers.map(u => (
                       <div key={u.id} className={`flex justify-between items-center p-3 rounded-xl border ${isDarkMode ? 'bg-slate-700 border-slate-600' : 'bg-slate-100 border-slate-200'}`}>
                         <div>
-                          <p className="font-bold text-sm flex items-center gap-1">{u.name || 'مستخدم'} {u.isVerified && <ShieldCheck size={14} className="text-blue-500"/>}</p>
-                          <p className="text-xs text-slate-500">{u.phone || 'بدون رقم'}</p>
+                          <p className="font-bold text-sm flex items-center gap-1">{u.name} {u.isVerified && <ShieldCheck size={14} className="text-blue-500"/>}</p>
+                          <p className="text-xs text-slate-500">{u.phone}</p>
                         </div>
                         <button onClick={() => adminToggleVerification(u.id, u.isVerified)} className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-colors ${u.isVerified ? 'bg-rose-100 text-rose-600 hover:bg-rose-200' : 'bg-emerald-100 text-emerald-700 hover:bg-emerald-200'}`}>
                           {u.isVerified ? 'سحب التوثيق' : 'إعطاء توثيق'}
@@ -624,6 +654,7 @@ export default function App() {
         </div>
       )}
 
+      {/* الإعدادات */}
       {showSettings && (
         <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-sm z-[70] flex justify-end">
           <div className={`${bgModal} w-full sm:w-[400px] h-full shadow-2xl flex flex-col animate-fade-in-right`}>
@@ -688,6 +719,7 @@ export default function App() {
         </div>
       )}
 
+      {/* سجل رحلاتي الشامل */}
       {showMyTrips && !isGuest && (
         <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-sm z-[65] flex justify-center items-end sm:items-center p-0 sm:p-4">
           <div className={`${bgModal} w-full h-[85vh] sm:h-[650px] sm:max-w-xl rounded-t-[2rem] sm:rounded-3xl shadow-2xl flex flex-col overflow-hidden`}>
@@ -742,6 +774,7 @@ export default function App() {
         </div>
       )}
 
+      {/* الهيدر الأساسي */}
       <header className={`sticky top-0 z-40 transition-all duration-300 border-b backdrop-blur-md ${isDarkMode ? 'bg-slate-900/90 border-slate-800 shadow-md' : 'bg-white/90 border-slate-200 shadow-sm'}`}>
         <div className="max-w-7xl mx-auto px-4 h-20 flex justify-between items-center">
           <div className="flex items-center gap-3">
@@ -777,6 +810,7 @@ export default function App() {
         </div>
       </header>
 
+      {/* الإعلانات المتحركة الصغيرة */}
       <div className={`overflow-hidden relative h-9 flex items-center justify-center transition-colors text-xs sm:text-sm font-medium ${isDarkMode ? 'bg-indigo-950 text-indigo-200' : 'bg-indigo-50 text-indigo-700'}`}>
         {announcements.map((ad, index) => (
           <div
@@ -793,6 +827,7 @@ export default function App() {
 
       <main className="flex-1 max-w-7xl mx-auto px-4 py-6 w-full pb-28 md:pb-6">
         
+        {/* البانر التفاعلي الجديد */}
         <div className="bg-gradient-to-br from-indigo-600 via-blue-700 to-indigo-900 rounded-[2.5rem] p-7 sm:p-10 mb-8 text-white shadow-xl relative overflow-hidden">
           <div className="absolute top-0 right-0 w-72 h-72 bg-white opacity-5 rounded-full blur-3xl transform translate-x-1/3 -translate-y-1/3"></div>
           <div className="absolute bottom-0 left-0 w-48 h-48 bg-indigo-400 opacity-20 rounded-full blur-2xl transform -translate-x-1/2 translate-y-1/2"></div>
@@ -814,6 +849,7 @@ export default function App() {
           </div>
         </div>
 
+        {/* شريط البحث السريع */}
         <div className={`p-4 rounded-2xl shadow-sm border mb-8 flex flex-col sm:flex-row gap-3 ${isDarkMode ? 'bg-slate-800 border-slate-700' : 'bg-white border-slate-200'}`}>
           <div className={`flex-1 flex items-center px-4 py-3 rounded-xl border ${isDarkMode ? 'bg-slate-700/50 border-slate-600' : 'bg-slate-50 border-slate-200'}`}>
             <MapPin className="text-indigo-500 ml-3" size={20} />
@@ -825,6 +861,7 @@ export default function App() {
           </div>
         </div>
 
+        {/* أزرار الفلترة (تم إضافة الدليفري) */}
         <div className={`flex gap-2 p-1.5 mb-8 max-w-xl mx-auto rounded-2xl shadow-inner ${isDarkMode ? 'bg-slate-800' : 'bg-slate-100'}`}>
           <button 
             onClick={() => setFilterType('all')} 
@@ -848,6 +885,7 @@ export default function App() {
           </button>
         </div>
 
+        {/* قائمة الرحلات */}
         {filteredTrips.length === 0 ? (
           <div className={`text-center py-24 rounded-[2rem] border-2 border-dashed flex flex-col items-center justify-center ${isDarkMode ? 'border-slate-700 bg-slate-800/50' : 'border-slate-200 bg-slate-50/50'}`}>
              <div className={`w-20 h-20 rounded-full flex items-center justify-center mb-4 ${isDarkMode ? 'bg-slate-700' : 'bg-slate-200'}`}><Car size={32} className="text-slate-400"/></div>
@@ -880,29 +918,34 @@ export default function App() {
                     </div>
                     <div>
                       <h3 className={`font-bold text-sm flex items-center gap-1 ${isDarkMode ? 'text-white' : 'text-slate-800'}`}>
-                        {trip.userName || 'مستخدم'} {trip.verified && <ShieldCheck size={16} className="text-blue-500" />}
+                        {trip.userName} {trip.verified && <ShieldCheck size={16} className="text-blue-500" />}
                       </h3>
                       
+                      {/* النجوم */}
                       <div className="mt-0.5">
                         {renderStars(trip.rating, trip.totalRatings)}
                       </div>
 
+                      {/* نوع الرحلة (راكب - سائق - دليفري) */}
                       <span className={`inline-block mt-1 text-[10px] font-bold px-2 py-0.5 rounded-md ${trip.type === 'offer' ? (isDarkMode ? 'bg-emerald-900/40 text-emerald-400' : 'bg-emerald-100 text-emerald-800') : trip.type === 'delivery' ? (isDarkMode ? 'bg-purple-900/40 text-purple-400' : 'bg-purple-100 text-purple-800') : (isDarkMode ? 'bg-orange-900/40 text-orange-400' : 'bg-orange-100 text-orange-800')}`}>
                         {trip.type === 'offer' ? 'سائق (يعرض توصيلة)' : trip.type === 'delivery' ? 'دليفري (شحن وتوصيل)' : 'راكب (يطلب توصيلة)'}
                       </span>
                     </div>
                   </div>
                   
+                  {/* حالة الرحلة */}
                   <div className={`text-[10px] font-bold px-2.5 py-1 rounded-lg border ${isCompleted ? (isDarkMode ? 'bg-slate-700 text-slate-300 border-slate-600' : 'bg-slate-100 text-slate-600 border-slate-200') : isInProgress ? (isDarkMode ? 'bg-amber-900/30 text-amber-400 border-amber-800 animate-pulse' : 'bg-amber-50 text-amber-600 border-amber-200 animate-pulse') : (isDarkMode ? 'bg-indigo-900/30 text-indigo-400 border-indigo-800' : 'bg-indigo-50 text-indigo-600 border-indigo-100')}`}>
                     {isCompleted ? 'مكتملة' : isInProgress ? 'في الطريق' : 'متاحة'}
                   </div>
                 </div>
 
+                {/* الوقت والتاريخ */}
                 <div className={`flex items-center gap-5 text-xs font-bold px-4 py-2.5 rounded-xl mb-5 ${isDarkMode ? 'bg-slate-700/40 text-slate-300' : 'bg-slate-50 text-slate-600'}`}>
-                  <div className="flex items-center gap-1.5"><Calendar size={15} className="text-indigo-500"/> {trip.date || 'اليوم'}</div>
-                  <div className="flex items-center gap-1.5"><Clock size={15} className="text-amber-500"/> {trip.time || 'الآن'}</div>
+                  <div className="flex items-center gap-1.5"><Calendar size={15} className="text-indigo-500"/> {trip.date}</div>
+                  <div className="flex items-center gap-1.5"><Clock size={15} className="text-amber-500"/> {trip.time}</div>
                 </div>
                 
+                {/* مسار الرحلة */}
                 <div className="relative mb-6 flex-1">
                   <div className={`absolute right-[7px] top-2 bottom-2 w-0.5 ${isDarkMode ? 'bg-slate-600' : 'bg-slate-200'}`}></div>
                   
@@ -917,6 +960,7 @@ export default function App() {
                   </div>
                 </div>
                 
+                {/* التفاصيل (العدد والمساهمة) */}
                 <div className="flex gap-3 mb-5">
                   <div className={`flex-1 flex flex-col justify-center items-center py-2.5 rounded-xl border ${isDarkMode ? 'bg-slate-700/30 border-slate-600' : 'bg-slate-50 border-slate-100'}`}>
                      <span className="text-[10px] text-slate-400 mb-1">{trip.type === 'delivery' ? 'عدد الطرود' : 'العدد المطلوب'}</span>
@@ -925,7 +969,7 @@ export default function App() {
                        {trip.seats}
                      </span>
                   </div>
-                  {trip.cost && !trip.isBot && (
+                  {trip.cost && !trip.isBot && ( // إخفاء السعر لو كانت الرحلة من البوت
                     <div className={`flex-1 flex flex-col justify-center items-center py-2.5 rounded-xl border ${isDarkMode ? 'bg-slate-700/30 border-slate-600' : 'bg-slate-50 border-slate-100'}`}>
                       <span className="text-[10px] text-slate-400 mb-1">{trip.type === 'delivery' ? 'أجرة التوصيل' : 'المساهمة'}</span>
                       <span className={`text-sm font-extrabold flex items-center gap-1.5 ${isDarkMode ? 'text-emerald-400' : 'text-emerald-600'}`}><Wallet size={15}/> {trip.cost} ج</span>
@@ -933,6 +977,7 @@ export default function App() {
                   )}
                 </div>
                 
+                {/* الأزرار و الخصوصية */}
                 <div className="mt-auto">
                   {isOwner ? (
                     <div className={`w-full py-3.5 rounded-xl font-bold text-center text-sm border border-dashed ${isDarkMode ? 'bg-slate-700/50 text-slate-400 border-slate-600' : 'bg-slate-50 text-slate-500 border-slate-200'}`}>
@@ -985,12 +1030,14 @@ export default function App() {
         )}
       </main>
 
+      {/* زر الإضافة العائم */}
       <button 
         onClick={() => requireAuth(() => setShowAddModal(true))} 
         className="md:hidden fixed bottom-8 left-6 w-14 h-14 bg-indigo-600 text-white rounded-full flex items-center justify-center shadow-xl shadow-indigo-500/40 z-40 transform active:scale-95 transition-transform">
         <Navigation size={24} />
       </button>
 
+      {/* الإنبوكس */}
       {showInbox && !isGuest && (
         <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-sm z-50 flex justify-center items-end sm:items-center p-0 sm:p-4">
           <div className={`${bgModal} w-full h-[80vh] sm:h-[600px] sm:max-w-md rounded-t-[2rem] sm:rounded-3xl shadow-2xl flex flex-col overflow-hidden`}>
@@ -1011,10 +1058,10 @@ export default function App() {
                        {chat.otherPersonId === 'admin' ? (
                          <div className="w-10 h-10 bg-rose-100 text-rose-600 rounded-full flex items-center justify-center font-bold"><Crown size={20}/></div>
                        ) : (
-                         <div className="w-10 h-10 bg-indigo-100 text-indigo-600 rounded-full flex items-center justify-center font-bold">{chat.otherPersonName?.charAt(0) || 'م'}</div>
+                         <div className="w-10 h-10 bg-indigo-100 text-indigo-600 rounded-full flex items-center justify-center font-bold">{chat.otherPersonName.charAt(0)}</div>
                        )}
                        <div>
-                        <h4 className={`font-bold text-sm ${isDarkMode ? 'text-white' : 'text-slate-900'}`}>{chat.otherPersonName || 'مستخدم'}</h4>
+                        <h4 className={`font-bold text-sm ${isDarkMode ? 'text-white' : 'text-slate-900'}`}>{chat.otherPersonName}</h4>
                         <p className={`text-xs line-clamp-1 mt-1 ${isDarkMode ? 'text-slate-400' : 'text-slate-500'}`}>{chat.lastMessage}</p>
                        </div>
                     </div>
@@ -1026,6 +1073,7 @@ export default function App() {
         </div>
       )}
 
+      {/* الشات */}
       {activeChat && !isGuest && (
         <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-sm z-[60] flex justify-center items-end sm:items-center p-0 sm:p-4">
           <div className={`${bgModal} w-full h-[85vh] sm:h-[600px] sm:max-w-md rounded-t-[2rem] sm:rounded-3xl shadow-2xl flex flex-col overflow-hidden`}>
@@ -1033,7 +1081,7 @@ export default function App() {
               <button onClick={() => setActiveChat(null)} className={`p-2 rounded-full transition-colors ${activeChat.otherPersonId === 'admin' ? 'hover:bg-rose-700' : 'hover:bg-indigo-700'}`}><ChevronLeft size={24} /></button>
               <div className="w-10 h-10 bg-white/20 rounded-full flex items-center justify-center">{activeChat.otherPersonId === 'admin' ? <Crown size={20}/> : <User size={20}/>}</div>
               <div className="flex-1">
-                <h3 className="font-bold text-sm leading-tight">{activeChat.otherPersonName || 'مستخدم'}</h3>
+                <h3 className="font-bold text-sm leading-tight">{activeChat.otherPersonName}</h3>
                 {activeChat.tripInfo && activeChat.tripInfo !== 'system' && <span className="text-[10px] text-indigo-200 leading-tight block">{activeChat.tripInfo}</span>}
               </div>
             </div>
@@ -1065,6 +1113,7 @@ export default function App() {
         </div>
       )}
 
+      {/* شاشة الإضافة (دليفري مضاف) */}
       {showAddModal && !isGuest && (
         <div className="fixed inset-0 bg-slate-900/70 backdrop-blur-sm z-50 flex justify-center items-center p-4">
           <div className={`${bgModal} rounded-[2rem] w-full max-w-lg shadow-2xl border overflow-hidden ${isDarkMode ? 'border-slate-700' : 'border-slate-100'}`}>
@@ -1075,6 +1124,7 @@ export default function App() {
             <div className="p-6 max-h-[75vh] overflow-y-auto custom-scrollbar">
               <form onSubmit={handleAddTrip} className="space-y-6">
                 
+                {/* اختيار النوع (3 كروت) */}
                 <div>
                   <label className={`block text-sm font-bold mb-3 ${isDarkMode ? 'text-slate-300' : 'text-slate-700'}`}>نوع إعلانك؟</label>
                   <div className="grid grid-cols-3 gap-3">
