@@ -1,5 +1,5 @@
 {
-  "name": "khodni-maak",
+  "name": "khodnimaak",
   "private": true,
   "version": "0.0.0",
   "type": "module",
@@ -9,13 +9,14 @@
     "preview": "vite preview"
   },
   "dependencies": {
-    "firebase": "^10.7.0",
-    "lucide-react": "^0.300.0",
+    "firebase": "^10.8.0",
+    "lucide-react": "^0.344.0",
     "react": "^18.2.0",
     "react-dom": "^18.2.0"
   },
   "devDependencies": {
     "@vitejs/plugin-react": "^4.2.1",
-    "vite": "^5.0.8"
+    "tailwindcss": "^3.4.1",
+    "vite": "^5.1.4"
   }
 }
