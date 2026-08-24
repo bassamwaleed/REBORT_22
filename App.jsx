@@ -2,7 +2,7 @@ import React, { useState, useEffect, useRef } from 'react';
 import { initializeApp } from 'firebase/app';
 import { getAuth, createUserWithEmailAndPassword, signInWithEmailAndPassword, signInAnonymously, onAuthStateChanged, updateProfile, signOut } from 'firebase/auth';
 import { getFirestore, collection, onSnapshot, addDoc, deleteDoc, updateDoc, doc, setDoc, getDoc, serverTimestamp } from 'firebase/firestore';
-import { MapPin, Navigation, Car, User, MessageCircle, ShieldCheck, X, CheckCircle2, Loader2, Trash2, Send, LogOut, Bell, Phone, Mail, Lock, LogIn, AlertCircle, Settings, Moon, Sun, Info, History, Star, Play, CheckSquare, Megaphone, Calendar, Clock, ChevronLeft, Wallet, Sparkles, ArrowRight, Shield, Crown } from 'lucide-react';
+import { MapPin, Navigation, Car, User, MessageCircle, ShieldCheck, X, CheckCircle2, Loader2, Trash2, Send, LogOut, Bell, Phone, Mail, Lock, LogIn, AlertCircle, Settings, Moon, Sun, Info, History, Star, Play, CheckSquare, Megaphone, Calendar, Clock, ChevronLeft, Wallet, Sparkles, ArrowRight, Shield, Crown, Package } from 'lucide-react';
 
 // إعدادات فايربيز 
 const firebaseConfig = {
@@ -25,7 +25,7 @@ const ADMIN_EMAIL = "bassamwaleed2000@gmail.com".toLowerCase();
 const DUMMY_TRIPS = [
   { id: 'dummy_1', type: 'offer', from: 'القاهرة (رمسيس)', to: 'الإسكندرية (محطة مصر)', date: '2026-08-25', time: '08:00 ص', seats: 3, cost: '150', notes: 'عربية مكيفة، رحلة ممتعة إن شاء الله', userId: 'd1', userName: 'أحمد محمود', userPhone: '', verified: true, isDummy: true, status: 'completed', rating: 4.5, totalRatings: 12, createdAt: { toMillis: () => Date.now() - 1000000 } },
   { id: 'dummy_2', type: 'request', from: 'المنصورة', to: 'القاهرة (مدينة نصر)', date: '2026-08-26', time: '10:30 ص', seats: 1, cost: '', notes: 'معايا شنطة سفر واحدة صغيرة', userId: 'd2', userName: 'سارة خالد', userPhone: '', verified: false, isDummy: true, status: 'completed', rating: 5.0, totalRatings: 4, createdAt: { toMillis: () => Date.now() - 2000000 } },
-  { id: 'dummy_3', type: 'offer', from: 'الزقازيق', to: 'العاشر من رمضان', date: '2026-08-24', time: '02:00 م', seats: 2, cost: '40', notes: 'التحرك من موقف الأحرار', userId: 'd3', userName: 'محمود حسن', userPhone: '', verified: true, isDummy: true, status: 'in_progress', rating: 4.0, totalRatings: 8, createdAt: { toMillis: () => Date.now() - 3000000 } }, 
+  { id: 'dummy_3', type: 'delivery', from: 'الزقازيق', to: 'العاشر من رمضان', date: '2026-08-24', time: '02:00 م', seats: 1, cost: '40', notes: 'محتاج حد يوصلي ظرف ورق مهم', userId: 'd3', userName: 'محمود حسن', userPhone: '', verified: true, isDummy: true, status: 'in_progress', rating: 4.0, totalRatings: 8, createdAt: { toMillis: () => Date.now() - 3000000 } }, 
   { id: 'dummy_4', type: 'request', from: 'طنطا', to: 'بنها', date: '2026-08-25', time: '05:00 م', seats: 2, cost: '', notes: 'محتاجين عربية في أسرع وقت', userId: 'd4', userName: 'مصطفى كمال', userPhone: '', verified: false, isDummy: true, status: 'completed', rating: 0, totalRatings: 0, createdAt: { toMillis: () => Date.now() - 4000000 } }
 ];
 
@@ -65,7 +65,7 @@ export default function App() {
   ]);
   const [currentAdIndex, setCurrentAdIndex] = useState(0);
   const [newAdText, setNewAdText] = useState(''); 
-  const [broadcastMsg, setBroadcastMsg] = useState(''); // حالة رسالة الأدمن للجميع
+  const [broadcastMsg, setBroadcastMsg] = useState(''); 
 
   const [allUsers, setAllUsers] = useState([]);
 
@@ -78,6 +78,31 @@ export default function App() {
   const [newTrip, setNewTrip] = useState({
     type: 'request', from: '', to: '', date: '', time: '', seats: 1, cost: '', notes: ''
   });
+
+  // البوت الذكي: تغيير حالة الرحلات العشوائية تلقائياً لو الأدمن فاتح الموقع (توقيتات محدثة)
+  useEffect(() => {
+    if (!isAdmin || realTrips.length === 0) return;
+    
+    const botInterval = setInterval(() => {
+      const now = Date.now();
+      realTrips.forEach(async (trip) => {
+        if (trip.isBot && trip.createdAt) {
+          const tripAgeInMinutes = (now - trip.createdAt.toMillis()) / 60000;
+          
+          // بعد 5 دقايق تتحول لـ "في الطريق"
+          if (trip.status === 'open' && tripAgeInMinutes >= 5 && tripAgeInMinutes < 35) {
+            await updateDoc(doc(db, APP_COLLECTION_NAME, trip.id), { status: 'in_progress' });
+          }
+          // بعد 35 دقيقة (30 دقيقة من بدايتها) تتحول لـ "مكتملة"
+          else if (trip.status === 'in_progress' && tripAgeInMinutes >= 35) {
+            await updateDoc(doc(db, APP_COLLECTION_NAME, trip.id), { status: 'completed' });
+          }
+        }
+      });
+    }, 60000); // يفحص كل دقيقة عشان التوقيتات الجديدة أطول
+    
+    return () => clearInterval(botInterval);
+  }, [isAdmin, realTrips]);
 
   // جلب الإعلانات من فايربيز
   useEffect(() => {
@@ -129,7 +154,7 @@ export default function App() {
         } else {
           setIsGuest(false);
           
-          // التحقق من إيميل الإدارة
+          // التحقق من إيميل الإدارة حصرياً
           const isUserAdmin = currentUser.email && currentUser.email.toLowerCase() === ADMIN_EMAIL;
           setIsAdmin(isUserAdmin);
 
@@ -191,7 +216,7 @@ export default function App() {
     return () => unsubscribe();
   }, [user, activeChat, isGuest]);
 
-  // جلب كل المستخدمين للأدمن فقط
+  // جلب كل المستخدمين للأدمن
   useEffect(() => {
     if (!user || !isAdmin || !showAdminPanel) return;
     const usersPath = collection(db, USERS_COLLECTION);
@@ -226,35 +251,20 @@ export default function App() {
     triggerToast(!currentStatus ? 'تم توثيق الحساب ✅' : 'تم سحب التوثيق ❌');
   };
 
-  // إرسال إشعار للجميع في صندوق الرسائل
   const adminSendBroadcastMessage = async () => {
     if (!broadcastMsg.trim() || allUsers.length === 0) return;
     setIsSubmitting(true);
     try {
       const sysName = "إدارة خدني معاك 👑";
-      // عمل حلقة للمرور على جميع المستخدمين
       const promises = allUsers.map(async (u) => {
-        const chatId = `sys_admin_to_${u.id}`; // كود محادثة خاص بالإدارة
-        
-        // إضافة الرسالة في صندوق الوارد للمستخدم
+        const chatId = `sys_admin_to_${u.id}`; 
         await setDoc(doc(db, `inbox_${u.id}`, chatId), {
-          chatId: chatId,
-          tripId: 'system',
-          otherPersonId: 'admin',
-          otherPersonName: sysName,
-          lastMessage: broadcastMsg,
-          createdAt: serverTimestamp()
+          chatId: chatId, tripId: 'system', otherPersonId: 'admin', otherPersonName: sysName, lastMessage: broadcastMsg, createdAt: serverTimestamp()
         });
-
-        // إضافة نص الرسالة في الشات نفسه
         await addDoc(collection(db, `chats_${chatId}`), {
-          text: broadcastMsg,
-          senderId: 'admin',
-          senderName: sysName,
-          createdAt: serverTimestamp()
+          text: broadcastMsg, senderId: 'admin', senderName: sysName, createdAt: serverTimestamp()
         });
       });
-
       await Promise.all(promises);
       setBroadcastMsg('');
       triggerToast('تم إرسال الإشعار لجميع المستخدمين بنجاح! 🚀');
@@ -263,6 +273,45 @@ export default function App() {
       alert('حدث خطأ أثناء إرسال الإشعار.');
     } finally {
       setIsSubmitting(false);
+    }
+  };
+
+  // توليد رحلة عشوائية لتنشيط التطبيق
+  const adminGenerateBotTrip = async () => {
+    const cities = ['القاهرة', 'الإسكندرية', 'المنصورة', 'طنطا', 'الزقازيق', 'بنها', 'بورسعيد', 'الإسماعيلية'];
+    const names = ['أحمد فتحي', 'محمد كمال', 'سارة علي', 'محمود سعد', 'نورهان فاروق', 'خالد حسام', 'عمر مجدي', 'هدى سمير'];
+    const types = ['offer', 'request', 'delivery'];
+    
+    const randomCity1 = cities[Math.floor(Math.random() * cities.length)];
+    let randomCity2 = cities[Math.floor(Math.random() * cities.length)];
+    while(randomCity1 === randomCity2) randomCity2 = cities[Math.floor(Math.random() * cities.length)];
+    
+    const randomName = names[Math.floor(Math.random() * names.length)];
+    const randomType = types[Math.floor(Math.random() * types.length)];
+    
+    try {
+      await addDoc(collection(db, APP_COLLECTION_NAME), {
+          type: randomType,
+          from: randomCity1,
+          to: randomCity2,
+          date: new Date().toISOString().split('T')[0], 
+          time: new Date().toLocaleTimeString('ar-EG', {hour: '2-digit', minute:'2-digit'}),
+          seats: Math.floor(Math.random() * 3) + 1,
+          cost: '', // السعر مخفي كما طلبت
+          notes: 'رحلة عشوائية آمنة',
+          userId: 'bot_' + Math.floor(Math.random() * 10000),
+          userName: randomName,
+          userPhone: '',
+          verified: Math.random() > 0.3,
+          rating: (Math.random() * 2 + 3).toFixed(1),
+          totalRatings: Math.floor(Math.random() * 50) + 1,
+          status: 'open',
+          isBot: true, // لتسهيل تتبعها برمجياً
+          createdAt: serverTimestamp()
+      });
+      triggerToast('تم توليد رحلة عشوائية بنجاح 🤖');
+    } catch(err) {
+      console.error(err);
     }
   };
 
@@ -389,7 +438,7 @@ export default function App() {
   };
 
   const openChatFromTrip = (trip) => {
-    if (trip.status === 'completed' || trip.status === 'in_progress' || trip.isDummy) {
+    if (trip.status === 'completed' || trip.status === 'in_progress' || trip.isDummy || trip.isBot) {
       alert("عذراً، هذه الرحلة جارية أو مكتملة. لا يمكن بدء محادثة جديدة.");
       return;
     }
@@ -433,6 +482,7 @@ export default function App() {
 
   const bgMain = isDarkMode ? 'bg-slate-900 text-slate-100' : 'bg-slate-50 text-slate-800';
   const bgCard = isDarkMode ? 'bg-slate-800 border-slate-700' : 'bg-white border-slate-200';
+  const bgHeader = isDarkMode ? 'bg-slate-900 border-slate-800' : 'bg-white border-slate-100';
   const bgInput = isDarkMode ? 'bg-slate-700 border-slate-600 text-white placeholder-slate-400 focus:bg-slate-600' : 'bg-slate-50 border-slate-200 text-slate-900 focus:bg-white';
   const bgModal = isDarkMode ? 'bg-slate-800 text-white' : 'bg-white text-slate-900';
 
@@ -498,37 +548,6 @@ export default function App() {
     <div dir="rtl" className={`min-h-screen flex flex-col relative transition-colors duration-300 ${bgMain}`}>
       <style dangerouslySetInnerHTML={{__html: `:root { color-scheme: light dark; }`}} />
       
-      {systemNotice && (
-        <div className="fixed inset-0 bg-black/80 backdrop-blur-sm z-[100] flex justify-center items-center p-4">
-          <div className={`${bgModal} rounded-3xl p-8 max-w-sm w-full text-center shadow-2xl border border-indigo-500/30 transform scale-105 transition-transform`}>
-            <div className="bg-indigo-100 w-20 h-20 rounded-full flex items-center justify-center mx-auto mb-5 animate-bounce"><Megaphone size={40} className="text-indigo-600" /></div>
-            <h2 className="text-2xl font-black mb-3 text-indigo-500">{systemNotice.title}</h2>
-            <p className={`mb-8 leading-relaxed font-medium ${isDarkMode ? 'text-slate-400' : 'text-slate-500'}`}>{systemNotice.body}</p>
-            <button onClick={closeSystemNotice} className="w-full py-3.5 bg-indigo-600 text-white rounded-2xl font-bold hover:bg-indigo-700 transition-colors shadow-lg shadow-indigo-500/30">فهمت، شكراً!</button>
-          </div>
-        </div>
-      )}
-
-      {showToast && (
-        <div className="fixed top-24 left-1/2 transform -translate-x-1/2 z-[60] bg-indigo-600 text-white px-6 py-3.5 rounded-full shadow-xl flex items-center gap-3 animate-fade-in-down border border-indigo-400/30">
-          <CheckCircle2 size={20} /><p className="text-sm font-bold whitespace-nowrap">{toastMessage}</p>
-        </div>
-      )}
-      
-      {showAuthPrompt && (
-        <div className="fixed inset-0 bg-slate-900/70 backdrop-blur-sm z-[70] flex justify-center items-center p-4">
-          <div className={`${bgModal} rounded-3xl p-8 max-w-sm w-full text-center shadow-2xl border ${isDarkMode ? 'border-slate-700' : 'border-transparent'}`}>
-            <div className="bg-rose-100 w-16 h-16 rounded-2xl flex items-center justify-center mx-auto mb-5 transform -rotate-6"><AlertCircle size={32} className="text-rose-500 transform rotate-6"/></div>
-            <h2 className="text-xl font-bold mb-3">عذراً يا صديقي!</h2>
-            <p className={`mb-8 text-sm leading-relaxed ${isDarkMode ? 'text-slate-400' : 'text-slate-500'}`}>عشان تقدر تستخدم الميزة دي وتتفاعل مع الرحلات، لازم تسجل حساب معانا في ثواني.</p>
-            <div className="flex gap-3">
-              <button onClick={() => setShowAuthPrompt(false)} className={`flex-1 py-3.5 rounded-xl font-bold transition-colors ${isDarkMode ? 'bg-slate-700 text-white hover:bg-slate-600' : 'bg-slate-100 text-slate-700 hover:bg-slate-200'}`}>إلغاء</button>
-              <button onClick={handleLogout} className="flex-1 py-3.5 bg-indigo-600 text-white rounded-xl font-bold hover:bg-indigo-700 flex justify-center items-center gap-2 shadow-lg shadow-indigo-500/30"><LogIn size={18}/> تسجيل</button>
-            </div>
-          </div>
-        </div>
-      )}
-
       {/* لوحة تحكم الإدارة (الأدمن) */}
       {showAdminPanel && isAdmin && (
         <div className="fixed inset-0 bg-slate-900/80 backdrop-blur-md z-[80] flex justify-center items-center p-4">
@@ -540,7 +559,7 @@ export default function App() {
             
             <div className={`flex-1 overflow-y-auto p-6 space-y-8 ${isDarkMode ? 'bg-slate-900' : 'bg-slate-50'}`}>
               
-              {/* إرسال إشعارات (Inbox Broadcast) */}
+              {/* قسم إرسال الإشعارات */}
               <div className={`p-5 rounded-2xl border ${bgCard}`}>
                 <h3 className="font-bold text-lg mb-4 flex items-center gap-2"><Bell size={18} className="text-rose-500"/> إرسال إشعار للمستخدمين (صندوق الوارد)</h3>
                 <textarea 
@@ -559,6 +578,21 @@ export default function App() {
                 </button>
               </div>
 
+              {/* قسم تنشيط التطبيق (البوت) */}
+              <div className={`p-5 rounded-2xl border ${bgCard}`}>
+                <div className="flex items-center justify-between mb-4">
+                  <h3 className="font-bold text-lg flex items-center gap-2"><Sparkles size={18} className="text-amber-500"/> أدوات تنشيط التطبيق (البوت)</h3>
+                  <div className="bg-amber-100 text-amber-700 text-xs font-bold px-2 py-1 rounded-md">يعمل تلقائياً في الخلفية</div>
+                </div>
+                <p className="text-sm text-slate-500 mb-4 leading-relaxed">
+                  بمجرد توليد رحلة عشوائية، سيقوم النظام تلقائياً بتغيير حالتها إلى "في الطريق" بعد 5 دقائق، وإلى "مكتملة" بعد 30 دقيقة، لمحاكاة النشاط الحقيقي.
+                </p>
+                <button onClick={adminGenerateBotTrip} className="w-full bg-amber-500 text-white py-3 rounded-xl font-bold hover:bg-amber-600 flex justify-center items-center gap-2">
+                  <Car size={18} /> توليد رحلة عشوائية الآن
+                </button>
+              </div>
+
+              {/* قسم إدارة الإعلانات */}
               <div className={`p-5 rounded-2xl border ${bgCard}`}>
                 <h3 className="font-bold text-lg mb-4 flex items-center gap-2"><Megaphone size={18} className="text-indigo-500"/> إدارة شريط الإعلانات</h3>
                 <div className="flex gap-2 mb-4">
@@ -575,6 +609,7 @@ export default function App() {
                 </div>
               </div>
 
+              {/* قسم توثيق المستخدمين */}
               <div className={`p-5 rounded-2xl border ${bgCard}`}>
                 <h3 className="font-bold text-lg mb-4 flex items-center gap-2"><Shield size={18} className="text-emerald-500"/> توثيق المستخدمين</h3>
                 <div className="space-y-3">
@@ -594,6 +629,26 @@ export default function App() {
                 </div>
               </div>
 
+            </div>
+          </div>
+        </div>
+      )}
+
+      {showToast && (
+        <div className="fixed top-24 left-1/2 transform -translate-x-1/2 z-[60] bg-indigo-600 text-white px-6 py-3.5 rounded-full shadow-xl flex items-center gap-3 animate-fade-in-down border border-indigo-400/30">
+          <CheckCircle2 size={20} /><p className="text-sm font-bold whitespace-nowrap">{toastMessage}</p>
+        </div>
+      )}
+      
+      {showAuthPrompt && (
+        <div className="fixed inset-0 bg-slate-900/70 backdrop-blur-sm z-[70] flex justify-center items-center p-4">
+          <div className={`${bgModal} rounded-3xl p-8 max-w-sm w-full text-center shadow-2xl border ${isDarkMode ? 'border-slate-700' : 'border-transparent'}`}>
+            <div className="bg-rose-100 w-16 h-16 rounded-2xl flex items-center justify-center mx-auto mb-5 transform -rotate-6"><AlertCircle size={32} className="text-rose-500 transform rotate-6"/></div>
+            <h2 className="text-xl font-bold mb-3">عذراً يا صديقي!</h2>
+            <p className={`mb-8 text-sm leading-relaxed ${isDarkMode ? 'text-slate-400' : 'text-slate-500'}`}>عشان تقدر تستخدم الميزة دي وتتفاعل مع الرحلات، لازم تسجل حساب معانا في ثواني.</p>
+            <div className="flex gap-3">
+              <button onClick={() => setShowAuthPrompt(false)} className={`flex-1 py-3.5 rounded-xl font-bold transition-colors ${isDarkMode ? 'bg-slate-700 text-white hover:bg-slate-600' : 'bg-slate-100 text-slate-700 hover:bg-slate-200'}`}>إلغاء</button>
+              <button onClick={handleLogout} className="flex-1 py-3.5 bg-indigo-600 text-white rounded-xl font-bold hover:bg-indigo-700 flex justify-center items-center gap-2 shadow-lg shadow-indigo-500/30"><LogIn size={18}/> تسجيل</button>
             </div>
           </div>
         </div>
@@ -643,7 +698,7 @@ export default function App() {
                   <span className="font-bold text-sm">سياسة التطبيق</span>
                 </div>
                 <p className={`text-xs leading-relaxed ${isDarkMode ? 'text-slate-400' : 'text-slate-500'}`}>
-                  نعمل على توفير بيئة آمنة. يرجى الالتزام بالآداب العامة. الإدارة غير مسؤولة عن أي تعاملات مادية خارج التطبيق.
+                  نعمل على توفير بيئة آمنة. يرجى الالتزام بالآداب العامة أثناء الرحلات. الإدارة غير مسؤولة عن أي تعاملات مادية خارج التطبيق.
                 </p>
               </div>
             </div>
@@ -664,7 +719,7 @@ export default function App() {
         </div>
       )}
 
-      {/* سجل رحلاتي */}
+      {/* سجل رحلاتي الشامل */}
       {showMyTrips && !isGuest && (
         <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-sm z-[65] flex justify-center items-end sm:items-center p-0 sm:p-4">
           <div className={`${bgModal} w-full h-[85vh] sm:h-[650px] sm:max-w-xl rounded-t-[2rem] sm:rounded-3xl shadow-2xl flex flex-col overflow-hidden`}>
@@ -682,8 +737,8 @@ export default function App() {
                 myOwnTrips.map(trip => (
                   <div key={trip.id} className={`p-5 rounded-2xl shadow-sm border relative flex flex-col ${bgCard}`}>
                     <div className="flex justify-between items-start mb-4">
-                      <span className={`text-xs font-bold px-3 py-1.5 rounded-lg ${trip.type === 'offer' ? (isDarkMode ? 'bg-emerald-900/30 text-emerald-400' : 'bg-emerald-100 text-emerald-800') : (isDarkMode ? 'bg-amber-900/30 text-amber-400' : 'bg-amber-100 text-amber-800')}`}>
-                        {trip.type === 'offer' ? 'أنا سائق (معي سيارة)' : 'أنا راكب'}
+                      <span className={`text-xs font-bold px-3 py-1.5 rounded-lg ${trip.type === 'offer' ? (isDarkMode ? 'bg-emerald-900/30 text-emerald-400' : 'bg-emerald-100 text-emerald-800') : trip.type === 'delivery' ? (isDarkMode ? 'bg-purple-900/30 text-purple-400' : 'bg-purple-100 text-purple-800') : (isDarkMode ? 'bg-amber-900/30 text-amber-400' : 'bg-amber-100 text-amber-800')}`}>
+                        {trip.type === 'offer' ? 'سائق' : trip.type === 'delivery' ? 'دليفري' : 'راكب'}
                       </span>
                       <span className={`text-xs font-bold px-3 py-1.5 rounded-lg ${trip.status === 'completed' ? (isDarkMode ? 'bg-slate-700 text-slate-300' : 'bg-slate-100 text-slate-600') : trip.status === 'in_progress' ? (isDarkMode ? 'bg-indigo-900/30 text-indigo-400' : 'bg-indigo-100 text-indigo-700') : (isDarkMode ? 'bg-blue-900/30 text-blue-400' : 'bg-blue-50 text-blue-600')}`}>
                         {trip.status === 'completed' ? 'مكتملة ✅' : trip.status === 'in_progress' ? 'في الطريق 🚗' : 'متاحة الآن'}
@@ -722,7 +777,6 @@ export default function App() {
       {/* الهيدر الأساسي */}
       <header className={`sticky top-0 z-40 transition-all duration-300 border-b backdrop-blur-md ${isDarkMode ? 'bg-slate-900/90 border-slate-800 shadow-md' : 'bg-white/90 border-slate-200 shadow-sm'}`}>
         <div className="max-w-7xl mx-auto px-4 h-20 flex justify-between items-center">
-          
           <div className="flex items-center gap-3">
             <div className="bg-gradient-to-br from-indigo-600 to-blue-600 text-white p-2.5 rounded-2xl shadow-lg shadow-indigo-500/30 transform rotate-3"><Car size={26} className="-rotate-3"/></div>
             <div>
@@ -734,7 +788,6 @@ export default function App() {
               </div>
             </div>
           </div>
-
           <div className="flex items-center gap-1.5 sm:gap-2">
             {!isGuest && (
               <button onClick={() => setShowMyTrips(true)} className={`p-2.5 rounded-xl transition-all ${isDarkMode ? 'hover:bg-slate-800 text-slate-400 hover:text-slate-200' : 'hover:bg-slate-100 text-slate-500 hover:text-slate-800'}`} title="سجل رحلاتي">
@@ -808,11 +861,28 @@ export default function App() {
           </div>
         </div>
 
-        {/* أزرار الفلترة */}
-        <div className={`flex gap-2 p-1.5 mb-8 max-w-lg mx-auto rounded-2xl shadow-inner ${isDarkMode ? 'bg-slate-800' : 'bg-slate-100'}`}>
-          <button onClick={() => setFilterType('all')} className={`flex-1 py-2.5 text-sm font-bold rounded-xl transition-all shadow-sm ${filterType === 'all' ? (isDarkMode ? 'bg-slate-200 text-slate-900' : 'bg-slate-800 text-white') : (isDarkMode ? 'bg-slate-800 text-slate-400' : 'bg-white text-slate-500 hover:bg-slate-50')}`}>الكل</button>
-          <button onClick={() => setFilterType('offer')} className={`flex-1 py-2.5 text-sm font-bold rounded-xl transition-all shadow-sm ${filterType === 'offer' ? 'bg-emerald-600 text-white' : (isDarkMode ? 'bg-slate-800 text-slate-400' : 'bg-white text-slate-500 hover:bg-slate-50')}`}>أصحاب سيارات 🚗</button>
-          <button onClick={() => setFilterType('request')} className={`flex-1 py-2.5 text-sm font-bold rounded-xl transition-all shadow-sm ${filterType === 'request' ? 'bg-orange-500 text-white' : (isDarkMode ? 'bg-slate-800 text-slate-400' : 'bg-white text-slate-500 hover:bg-slate-50')}`}>ركاب 🙋‍♂️</button>
+        {/* أزرار الفلترة (تم إضافة الدليفري) */}
+        <div className={`flex gap-2 p-1.5 mb-8 max-w-xl mx-auto rounded-2xl shadow-inner ${isDarkMode ? 'bg-slate-800' : 'bg-slate-100'}`}>
+          <button 
+            onClick={() => setFilterType('all')} 
+            className={`flex-1 py-2.5 text-xs sm:text-sm font-bold rounded-xl transition-all shadow-sm ${filterType === 'all' ? (isDarkMode ? 'bg-slate-200 text-slate-900' : 'bg-slate-800 text-white') : (isDarkMode ? 'bg-slate-800 text-slate-400' : 'bg-white text-slate-500 hover:bg-slate-50')}`}>
+            الكل
+          </button>
+          <button 
+            onClick={() => setFilterType('offer')} 
+            className={`flex-1 py-2.5 text-xs sm:text-sm font-bold rounded-xl transition-all shadow-sm ${filterType === 'offer' ? 'bg-emerald-600 text-white' : (isDarkMode ? 'bg-slate-800 text-slate-400' : 'bg-white text-slate-500 hover:bg-slate-50')}`}>
+            معاهم عربية 🚗
+          </button>
+          <button 
+            onClick={() => setFilterType('request')} 
+            className={`flex-1 py-2.5 text-xs sm:text-sm font-bold rounded-xl transition-all shadow-sm ${filterType === 'request' ? 'bg-orange-500 text-white' : (isDarkMode ? 'bg-slate-800 text-slate-400' : 'bg-white text-slate-500 hover:bg-slate-50')}`}>
+            ركاب 🙋‍♂️
+          </button>
+          <button 
+            onClick={() => setFilterType('delivery')} 
+            className={`flex-1 py-2.5 text-xs sm:text-sm font-bold rounded-xl transition-all shadow-sm ${filterType === 'delivery' ? 'bg-purple-600 text-white' : (isDarkMode ? 'bg-slate-800 text-slate-400' : 'bg-white text-slate-500 hover:bg-slate-50')}`}>
+            شحن ودليفري 📦
+          </button>
         </div>
 
         {/* قائمة الرحلات */}
@@ -830,7 +900,6 @@ export default function App() {
               const isInProgress = trip.status === 'in_progress';
               const isClosedForPublic = (isInProgress || isCompleted) && !isOwner;
               const isPassenger = myInbox.some(chat => chat.tripId === trip.id);
-              
               const canDelete = isOwner || isAdmin;
               
               return (
@@ -852,13 +921,14 @@ export default function App() {
                         {trip.userName} {trip.verified && <ShieldCheck size={16} className="text-blue-500" />}
                       </h3>
                       
-                      {/* النجوم التراكمية */}
+                      {/* النجوم */}
                       <div className="mt-0.5">
                         {renderStars(trip.rating, trip.totalRatings)}
                       </div>
 
-                      <span className={`inline-block mt-1 text-[10px] font-bold px-2 py-0.5 rounded-md ${trip.type === 'offer' ? (isDarkMode ? 'bg-emerald-900/40 text-emerald-400' : 'bg-emerald-100 text-emerald-800') : (isDarkMode ? 'bg-orange-900/40 text-orange-400' : 'bg-orange-100 text-orange-800')}`}>
-                        {trip.type === 'offer' ? 'سائق (يعرض توصيلة)' : 'راكب (يطلب توصيلة)'}
+                      {/* نوع الرحلة (راكب - سائق - دليفري) */}
+                      <span className={`inline-block mt-1 text-[10px] font-bold px-2 py-0.5 rounded-md ${trip.type === 'offer' ? (isDarkMode ? 'bg-emerald-900/40 text-emerald-400' : 'bg-emerald-100 text-emerald-800') : trip.type === 'delivery' ? (isDarkMode ? 'bg-purple-900/40 text-purple-400' : 'bg-purple-100 text-purple-800') : (isDarkMode ? 'bg-orange-900/40 text-orange-400' : 'bg-orange-100 text-orange-800')}`}>
+                        {trip.type === 'offer' ? 'سائق (يعرض توصيلة)' : trip.type === 'delivery' ? 'دليفري (شحن وتوصيل)' : 'راكب (يطلب توصيلة)'}
                       </span>
                     </div>
                   </div>
@@ -878,30 +948,36 @@ export default function App() {
                 {/* مسار الرحلة */}
                 <div className="relative mb-6 flex-1">
                   <div className={`absolute right-[7px] top-2 bottom-2 w-0.5 ${isDarkMode ? 'bg-slate-600' : 'bg-slate-200'}`}></div>
+                  
                   <div className="flex items-start gap-4 mb-4 relative z-10">
                     <div className={`w-4 h-4 rounded-full bg-indigo-500 border-[3px] mt-0.5 shrink-0 shadow-sm ${isDarkMode ? 'border-slate-800' : 'border-white'}`}></div>
                     <p className={`font-bold text-sm leading-snug ${isDarkMode ? 'text-slate-100' : 'text-slate-800'}`}>{trip.from}</p>
                   </div>
+                  
                   <div className="flex items-start gap-4 relative z-10">
                     <div className={`w-4 h-4 rounded-full bg-rose-500 border-[3px] mt-0.5 shrink-0 shadow-sm ${isDarkMode ? 'border-slate-800' : 'border-white'}`}></div>
                     <p className={`font-bold text-sm leading-snug ${isDarkMode ? 'text-slate-100' : 'text-slate-800'}`}>{trip.to}</p>
                   </div>
                 </div>
                 
-                {/* التفاصيل */}
+                {/* التفاصيل (العدد والمساهمة) */}
                 <div className="flex gap-3 mb-5">
                   <div className={`flex-1 flex flex-col justify-center items-center py-2.5 rounded-xl border ${isDarkMode ? 'bg-slate-700/30 border-slate-600' : 'bg-slate-50 border-slate-100'}`}>
-                     <span className="text-[10px] text-slate-400 mb-1">العدد المطلوب</span>
-                     <span className={`text-sm font-extrabold flex items-center gap-1.5 ${isDarkMode ? 'text-slate-200' : 'text-slate-700'}`}><User size={15} className="text-indigo-400"/> {trip.seats}</span>
+                     <span className="text-[10px] text-slate-400 mb-1">{trip.type === 'delivery' ? 'عدد الطرود' : 'العدد المطلوب'}</span>
+                     <span className={`text-sm font-extrabold flex items-center gap-1.5 ${isDarkMode ? 'text-slate-200' : 'text-slate-700'}`}>
+                       {trip.type === 'delivery' ? <Package size={15} className="text-purple-400"/> : <User size={15} className="text-indigo-400"/>} 
+                       {trip.seats}
+                     </span>
                   </div>
-                  {trip.cost && (
+                  {trip.cost && !trip.isBot && ( // إخفاء السعر لو كانت الرحلة من البوت
                     <div className={`flex-1 flex flex-col justify-center items-center py-2.5 rounded-xl border ${isDarkMode ? 'bg-slate-700/30 border-slate-600' : 'bg-slate-50 border-slate-100'}`}>
-                      <span className="text-[10px] text-slate-400 mb-1">المساهمة</span>
+                      <span className="text-[10px] text-slate-400 mb-1">{trip.type === 'delivery' ? 'أجرة التوصيل' : 'المساهمة'}</span>
                       <span className={`text-sm font-extrabold flex items-center gap-1.5 ${isDarkMode ? 'text-emerald-400' : 'text-emerald-600'}`}><Wallet size={15}/> {trip.cost} ج</span>
                     </div>
                   )}
                 </div>
                 
+                {/* الأزرار و الخصوصية */}
                 <div className="mt-auto">
                   {isOwner ? (
                     <div className={`w-full py-3.5 rounded-xl font-bold text-center text-sm border border-dashed ${isDarkMode ? 'bg-slate-700/50 text-slate-400 border-slate-600' : 'bg-slate-50 text-slate-500 border-slate-200'}`}>
@@ -909,8 +985,7 @@ export default function App() {
                     </div>
                   ) : isClosedForPublic ? (
                     isCompleted ? (
-                      // إظهار التقييم لمن اشترك في الرحلة فقط
-                      isPassenger ? (
+                      isPassenger && !trip.isBot ? (
                         <div className={`p-3.5 rounded-xl text-center border ${isDarkMode ? 'bg-slate-700 border-slate-600' : 'bg-slate-50 border-slate-200'}`}>
                           <p className="text-xs font-bold mb-2">تقييمك للرحلة:</p>
                           <div className="flex justify-center gap-1">
@@ -936,7 +1011,7 @@ export default function App() {
                       </button>
                       
                       <button onClick={() => requireAuth(() => {
-                        if (trip.isDummy) {
+                        if (trip.isDummy || trip.isBot) {
                           triggerToast('هذه رحلة تجريبية للعرض فقط 😅');
                         } else if (!trip.userPhone) {
                           triggerToast('عذراً، رقم الهاتف غير مسجل لهذا المستخدم 📞');
@@ -955,7 +1030,7 @@ export default function App() {
         )}
       </main>
 
-      {/* زر الإضافة للموبايل */}
+      {/* زر الإضافة العائم */}
       <button 
         onClick={() => requireAuth(() => setShowAddModal(true))} 
         className="md:hidden fixed bottom-8 left-6 w-14 h-14 bg-indigo-600 text-white rounded-full flex items-center justify-center shadow-xl shadow-indigo-500/40 z-40 transform active:scale-95 transition-transform">
@@ -1038,43 +1113,55 @@ export default function App() {
         </div>
       )}
 
-      {/* شاشة الإضافة */}
+      {/* شاشة الإضافة (دليفري مضاف) */}
       {showAddModal && !isGuest && (
         <div className="fixed inset-0 bg-slate-900/70 backdrop-blur-sm z-50 flex justify-center items-center p-4">
           <div className={`${bgModal} rounded-[2rem] w-full max-w-lg shadow-2xl border overflow-hidden ${isDarkMode ? 'border-slate-700' : 'border-slate-100'}`}>
             <div className={`flex justify-between items-center p-6 border-b ${isDarkMode ? 'bg-slate-800/80 border-slate-700' : 'bg-slate-50/80 border-slate-100 backdrop-blur-md'}`}>
-              <h2 className="text-xl font-extrabold flex items-center gap-2"><Navigation className="text-indigo-500"/> إضافة رحلة</h2>
+              <h2 className="text-xl font-extrabold flex items-center gap-2"><Navigation className="text-indigo-500"/> إضافة رحلة أو طلب</h2>
               <button onClick={() => setShowAddModal(false)} className="p-2 hover:bg-rose-50 hover:text-rose-500 text-slate-400 rounded-full transition-colors"><X size={20} /></button>
             </div>
             <div className="p-6 max-h-[75vh] overflow-y-auto custom-scrollbar">
               <form onSubmit={handleAddTrip} className="space-y-6">
                 
-                {/* اختيار النوع */}
+                {/* اختيار النوع (3 كروت) */}
                 <div>
-                  <label className={`block text-sm font-bold mb-3 ${isDarkMode ? 'text-slate-300' : 'text-slate-700'}`}>أنت مسافر بصفتك؟</label>
-                  <div className="grid grid-cols-2 gap-4">
+                  <label className={`block text-sm font-bold mb-3 ${isDarkMode ? 'text-slate-300' : 'text-slate-700'}`}>نوع إعلانك؟</label>
+                  <div className="grid grid-cols-3 gap-3">
                     <div 
                       onClick={() => setNewTrip({...newTrip, type: 'request'})} 
-                      className={`cursor-pointer p-4 rounded-2xl border-2 flex flex-col items-center justify-center gap-2 transition-all ${
+                      className={`cursor-pointer p-3 rounded-2xl border-2 flex flex-col items-center justify-center gap-2 transition-all ${
                         newTrip.type === 'request' 
                           ? (isDarkMode ? 'border-indigo-600 bg-indigo-900/30 shadow-sm' : 'border-indigo-600 bg-indigo-50 shadow-sm')
                           : (isDarkMode ? 'border-slate-700 bg-slate-800 hover:bg-slate-700' : 'border-slate-200 bg-white hover:bg-slate-50')
                       }`}
                     >
-                      <User size={28} className={newTrip.type === 'request' ? (isDarkMode ? 'text-indigo-400' : 'text-indigo-600') : (isDarkMode ? 'text-slate-400' : 'text-slate-400')}/>
-                      <span className={`font-extrabold text-sm ${newTrip.type === 'request' ? (isDarkMode ? 'text-indigo-400' : 'text-indigo-700') : (isDarkMode ? 'text-slate-400' : 'text-slate-500')}`}>راكب</span>
+                      <User size={24} className={newTrip.type === 'request' ? (isDarkMode ? 'text-indigo-400' : 'text-indigo-600') : (isDarkMode ? 'text-slate-400' : 'text-slate-400')}/>
+                      <span className={`font-extrabold text-[11px] sm:text-xs ${newTrip.type === 'request' ? (isDarkMode ? 'text-indigo-400' : 'text-indigo-700') : (isDarkMode ? 'text-slate-400' : 'text-slate-500')}`}>أنا راكب</span>
                     </div>
                     
                     <div 
                       onClick={() => setNewTrip({...newTrip, type: 'offer'})} 
-                      className={`cursor-pointer p-4 rounded-2xl border-2 flex flex-col items-center justify-center gap-2 transition-all ${
+                      className={`cursor-pointer p-3 rounded-2xl border-2 flex flex-col items-center justify-center gap-2 transition-all ${
                         newTrip.type === 'offer' 
                           ? (isDarkMode ? 'border-emerald-500 bg-emerald-900/30 shadow-sm' : 'border-emerald-500 bg-emerald-50 shadow-sm')
                           : (isDarkMode ? 'border-slate-700 bg-slate-800 hover:bg-slate-700' : 'border-slate-200 bg-white hover:bg-slate-50')
                       }`}
                     >
-                      <Car size={28} className={newTrip.type === 'offer' ? (isDarkMode ? 'text-emerald-400' : 'text-emerald-500') : (isDarkMode ? 'text-slate-400' : 'text-slate-400')}/>
-                      <span className={`font-extrabold text-sm ${newTrip.type === 'offer' ? (isDarkMode ? 'text-emerald-400' : 'text-emerald-700') : (isDarkMode ? 'text-slate-400' : 'text-slate-500')}`}>سائق سيارة</span>
+                      <Car size={24} className={newTrip.type === 'offer' ? (isDarkMode ? 'text-emerald-400' : 'text-emerald-500') : (isDarkMode ? 'text-slate-400' : 'text-slate-400')}/>
+                      <span className={`font-extrabold text-[11px] sm:text-xs ${newTrip.type === 'offer' ? (isDarkMode ? 'text-emerald-400' : 'text-emerald-700') : (isDarkMode ? 'text-slate-400' : 'text-slate-500')}`}>معي سيارة</span>
+                    </div>
+
+                    <div 
+                      onClick={() => setNewTrip({...newTrip, type: 'delivery'})} 
+                      className={`cursor-pointer p-3 rounded-2xl border-2 flex flex-col items-center justify-center gap-2 transition-all ${
+                        newTrip.type === 'delivery' 
+                          ? (isDarkMode ? 'border-purple-500 bg-purple-900/30 shadow-sm' : 'border-purple-500 bg-purple-50 shadow-sm')
+                          : (isDarkMode ? 'border-slate-700 bg-slate-800 hover:bg-slate-700' : 'border-slate-200 bg-white hover:bg-slate-50')
+                      }`}
+                    >
+                      <Package size={24} className={newTrip.type === 'delivery' ? (isDarkMode ? 'text-purple-400' : 'text-purple-600') : (isDarkMode ? 'text-slate-400' : 'text-slate-400')}/>
+                      <span className={`font-extrabold text-[11px] sm:text-xs ${newTrip.type === 'delivery' ? (isDarkMode ? 'text-purple-400' : 'text-purple-700') : (isDarkMode ? 'text-slate-400' : 'text-slate-500')}`}>دليفري وطرود</span>
                     </div>
                   </div>
                 </div>
@@ -1083,11 +1170,11 @@ export default function App() {
                   <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                     <div className="relative">
                       <MapPin size={18} className="absolute right-4 top-4 text-slate-400" />
-                      <input type="text" required value={newTrip.from} onChange={(e) => setNewTrip({...newTrip, from: e.target.value})} placeholder="نقطة التحرك" className={`w-full border py-3.5 pr-11 pl-4 rounded-2xl font-bold outline-none focus:ring-2 focus:ring-indigo-500 transition-colors ${bgInput}`} />
+                      <input type="text" required value={newTrip.from} onChange={(e) => setNewTrip({...newTrip, from: e.target.value})} placeholder={newTrip.type === 'delivery' ? "مكان استلام الطرد" : "نقطة التحرك"} className={`w-full border py-3.5 pr-11 pl-4 rounded-2xl font-bold outline-none focus:ring-2 focus:ring-indigo-500 transition-colors ${bgInput}`} />
                     </div>
                     <div className="relative">
                       <Navigation size={18} className="absolute right-4 top-4 text-slate-400" />
-                      <input type="text" required value={newTrip.to} onChange={(e) => setNewTrip({...newTrip, to: e.target.value})} placeholder="نقطة الوصول" className={`w-full border py-3.5 pr-11 pl-4 rounded-2xl font-bold outline-none focus:ring-2 focus:ring-indigo-500 transition-colors ${bgInput}`} />
+                      <input type="text" required value={newTrip.to} onChange={(e) => setNewTrip({...newTrip, to: e.target.value})} placeholder={newTrip.type === 'delivery' ? "مكان تسليم الطرد" : "نقطة الوصول"} className={`w-full border py-3.5 pr-11 pl-4 rounded-2xl font-bold outline-none focus:ring-2 focus:ring-indigo-500 transition-colors ${bgInput}`} />
                     </div>
                   </div>
 
@@ -1099,19 +1186,19 @@ export default function App() {
                   <div className="grid grid-cols-2 gap-4">
                     <div className="relative">
                       <User size={18} className="absolute right-4 top-4 text-slate-400" />
-                      <input type="number" min="1" required placeholder={newTrip.type === 'offer' ? 'المقاعد المتاحة' : 'عدد الركاب'} value={newTrip.seats} onChange={(e) => setNewTrip({...newTrip, seats: parseInt(e.target.value)})} className={`w-full border py-3.5 pr-11 pl-4 rounded-2xl font-bold outline-none focus:ring-2 focus:ring-indigo-500 transition-colors ${bgInput}`} />
+                      <input type="number" min="1" required placeholder={newTrip.type === 'delivery' ? 'عدد الطرود' : newTrip.type === 'offer' ? 'المقاعد المتاحة' : 'عدد الركاب'} value={newTrip.seats} onChange={(e) => setNewTrip({...newTrip, seats: parseInt(e.target.value)})} className={`w-full border py-3.5 pr-11 pl-4 rounded-2xl font-bold outline-none focus:ring-2 focus:ring-indigo-500 transition-colors ${bgInput}`} />
                     </div>
                     <div className="relative">
                       <Wallet size={18} className="absolute right-4 top-4 text-slate-400" />
-                      <input type="number" min="0" placeholder="المساهمة (ج)" value={newTrip.cost} onChange={(e) => setNewTrip({...newTrip, cost: e.target.value})} className={`w-full border py-3.5 pr-11 pl-4 rounded-2xl font-bold outline-none focus:ring-2 focus:ring-indigo-500 transition-colors ${bgInput}`} />
+                      <input type="number" min="0" placeholder={newTrip.type === 'delivery' ? "أجرة التوصيل (ج)" : "المساهمة (ج)"} value={newTrip.cost} onChange={(e) => setNewTrip({...newTrip, cost: e.target.value})} className={`w-full border py-3.5 pr-11 pl-4 rounded-2xl font-bold outline-none focus:ring-2 focus:ring-indigo-500 transition-colors ${bgInput}`} />
                     </div>
                   </div>
                   
-                  <textarea rows="3" value={newTrip.notes} onChange={(e) => setNewTrip({...newTrip, notes: e.target.value})} placeholder="تفاصيل إضافية (أماكن الوقوف بالتحديد، حجم الحقائب، الخ...)" className={`w-full border p-4 rounded-2xl resize-none font-medium outline-none focus:ring-2 focus:ring-indigo-500 transition-colors leading-relaxed ${bgInput}`}></textarea>
+                  <textarea rows="3" value={newTrip.notes} onChange={(e) => setNewTrip({...newTrip, notes: e.target.value})} placeholder={newTrip.type === 'delivery' ? "تفاصيل الطرد (وزنه، نوعه، قابل للكسر...)" : "تفاصيل إضافية (أماكن الوقوف بالتحديد، حجم الحقائب...)"} className={`w-full border p-4 rounded-2xl resize-none font-medium outline-none focus:ring-2 focus:ring-indigo-500 transition-colors leading-relaxed ${bgInput}`}></textarea>
                 </div>
                 
                 <button type="submit" disabled={isSubmitting} className="w-full bg-indigo-600 text-white py-4 rounded-2xl font-extrabold text-lg hover:bg-indigo-700 shadow-lg shadow-indigo-500/30 flex justify-center items-center gap-2 transition-all transform active:scale-[0.98]">
-                  {isSubmitting ? <><Loader2 className="animate-spin"/> جاري النشر...</> : 'نشر الرحلة الآن'}
+                  {isSubmitting ? <><Loader2 className="animate-spin"/> جاري النشر...</> : 'نشر الإعلان الآن'}
                 </button>
               </form>
             </div>
