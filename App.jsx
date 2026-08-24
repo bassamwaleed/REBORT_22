@@ -2,7 +2,7 @@ import React, { useState, useEffect, useRef } from 'react';
 import { initializeApp } from 'firebase/app';
 import { getAuth, createUserWithEmailAndPassword, signInWithEmailAndPassword, signInAnonymously, onAuthStateChanged, updateProfile, signOut } from 'firebase/auth';
 import { getFirestore, collection, onSnapshot, addDoc, deleteDoc, updateDoc, doc, setDoc, getDoc, serverTimestamp } from 'firebase/firestore';
-import { getStorage, ref, uploadBytes, getDownloadURL, deleteObject } from 'firebase/storage';
+import { getStorage, ref, uploadBytes, getDownloadURL } from 'firebase/storage';
 import { MapPin, Navigation, Car, User, MessageCircle, ShieldCheck, X, CheckCircle2, Loader2, Trash2, Send, LogOut, Bell, Phone, Mail, Lock, LogIn, AlertCircle, Settings, Moon, Sun, Info, History, Star, Play, CheckSquare, Megaphone, Calendar, Clock, ChevronLeft, Wallet, Sparkles, ArrowRight, Shield, Crown, Image as ImageIcon, Camera, Package } from 'lucide-react';
 
 // إعدادات فايربيز 
@@ -122,7 +122,7 @@ export default function App() {
     localStorage.setItem('khodnimaak_theme', newTheme ? 'dark' : 'light');
   };
 
-  // مراقبة المستخدم وفحص الأدمن (الإيميل الحصري الخاص بك)
+  // مراقبة المستخدم وفحص الأدمن
   useEffect(() => {
     const unsubscribe = onAuthStateChanged(auth, async (currentUser) => {
       if (currentUser) {
@@ -156,14 +156,14 @@ export default function App() {
     return () => unsubscribe();
   }, []);
 
-  // جلب الرحلات والحفاظ على نظام التوقيت التلقائي للبوت
+  // جلب الرحلات مع نظام البوت الآلي
   useEffect(() => {
     if (!user) return;
     const tripsPath = collection(db, APP_COLLECTION_NAME);
     const unsubscribe = onSnapshot(tripsPath, (snapshot) => {
       const tripsData = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
       
-      // نظام البوت التلقائي المطور للأدمن لتحديث الرحلات العشوائية
+      // نظام البوت التلقائي للأدمن لتحديث الرحلات العشوائية
       if (isAdmin) {
         tripsData.forEach(trip => {
           if (trip.isDummy && trip.createdAt) {
@@ -249,7 +249,7 @@ export default function App() {
         rating: 4.8,
         totalRatings: 5,
         status: "open",
-        isDummy: true, // عشان يمر بنظام التوقيتات
+        isDummy: true, 
         createdAt: serverTimestamp()
       });
       triggerToast("تم توليد رحلة عشوائية بنجاح! 🤖");
@@ -738,7 +738,7 @@ export default function App() {
         </div>
       </header>
 
-      {/* شريط الإعلانات النصية */}
+      {/* شريط الأخبار */}
       <div className={`overflow-hidden relative h-9 flex items-center justify-center transition-colors text-xs sm:text-sm font-medium ${isDarkMode ? 'bg-indigo-950 text-indigo-200' : 'bg-indigo-50 text-indigo-700'}`}>
         {announcements.map((ad, index) => (
           <div key={index} className={`absolute transition-all duration-700 ease-in-out w-full text-center px-4 flex items-center justify-center gap-2 ${index === currentAdIndex ? 'opacity-100 translate-y-0' : 'opacity-0 translate-y-4'}`}>
@@ -767,7 +767,7 @@ export default function App() {
           
           <div className="relative z-10 max-w-2xl text-white">
             <div className="inline-flex items-center gap-2 bg-white/20 backdrop-blur-md px-3.5 py-1.5 rounded-full text-xs font-bold mb-4 border border-white/20 text-white">
-              <Sparkles size={14} className="text-amber-300 animate-spin"/> السفر والشحن بقى أبسط وأوفر في مصر
+              <Sparkles size={14} className="text-amber-300 animate-spin"/> السفر بقى أبسط وأوفر في مصر
             </div>
             <h1 className="text-3xl sm:text-4xl font-black mb-3 leading-tight drop-shadow-lg">شارك رحلتك أو اطلب توصيل طردك بكل سهولة</h1>
             <p className="text-gray-100 text-sm sm:text-base mb-6 font-medium leading-relaxed drop-shadow-md">
@@ -840,7 +840,7 @@ export default function App() {
                       <div className="mt-0.5">{renderStars(trip.rating, trip.totalRatings)}</div>
                       
                       <span className={`inline-block mt-1 text-[10px] font-bold px-2 py-0.5 rounded-md ${
-                        trip.type === 'offer' ? (isDarkMode ? 'bg-emerald-900/40 text-emerald-400' : 'bg-emerald-100 text-emerald-850') :
+                        trip.type === 'offer' ? (isDarkMode ? 'bg-emerald-900/40 text-emerald-400' : 'bg-emerald-100 text-emerald-800') :
                         trip.type === 'delivery' ? (isDarkMode ? 'bg-purple-900/40 text-purple-300' : 'bg-purple-100 text-purple-800') :
                         (isDarkMode ? 'bg-orange-900/40 text-orange-400' : 'bg-orange-100 text-orange-800')
                       }`}>
@@ -1089,7 +1089,7 @@ export default function App() {
                   <div className="grid grid-cols-2 gap-4">
                     <div className="relative">
                       <User size={18} className="absolute right-4 top-4 text-slate-400" />
-                      <input type="number" min="1" required placeholder={newTrip.type === 'offer' ? 'المقاعد' : tripType => newTrip.type === 'delivery' ? 'عدد القطع' : 'الأفراد'} value={newTrip.seats} onChange={(e) => setNewTrip({...newTrip, seats: parseInt(e.target.value)})} className={`w-full border py-3.5 pr-11 pl-4 rounded-2xl font-bold outline-none focus:ring-2 focus:ring-indigo-500 transition-colors ${bgInput}`} />
+                      <input type="number" min="1" required placeholder={newTrip.type === 'offer' ? 'المقاعد' : 'العدد'} value={newTrip.seats} onChange={(e) => setNewTrip({...newTrip, seats: parseInt(e.target.value)})} className={`w-full border py-3.5 pr-11 pl-4 rounded-2xl font-bold outline-none focus:ring-2 focus:ring-indigo-500 transition-colors ${bgInput}`} />
                     </div>
                     <div className="relative">
                       <Wallet size={18} className="absolute right-4 top-4 text-slate-400" />
