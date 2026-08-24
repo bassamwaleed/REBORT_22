@@ -1,9 +1,8 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { initializeApp } from 'firebase/app';
-import { getAnalytics } from 'firebase/analytics';
 import { getAuth, signInAnonymously, onAuthStateChanged, updateProfile, signOut } from 'firebase/auth';
 import { getFirestore, collection, onSnapshot, addDoc, deleteDoc, doc, serverTimestamp } from 'firebase/firestore';
-import { MapPin, Navigation, Car, User, Bell, Search, Calendar, Clock, MessageCircle, ShieldCheck, ArrowRight, Menu, X, CheckCircle2, Loader2, ExternalLink, Trash2, Wallet, Filter, Send, LogOut } from 'lucide-react';
+import { MapPin, Navigation, Car, User, MessageCircle, ShieldCheck, X, CheckCircle2, Loader2, Trash2, Send, LogOut } from 'lucide-react';
 
 const firebaseConfig = {
   apiKey: "AIzaSyC3JM11miWda_leIk0LPViRNVdSZRCQ8N8",
@@ -11,14 +10,10 @@ const firebaseConfig = {
   projectId: "khodnimaak",
   storageBucket: "khodnimaak.firebasestorage.app",
   messagingSenderId: "883484024405",
-  appId: "1:883484024405:web:8329b9a29d9f512a82bedc",
-  measurementId: "G-2HXCZJ2762"
+  appId: "1:883484024405:web:8329b9a29d9f512a82bedc"
 };
 
 const app = initializeApp(firebaseConfig);
-let analytics;
-try { analytics = getAnalytics(app); } catch (e) {}
-
 const auth = getAuth(app);
 const db = getFirestore(app);
 const APP_COLLECTION_NAME = 'khodni_maak_trips';
@@ -71,7 +66,7 @@ export default function App() {
   }, []);
 
   useEffect(() => {
-    if (!user || !isNameSet) return;
+    if (!user) return;
     const tripsPath = collection(db, APP_COLLECTION_NAME);
     const unsubscribe = onSnapshot(tripsPath, (snapshot) => {
       const tripsData = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
@@ -81,7 +76,7 @@ export default function App() {
       console.error("Error fetching trips:", error);
     });
     return () => unsubscribe();
-  }, [user, isNameSet]);
+  }, [user]);
 
   useEffect(() => {
     if (!user || !activeChat) return;
@@ -111,13 +106,8 @@ export default function App() {
   };
 
   const handleLogout = async () => {
-    try {
-      await signOut(auth);
-      setIsNameSet(false);
-      setUserName('');
-    } catch (error) {
-      console.error("Logout error:", error);
-    }
+    setIsNameSet(false);
+    setUserName('');
   };
 
   const triggerToast = (msg) => {
