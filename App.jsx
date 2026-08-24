@@ -2,8 +2,8 @@ import React, { useState, useEffect, useRef } from 'react';
 import { initializeApp } from 'firebase/app';
 import { getAuth, createUserWithEmailAndPassword, signInWithEmailAndPassword, signInAnonymously, onAuthStateChanged, updateProfile, signOut } from 'firebase/auth';
 import { getFirestore, collection, onSnapshot, addDoc, deleteDoc, updateDoc, doc, setDoc, getDoc, serverTimestamp } from 'firebase/firestore';
-import { getStorage, ref, uploadBytes, getDownloadURL } from 'firebase/storage';
-import { MapPin, Navigation, Car, User, MessageCircle, ShieldCheck, X, CheckCircle2, Loader2, Trash2, Send, LogOut, Bell, Phone, Mail, Lock, LogIn, AlertCircle, Settings, Moon, Sun, Info, History, Star, Play, CheckSquare, Megaphone, Calendar, Clock, ChevronLeft, Wallet, Sparkles, ArrowRight, Shield, Crown, Image as ImageIcon, Camera, Package } from 'lucide-react';
+import { getStorage, ref, uploadBytes, getDownloadURL, deleteObject } from 'firebase/storage';
+import { MapPin, Navigation, Car, User, MessageCircle, ShieldCheck, X, CheckCircle2, Loader2, Trash2, Send, LogOut, Bell, Phone, Mail, Lock, LogIn, AlertCircle, Settings, Moon, Sun, Info, History, Star, Play, CheckSquare, Megaphone, Calendar, Clock, ChevronLeft, Wallet, Sparkles, ArrowRight, Shield, Crown, Package, Image as ImageIcon, Camera } from 'lucide-react';
 
 const firebaseConfig = {
   apiKey: "AIzaSyC3JM11miWda_leIk0LPViRNVdSZRCQ8N8",
@@ -25,7 +25,8 @@ const ADMIN_EMAIL = "bassamwaleed2000@gmail.com".toLowerCase();
 const DUMMY_TRIPS = [
   { id: 'dummy_1', type: 'offer', from: 'القاهرة (رمسيس)', to: 'الإسكندرية (محطة مصر)', date: '2026-08-25', time: '08:00 ص', seats: 3, cost: '150', notes: 'عربية مكيفة، رحلة ممتعة إن شاء الله', userId: 'd1', userName: 'أحمد محمود', userPhone: '', verified: true, isDummy: true, status: 'completed', rating: 4.5, totalRatings: 12, createdAt: { toMillis: () => Date.now() - 1000000 } },
   { id: 'dummy_2', type: 'request', from: 'المنصورة', to: 'القاهرة (مدينة نصر)', date: '2026-08-26', time: '10:30 ص', seats: 1, cost: '', notes: 'معايا شنطة سفر واحدة صغيرة', userId: 'd2', userName: 'سارة خالد', userPhone: '', verified: false, isDummy: true, status: 'completed', rating: 5.0, totalRatings: 4, createdAt: { toMillis: () => Date.now() - 2000000 } },
-  { id: 'dummy_3', type: 'delivery', from: 'الزقازيق', to: 'العاشر من رمضان', date: '2026-08-24', time: '02:00 م', seats: 1, cost: '50', notes: 'توصيل أوراق هامة بسرعة', userId: 'd3', userName: 'محمود حسن', userPhone: '', verified: true, isDummy: true, status: 'in_progress', rating: 4.0, totalRatings: 8, createdAt: { toMillis: () => Date.now() - 3000000 } }
+  { id: 'dummy_3', type: 'delivery', from: 'الزقازيق', to: 'العاشر من رمضان', date: '2026-08-24', time: '02:00 م', seats: 1, cost: '40', notes: 'محتاج حد يوصلي ظرف ورق مهم', userId: 'd3', userName: 'محمود حسن', userPhone: '', verified: true, isDummy: true, status: 'in_progress', rating: 4.0, totalRatings: 8, createdAt: { toMillis: () => Date.now() - 3000000 } }, 
+  { id: 'dummy_4', type: 'request', from: 'طنطا', to: 'بنها', date: '2026-08-25', time: '05:00 م', seats: 2, cost: '', notes: 'محتاجين عربية في أسرع وقت', userId: 'd4', userName: 'مصطفى كمال', userPhone: '', verified: false, isDummy: true, status: 'completed', rating: 0, totalRatings: 0, createdAt: { toMillis: () => Date.now() - 4000000 } }
 ];
 
 export default function App() {
@@ -57,10 +58,15 @@ export default function App() {
   const [isUploading, setIsUploading] = useState(false);
   
   const [isDarkMode, setIsDarkMode] = useState(false);
+  const [systemNotice, setSystemNotice] = useState(null);
   
-  const [announcements, setAnnouncements] = useState(["🚀 جاري تحديث وتطوير البرنامج باستمرار لخدمتكم"]);
+  const [announcements, setAnnouncements] = useState([
+    "🚀 جاري تحديث وتطوير البرنامج باستمرار لخدمتكم",
+    "🇪🇬 بأيدي شباب مصريين.. تطبيق خدني معاك بيسهل مشوارك"
+  ]);
   const [currentAdIndex, setCurrentAdIndex] = useState(0);
   const [newAdText, setNewAdText] = useState(''); 
+  const [broadcastMsg, setBroadcastMsg] = useState(''); 
 
   const [bannerImages, setBannerImages] = useState([]);
   const [currentBannerIndex, setCurrentBannerIndex] = useState(0);
@@ -78,24 +84,35 @@ export default function App() {
   });
 
   useEffect(() => {
+    if (!isAdmin || realTrips.length === 0) return;
+    const botInterval = setInterval(() => {
+      const now = Date.now();
+      realTrips.forEach(async (trip) => {
+        if (trip.isBot && trip.createdAt) {
+          const tripTime = trip.createdAt.toMillis ? trip.createdAt.toMillis() : Date.now();
+          const tripAgeInMinutes = (now - tripTime) / 60000;
+          if (trip.status === 'open' && tripAgeInMinutes >= 5 && tripAgeInMinutes < 35) {
+            await updateDoc(doc(db, APP_COLLECTION_NAME, trip.id), { status: 'in_progress' });
+          } else if (trip.status === 'in_progress' && tripAgeInMinutes >= 35) {
+            await updateDoc(doc(db, APP_COLLECTION_NAME, trip.id), { status: 'completed' });
+          }
+        }
+      });
+    }, 60000);
+    return () => clearInterval(botInterval);
+  }, [isAdmin, realTrips]);
+
+  useEffect(() => {
     const settingsDocRef = doc(db, 'app_settings', 'announcements');
     const unsubscribe = onSnapshot(settingsDocRef, (docSnap) => {
       if (docSnap.exists()) {
         const data = docSnap.data();
-        if (data.messages) setAnnouncements(data.messages);
+        if (data.messages && data.messages.length > 0) setAnnouncements(data.messages);
         if (data.banners) setBannerImages(data.banners);
       }
     });
     return () => unsubscribe();
   }, []);
-
-  useEffect(() => {
-    if (bannerImages.length <= 1) return;
-    const interval = setInterval(() => {
-      setCurrentBannerIndex((prev) => (prev + 1) % bannerImages.length);
-    }, 5000); 
-    return () => clearInterval(interval);
-  }, [bannerImages.length]);
 
   useEffect(() => {
     if (announcements.length <= 1) return;
@@ -106,9 +123,24 @@ export default function App() {
   }, [announcements.length]);
 
   useEffect(() => {
+    if (bannerImages.length <= 1) return;
+    const interval = setInterval(() => {
+      setCurrentBannerIndex((prev) => (prev + 1) % bannerImages.length);
+    }, 5000); 
+    return () => clearInterval(interval);
+  }, [bannerImages.length]);
+
+  useEffect(() => {
     const savedTheme = localStorage.getItem('khodnimaak_theme');
     if (savedTheme === 'dark') setIsDarkMode(true);
   }, []);
+
+  const closeSystemNotice = () => {
+    if(systemNotice) {
+      localStorage.setItem('last_seen_version', systemNotice.version);
+      setSystemNotice(null);
+    }
+  };
 
   const toggleTheme = () => {
     const newTheme = !isDarkMode;
@@ -128,14 +160,17 @@ export default function App() {
           setIsGuest(false);
           const isUserAdmin = currentUser.email && currentUser.email.toLowerCase() === ADMIN_EMAIL;
           setIsAdmin(isUserAdmin);
-
-          const userDoc = await getDoc(doc(db, USERS_COLLECTION, currentUser.uid));
-          if (userDoc.exists()) {
-            setUserData(userDoc.data());
-          } else {
-            const initialData = { name: currentUser.displayName || 'مستخدم', photoURL: currentUser.photoURL || null, isVerified: false, rating: 0, totalRatings: 0, email: currentUser.email };
-            await setDoc(doc(db, USERS_COLLECTION, currentUser.uid), initialData, { merge: true });
-            setUserData(initialData);
+          try {
+            const userDoc = await getDoc(doc(db, USERS_COLLECTION, currentUser.uid));
+            if (userDoc.exists()) {
+              setUserData(userDoc.data());
+            } else {
+              const initialData = { name: currentUser.displayName || 'مستخدم', photoURL: currentUser.photoURL || null, isVerified: false, rating: 0, totalRatings: 0, email: currentUser.email };
+              await setDoc(doc(db, USERS_COLLECTION, currentUser.uid), initialData, { merge: true });
+              setUserData(initialData);
+            }
+          } catch (e) {
+            console.error("Error user profile", e);
           }
         }
       } else {
@@ -154,34 +189,17 @@ export default function App() {
     const tripsPath = collection(db, APP_COLLECTION_NAME);
     const unsubscribe = onSnapshot(tripsPath, (snapshot) => {
       const tripsData = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
-      
-      // البوت
-      if (isAdmin) {
-        tripsData.forEach(trip => {
-          if (trip.isDummy && trip.createdAt) {
-            const createdTime = trip.createdAt.toMillis ? trip.createdAt.toMillis() : Date.now();
-            const elapsedMinutes = (Date.now() - createdTime) / (1000 * 60);
-            
-            if (trip.status === 'open' && elapsedMinutes >= 5 && elapsedMinutes < 30) {
-              updateDoc(doc(db, APP_COLLECTION_NAME, trip.id), { status: 'in_progress' }).catch(() => {});
-            } else if (trip.status === 'in_progress' && elapsedMinutes >= 30) {
-              updateDoc(doc(db, APP_COLLECTION_NAME, trip.id), { status: 'completed' }).catch(() => {});
-            }
-          }
-        });
-      }
-
       setRealTrips(tripsData);
     });
     return () => unsubscribe();
-  }, [user, isAdmin]);
+  }, [user]);
 
   useEffect(() => {
     if (!user || isGuest) return;
     const myInboxPath = collection(db, `inbox_${user.uid}`);
     const unsubscribe = onSnapshot(myInboxPath, (snapshot) => {
       const inboxData = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
-      inboxData.sort((a, b) => (b.createdAt?.toMillis() || 0) - (a.createdAt?.toMillis() || 0));
+      inboxData.sort((a, b) => (b.createdAt?.toMillis ? b.createdAt.toMillis() : 0) - (a.createdAt?.toMillis ? a.createdAt.toMillis() : 0));
       setMyInbox(inboxData);
     });
     return () => unsubscribe();
@@ -193,7 +211,7 @@ export default function App() {
     const msgsPath = collection(db, `chats_${chatId}`);
     const unsubscribe = onSnapshot(msgsPath, (snapshot) => {
       const msgsData = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
-      msgsData.sort((a, b) => (a.createdAt?.toMillis() || 0) - (b.createdAt?.toMillis() || 0));
+      msgsData.sort((a, b) => (a.createdAt?.toMillis ? a.createdAt.toMillis() : 0) - (b.createdAt?.toMillis ? b.createdAt.toMillis() : 0));
       setMessages(msgsData);
       setTimeout(() => messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' }), 100);
     });
@@ -210,45 +228,6 @@ export default function App() {
     return () => unsubscribe();
   }, [user, isAdmin, showAdminPanel]);
 
-  const adminGenerateBotTrip = async () => {
-    const cities = ["القاهرة", "الإسكندرية", "المنصورة", "طنطا", "الزقازيق", "أسيوط", "بورسعيد", "الإسماعيلية"];
-    const names = ["كريم إبراهيم", "منى عبد الله", "إسلام حامد", "هبة عادل", "محمود زكي"];
-    const types = ["offer", "request", "delivery"];
-    
-    const randomFrom = cities[Math.floor(Math.random() * cities.length)];
-    let randomTo = cities[Math.floor(Math.random() * cities.length)];
-    while (randomFrom === randomTo) {
-      randomTo = cities[Math.floor(Math.random() * cities.length)];
-    }
-    const randomName = names[Math.floor(Math.random() * names.length)];
-    const randomType = types[Math.floor(Math.random() * types.length)];
-
-    try {
-      await addDoc(collection(db, APP_COLLECTION_NAME), {
-        type: randomType,
-        from: randomFrom,
-        to: randomTo,
-        date: new Date().toISOString().split('T')[0],
-        time: new Date().toLocaleTimeString('ar-EG', {hour: '2-digit', minute:'2-digit'}),
-        seats: Math.floor(Math.random() * 3) + 1,
-        cost: "", 
-        notes: "", 
-        userId: "bot_user_" + Date.now(),
-        userName: randomName,
-        userPhone: "",
-        verified: true,
-        rating: Number((Math.random() * 2 + 3).toFixed(1)),
-        totalRatings: 5,
-        status: "open",
-        isDummy: true, 
-        createdAt: serverTimestamp()
-      });
-      triggerToast("تم توليد رحلة عشوائية بنجاح! 🤖");
-    } catch (err) {
-      alert("حدث خطأ أثناء توليد الرحلة.");
-    }
-  };
-
   const handleAvatarUpload = async (e) => {
     const file = e.target.files[0];
     if (!file) return;
@@ -263,7 +242,7 @@ export default function App() {
       setUserData(prev => ({...prev, photoURL: url}));
       triggerToast('تم تحديث صورتك بنجاح! 📸');
     } catch (err) {
-      alert('تأكد من تفعيل Storage في إعدادات فايربيز.');
+      alert('حدث خطأ. يرجى التأكد من تفعيل Storage في إعدادات فايربيز.');
     } finally {
       setIsUploading(false);
     }
@@ -300,7 +279,7 @@ export default function App() {
   };
 
   const adminDeleteAnnouncement = async (indexToDelete) => {
-    if(announcements.length <= 1) return alert("يجب ترك إعلان واحد على الأقل.");
+    if(announcements.length <= 1) return alert("لا يمكن حذف آخر إعلان، يجب ترك إعلان واحد على الأقل.");
     const newAdsList = announcements.filter((_, i) => i !== indexToDelete);
     await setDoc(doc(db, 'app_settings', 'announcements'), { messages: newAdsList }, { merge: true });
     triggerToast('تم حذف الإعلان.');
@@ -309,6 +288,68 @@ export default function App() {
   const adminToggleVerification = async (userId, currentStatus) => {
     await updateDoc(doc(db, USERS_COLLECTION, userId), { isVerified: !currentStatus });
     triggerToast(!currentStatus ? 'تم توثيق الحساب ✅' : 'تم سحب التوثيق ❌');
+  };
+
+  const adminSendBroadcastMessage = async () => {
+    if (!broadcastMsg.trim() || allUsers.length === 0) return;
+    setIsSubmitting(true);
+    try {
+      const sysName = "إدارة خدني معاك 👑";
+      const promises = allUsers.map(async (u) => {
+        const chatId = `sys_admin_to_${u.id}`; 
+        await setDoc(doc(db, `inbox_${u.id}`, chatId), {
+          chatId: chatId, tripId: 'system', otherPersonId: 'admin', otherPersonName: sysName, lastMessage: broadcastMsg, createdAt: serverTimestamp()
+        });
+        await addDoc(collection(db, `chats_${chatId}`), {
+          text: broadcastMsg, senderId: 'admin', senderName: sysName, createdAt: serverTimestamp()
+        });
+      });
+      await Promise.all(promises);
+      setBroadcastMsg('');
+      triggerToast('تم إرسال الإشعار لجميع المستخدمين بنجاح! 🚀');
+    } catch (error) {
+      alert('حدث خطأ أثناء إرسال الإشعار.');
+    } finally {
+      setIsSubmitting(false);
+    }
+  };
+
+  const adminGenerateBotTrip = async () => {
+    const cities = ['القاهرة', 'الإسكندرية', 'المنصورة', 'طنطا', 'الزقازيق', 'بنها', 'بورسعيد', 'الإسماعيلية'];
+    const names = ['أحمد فتحي', 'محمد كمال', 'سارة علي', 'محمود سعد', 'نورهان فاروق', 'خالد حسام', 'عمر مجدي', 'هدى سمير'];
+    const types = ['offer', 'request', 'delivery'];
+    
+    const randomCity1 = cities[Math.floor(Math.random() * cities.length)];
+    let randomCity2 = cities[Math.floor(Math.random() * cities.length)];
+    while(randomCity1 === randomCity2) randomCity2 = cities[Math.floor(Math.random() * cities.length)];
+    
+    const randomName = names[Math.floor(Math.random() * names.length)];
+    const randomType = types[Math.floor(Math.random() * types.length)];
+    
+    try {
+      await addDoc(collection(db, APP_COLLECTION_NAME), {
+          type: randomType,
+          from: randomCity1,
+          to: randomCity2,
+          date: new Date().toISOString().split('T')[0], 
+          time: new Date().toLocaleTimeString('ar-EG', {hour: '2-digit', minute:'2-digit'}),
+          seats: Math.floor(Math.random() * 3) + 1,
+          cost: '',
+          notes: '',
+          userId: 'bot_' + Math.floor(Math.random() * 10000),
+          userName: randomName,
+          userPhone: '',
+          verified: Math.random() > 0.3,
+          rating: Number((Math.random() * 2 + 3).toFixed(1)),
+          totalRatings: Math.floor(Math.random() * 50) + 1,
+          status: 'open',
+          isBot: true,
+          createdAt: serverTimestamp()
+      });
+      triggerToast('تم توليد رحلة عشوائية بنجاح 🤖');
+    } catch(err) {
+      console.error(err);
+    }
   };
 
   const handleAuth = async (e) => {
@@ -330,7 +371,7 @@ export default function App() {
         });
       }
     } catch (error) {
-      alert('تأكد من صحة البيانات.');
+      alert('تأكد من صحة البيانات (الرقم السري 6 أحرف على الأقل).');
     } finally {
       setAuthLoading(false);
     }
@@ -382,7 +423,7 @@ export default function App() {
         createdAt: serverTimestamp()
       });
       setShowAddModal(false);
-      triggerToast('تم نشر الطلب/الرحلة بنجاح!');
+      triggerToast('تم نشر الإعلان بنجاح!');
       setNewTrip({ type: 'request', from: '', to: '', date: '', time: '', seats: 1, cost: '', notes: '' });
     } catch (error) {
       alert('حدث خطأ أثناء النشر.');
@@ -394,9 +435,9 @@ export default function App() {
   const handleUpdateTripStatus = async (tripId, newStatus) => {
     try {
       await updateDoc(doc(db, APP_COLLECTION_NAME, tripId), { status: newStatus });
-      triggerToast(newStatus === 'in_progress' ? 'تم بدء الرحلة/التوصيل بنجاح! 🚗' : 'تمت العملية بنجاح! ✅');
+      triggerToast(newStatus === 'in_progress' ? 'تم بدء الرحلة، طريق السلامة! 🚗' : 'حمداً لله على السلامة، اكتملت الرحلة! ✅');
     } catch (error) {
-      alert('حدث خطأ أثناء التحديث.');
+      alert('حدث خطأ أثناء تحديث حالة الرحلة.');
     }
   };
 
@@ -417,7 +458,7 @@ export default function App() {
     if (!newMessage.trim() || !activeChat || isGuest) return;
     const chatId = activeChat.chatId;
     const msgData = {
-      text: newMessage, senderId: user.uid, senderName: userData?.name || user.displayName, createdAt: serverTimestamp()
+      text: newMessage, senderId: user.uid, senderName: userData?.name || user.displayName || 'مستخدم', createdAt: serverTimestamp()
     };
     try {
       await addDoc(collection(db, `chats_${chatId}`), msgData);
@@ -428,7 +469,7 @@ export default function App() {
         chatId, tripId: activeChat.tripId, otherPersonId: activeChat.otherPersonId, otherPersonName: activeChat.otherPersonName, otherPersonPhoto: otherPhoto, lastMessage: newMessage, createdAt: serverTimestamp()
       });
       await setDoc(doc(db, `inbox_${activeChat.otherPersonId}`, chatId), {
-        chatId, tripId: activeChat.tripId, otherPersonId: user.uid, otherPersonName: userData?.name || user.displayName, otherPersonPhoto: myPhoto, lastMessage: newMessage, createdAt: serverTimestamp()
+        chatId, tripId: activeChat.tripId, otherPersonId: user.uid, otherPersonName: userData?.name || user.displayName || 'مستخدم', otherPersonPhoto: myPhoto, lastMessage: newMessage, createdAt: serverTimestamp()
       });
       setNewMessage('');
     } catch (error) {
@@ -437,20 +478,20 @@ export default function App() {
   };
 
   const openChatFromTrip = (trip) => {
-    if (trip.status === 'completed' || trip.status === 'in_progress' || trip.isDummy) {
-      alert("عذراً، هذه الرحلة جارية أو مكتملة.");
+    if (trip.status === 'completed' || trip.status === 'in_progress' || trip.isDummy || trip.isBot) {
+      alert("عذراً، هذه الرحلة جارية أو مكتملة. لا يمكن بدء محادثة جديدة.");
       return;
     }
     requireAuth(() => {
       const chatId = trip.id + '_' + (user.uid < trip.userId ? user.uid + '_' + trip.userId : trip.userId + '_' + user.uid);
       setActiveChat({
-        chatId: chatId, tripId: trip.id, otherPersonId: trip.userId, otherPersonName: trip.userName, otherPersonPhoto: trip.userPhoto || null, tripInfo: `${trip.from} ➔ ${trip.to}`
+        chatId: chatId, tripId: trip.id, otherPersonId: trip.userId, otherPersonName: trip.userName || 'مستخدم', otherPersonPhoto: trip.userPhoto || null, tripInfo: `${trip.from} ➔ ${trip.to}`
       });
     });
   };
 
   const allTrips = [...realTrips, ...DUMMY_TRIPS];
-  allTrips.sort((a, b) => (b.createdAt?.toMillis() || 0) - (a.createdAt?.toMillis() || 0));
+  allTrips.sort((a, b) => (b.createdAt?.toMillis ? b.createdAt.toMillis() : 0) - (a.createdAt?.toMillis ? a.createdAt.toMillis() : 0));
 
   const filteredTrips = allTrips.filter(t => (filterType === 'all' || t.type === filterType) && (t.from?.includes(searchFrom) && t.to?.includes(searchTo)));
   const myOwnTrips = realTrips.filter(t => t.userId === user?.uid);
@@ -462,12 +503,11 @@ export default function App() {
     const numRating = Number(rating) || 0;
     const fullStars = Math.floor(numRating);
     const hasHalfStar = numRating % 1 !== 0;
-    
     return (
       <div className="flex items-center gap-1">
         <div className="flex text-amber-400">
           {[...Array(5)].map((_, i) => (
-            <Star key={i} size={12} fill={i < fullStars ? "currentColor" : (i === fullStars && hasHalfStar ? "currentColor" : "none")} className={i < fullStars || (i === fullStars && hasHalfStar) ? "text-amber-400" : "text-slate-300 dark:text-slate-600"}/>
+            <Star key={i} size={12} fill={i < fullStars ? "currentColor" : (i === fullStars && hasHalfStar ? "currentColor" : "none")} className={i < fullStars || (i === fullStars && hasHalfStar) ? "text-amber-400" : "text-slate-300 dark:text-slate-600"} />
           ))}
         </div>
         <span className="text-[11px] font-bold text-slate-500 dark:text-slate-400">({numRating.toFixed(1)})</span>
@@ -488,9 +528,12 @@ export default function App() {
         <style dangerouslySetInnerHTML={{__html: `:root { color-scheme: light dark; }`}} />
         <div className={`${bgCard} p-8 sm:p-10 rounded-3xl shadow-2xl max-w-md w-full border-t-8 border-indigo-600 relative overflow-hidden`}>
           <div className="absolute top-0 right-0 w-32 h-32 bg-indigo-500 rounded-full blur-3xl opacity-10 transform translate-x-1/2 -translate-y-1/2"></div>
-          <div className="bg-indigo-100 text-indigo-600 w-20 h-20 rounded-2xl flex items-center justify-center mx-auto mb-6 shadow-inner transform -rotate-6"><Car size={40} className="transform rotate-6" /></div>
+          <div className="bg-indigo-100 text-indigo-600 w-20 h-20 rounded-2xl flex items-center justify-center mx-auto mb-6 shadow-inner transform -rotate-6">
+            <Car size={40} className="transform rotate-6" />
+          </div>
           <h1 className="text-3xl font-extrabold mb-2 text-center bg-gradient-to-l from-indigo-600 to-blue-500 bg-clip-text text-transparent">خدني معاك</h1>
           <p className={`${isDarkMode ? 'text-slate-400' : 'text-slate-500'} mb-8 text-center text-sm font-medium`}>{isLoginMode ? 'مرحباً بعودتك! سجل دخولك للمتابعة' : 'انضم إلينا وابدأ رحلتك التوفيرية'}</p>
+          
           <form onSubmit={handleAuth} className="space-y-4">
             {!isLoginMode && (
               <>
@@ -516,6 +559,7 @@ export default function App() {
               {authLoading ? <Loader2 className="animate-spin" /> : (isLoginMode ? 'تسجيل الدخول' : 'إنشاء حساب جديد')}
             </button>
           </form>
+          
           <div className="mt-6 text-center space-y-5">
             <button onClick={() => setIsLoginMode(!isLoginMode)} className={`font-bold text-sm hover:underline block w-full transition-all ${isDarkMode ? 'text-indigo-400' : 'text-indigo-600'}`}>
               {isLoginMode ? 'ليس لديك حساب؟ أنشئ حساباً الآن' : 'لديك حساب بالفعل؟ سجل دخولك'}
@@ -564,7 +608,7 @@ export default function App() {
                 <div className="grid grid-cols-2 gap-3">
                   {bannerImages.map((img, idx) => (
                     <div key={idx} className="relative rounded-xl overflow-hidden h-24 border border-slate-200">
-                      <img src={img} className="w-full h-full object-cover" />
+                      <img src={img} className="w-full h-full object-cover" alt="banner" />
                       <button onClick={() => adminDeleteBanner(img)} className="absolute top-1 right-1 bg-red-500 text-white p-1 rounded-md hover:bg-red-600"><Trash2 size={14}/></button>
                     </div>
                   ))}
@@ -594,10 +638,10 @@ export default function App() {
                     allUsers.map(u => (
                       <div key={u.id} className={`flex justify-between items-center p-3 rounded-xl border ${isDarkMode ? 'bg-slate-700 border-slate-600' : 'bg-slate-100 border-slate-200'}`}>
                         <div className="flex items-center gap-3">
-                          {u.photoURL ? <img src={u.photoURL} className="w-10 h-10 rounded-full object-cover border" /> : <div className="w-10 h-10 rounded-full bg-indigo-100 flex items-center justify-center text-indigo-600 font-bold">{u.name?.charAt(0)}</div>}
+                          {u.photoURL ? <img src={u.photoURL} className="w-10 h-10 rounded-full object-cover border" alt="avatar" /> : <div className="w-10 h-10 rounded-full bg-indigo-100 flex items-center justify-center text-indigo-600 font-bold">{u.name?.charAt(0) || 'م'}</div>}
                           <div>
-                            <p className="font-bold text-sm flex items-center gap-1">{u.name} {u.isVerified && <ShieldCheck size={14} className="text-blue-500"/>}</p>
-                            <p className="text-xs text-slate-500">{u.phone}</p>
+                            <p className="font-bold text-sm flex items-center gap-1">{u.name || 'مستخدم'} {u.isVerified && <ShieldCheck size={14} className="text-blue-500"/>}</p>
+                            <p className="text-xs text-slate-500">{u.phone || 'بدون رقم'}</p>
                           </div>
                         </div>
                         <button onClick={() => adminToggleVerification(u.id, u.isVerified)} className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-colors ${u.isVerified ? 'bg-rose-100 text-rose-600 hover:bg-rose-200' : 'bg-emerald-100 text-emerald-700 hover:bg-emerald-200'}`}>
@@ -608,6 +652,7 @@ export default function App() {
                   }
                 </div>
               </div>
+
             </div>
           </div>
         </div>
@@ -702,6 +747,13 @@ export default function App() {
             </div>
             
             <div className={`p-6 border-t ${isDarkMode ? 'border-slate-700' : 'border-slate-100'}`}>
+              <div className="flex items-center gap-3 mb-4 px-2">
+                <div className="w-10 h-10 rounded-full bg-indigo-100 flex items-center justify-center text-indigo-600 font-bold">{userData?.name?.charAt(0) || <User size={20}/>}</div>
+                <div>
+                  <p className="font-bold text-sm">{userData?.name || 'زائر'}</p>
+                  <p className="text-xs text-slate-500">{userData?.phone || 'لا يوجد رقم'}</p>
+                </div>
+              </div>
               <button onClick={handleLogout} className={`w-full py-3.5 rounded-xl font-bold flex justify-center items-center gap-2 transition-colors ${isDarkMode ? 'bg-rose-500/10 text-rose-400 hover:bg-rose-500/20' : 'bg-rose-50 text-rose-600 hover:bg-rose-100'}`}>
                 {isGuest ? <LogIn size={18}/> : <LogOut size={18}/>} {isGuest ? 'تسجيل الدخول' : 'تسجيل الخروج'}
               </button>
@@ -790,7 +842,7 @@ export default function App() {
               </button>
             )}
             <button onClick={() => setShowSettings(true)} className={`relative p-2 rounded-xl transition-all ${isDarkMode ? 'hover:bg-slate-800 text-slate-400 hover:text-slate-200' : 'hover:bg-slate-100 text-slate-500 hover:text-slate-800'}`}>
-              {userData?.photoURL ? <img src={userData.photoURL} className="w-6 h-6 rounded-full object-cover border border-slate-300" alt="user" /> : <Settings size={20} />}
+              {userData?.photoURL ? <img src={userData.photoURL} alt="user" className="w-6 h-6 rounded-full object-cover border border-slate-300" /> : <Settings size={20} />}
             </button>
           </div>
         </div>
@@ -1071,7 +1123,7 @@ export default function App() {
               {activeChat.otherPersonId === 'admin' ? (
                 <div className="w-8 h-8 bg-white/20 rounded-full flex items-center justify-center"><Crown size={16}/></div>
               ) : activeChat.otherPersonPhoto ? (
-                <img src={activeChat.otherPersonPhoto} className="w-8 h-8 rounded-full object-cover border border-white/20" alt="avatar" />
+                <img src={activeChat.otherPersonPhoto} className="w-8 h-8 rounded-full object-cover border-2 border-white/20" alt="avatar" />
               ) : (
                 <div className="w-8 h-8 bg-white/20 rounded-full flex items-center justify-center"><User size={16}/></div>
               )}
