@@ -1,9 +1,9 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { initializeApp } from 'firebase/app';
 import { getAnalytics } from 'firebase/analytics';
-import { getAuth, signInAnonymously, onAuthStateChanged, updateProfile } from 'firebase/auth';
+import { getAuth, signInWithPopup, GoogleAuthProvider, onAuthStateChanged, signOut } from 'firebase/auth';
 import { getFirestore, collection, onSnapshot, addDoc, deleteDoc, doc, serverTimestamp } from 'firebase/firestore';
-import { MapPin, Navigation, Car, User, Bell, Search, Calendar, Clock, MessageCircle, ShieldCheck, ArrowRight, Menu, X, CheckCircle2, Loader2, ExternalLink, Trash2, Wallet, Filter, Send } from 'lucide-react';
+import { MapPin, Navigation, Car, User, Bell, Search, Calendar, Clock, MessageCircle, ShieldCheck, ArrowRight, Menu, X, CheckCircle2, Loader2, ExternalLink, Trash2, Wallet, Filter, Send, LogOut } from 'lucide-react';
 
 // ==========================================
 // 1. إعداد Firebase الحقيقي (بناءً على مفاتيحك الخاصة)
@@ -19,12 +19,11 @@ const firebaseConfig = {
 };
 
 const app = initializeApp(firebaseConfig);
-// تهيئة الأناكتيكس بأمان في بيئة المتصفح
 let analytics;
 try {
   analytics = getAnalytics(app);
 } catch (e) {
-  // تجاهل خطأ الأناكتيكس إذا لم يكن مدعوماً في بعض البيئات
+  // تجاهل خطأ الأناكتيكس إذا لم يكن مدعوماً
 }
 
 const auth = getAuth(app);
@@ -34,8 +33,6 @@ const APP_COLLECTION_NAME = 'khodni_maak_trips';
 
 export default function App() {
   const [user, setUser] = useState(null);
-  const [userName, setUserName] = useState('');
-  const [isNameSet, setIsNameSet] = useState(false);
   
   const [trips, setTrips] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -58,27 +55,20 @@ export default function App() {
     type: 'request', from: '', to: '', date: '', time: '', seats: 1, cost: '', notes: ''
   });
 
+  // متابعة حالة تسجيل الدخول للمستخدم
   useEffect(() => {
-    const initAuth = async () => {
-      try {
-        await signInAnonymously(auth);
-      } catch (error) {
-        console.error("Authentication error:", error);
-      }
-    };
-    initAuth();
-    
     const unsubscribe = onAuthStateChanged(auth, (currentUser) => {
       setUser(currentUser);
-      if (currentUser && currentUser.displayName) {
-        setIsNameSet(true);
+      if (!currentUser) {
+        setLoading(false);
       }
     });
     return () => unsubscribe();
   }, []);
 
+  // جلب الرحلات بعد تسجيل الدخول
   useEffect(() => {
-    if (!user || !isNameSet) return;
+    if (!user) return;
     
     const tripsPath = collection(db, APP_COLLECTION_NAME);
     const unsubscribe = onSnapshot(tripsPath, (snapshot) => {
@@ -92,8 +82,9 @@ export default function App() {
     });
     
     return () => unsubscribe();
-  }, [user, isNameSet]);
+  }, [user]);
 
+  // جلب المحادثات
   useEffect(() => {
     if (!user || !activeChat) return;
 
@@ -111,14 +102,23 @@ export default function App() {
     return () => unsubscribe();
   }, [user, activeChat]);
 
-  const handleSetName = async (e) => {
-    e.preventDefault();
-    if (!userName.trim()) return;
+  // تسجيل الدخول باستخدام جوجل
+  const handleGoogleLogin = async () => {
+    const provider = new GoogleAuthProvider();
     try {
-      await updateProfile(user, { displayName: userName });
-      setIsNameSet(true);
+      await signInWithPopup(auth, provider);
     } catch (error) {
-      console.error("Error setting name:", error);
+      console.error("Google login error:", error);
+      alert("حدث خطأ أثناء تسجيل الدخول.");
+    }
+  };
+
+  // تسجيل الخروج
+  const handleLogout = async () => {
+    try {
+      await signOut(auth);
+    } catch (error) {
+      console.error("Logout error:", error);
     }
   };
 
@@ -137,7 +137,8 @@ export default function App() {
     setIsSubmitting(true);
     try {
       const tripsPath = collection(db, APP_COLLECTION_NAME);
-      const avatarUrl = `https://api.dicebear.com/7.x/avataaars/svg?seed=${user.uid}`;
+      // استخدام صورة جوجل أو صورة افتراضية
+      const avatarUrl = user.photoURL || `https://api.dicebear.com/7.x/avataaars/svg?seed=${user.uid}`;
       
       await addDoc(tripsPath, {
         ...newTrip,
@@ -153,7 +154,7 @@ export default function App() {
       setNewTrip({ type: 'request', from: '', to: '', date: '', time: '', seats: 1, cost: '', notes: '' });
     } catch (error) {
       console.error(error);
-      alert('حدث خطأ أثناء النشر. تأكد من تفعيل قاعدة البيانات Firestore وقواعد الأمان (Rules).');
+      alert('حدث خطأ أثناء النشر. تأكد من إعدادات قاعدة البيانات.');
     } finally {
       setIsSubmitting(false);
     }
@@ -190,7 +191,8 @@ export default function App() {
     }
   };
 
-  if (user && !isNameSet) {
+  // شاشة الدخول للمستخدمين غير المسجلين
+  if (!user) {
     return (
       <div dir="rtl" className="min-h-screen bg-gray-50 flex items-center justify-center p-4 font-sans text-gray-800">
         <div className="bg-white p-8 rounded-3xl shadow-xl max-w-md w-full text-center">
@@ -198,17 +200,21 @@ export default function App() {
             <Car size={40} />
           </div>
           <h1 className="text-2xl font-bold mb-2">مرحباً بك في "خدني معاك"</h1>
-          <p className="text-gray-500 mb-8">أدخل اسمك لنبدأ رحلتك</p>
-          <form onSubmit={handleSetName} className="space-y-4">
-            <input 
-              type="text" required placeholder="الاسم الكامل" 
-              value={userName} onChange={(e) => setUserName(e.target.value)}
-              className="w-full bg-gray-50 border border-gray-200 rounded-xl py-4 px-4 focus:ring-2 focus:ring-blue-500 outline-none text-lg text-center"
-            />
-            <button type="submit" className="w-full bg-blue-600 text-white py-4 rounded-xl font-bold text-lg hover:bg-blue-700 transition-colors shadow-lg">
-              دخول
-            </button>
-          </form>
+          <p className="text-gray-500 mb-8">سجل دخولك لنبدأ رحلتك</p>
+          
+          <button 
+            onClick={handleGoogleLogin} 
+            className="w-full bg-white border-2 border-gray-200 text-gray-800 py-4 rounded-xl font-bold text-lg hover:bg-gray-50 transition-colors shadow-sm flex items-center justify-center gap-3"
+          >
+            <svg className="w-6 h-6" viewBox="0 0 24 24">
+              <path fill="#4285F4" d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z" />
+              <path fill="#34A853" d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z" />
+              <path fill="#FBBC05" d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.07H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.93l2.85-2.22.81-.62z" />
+              <path fill="#EA4335" d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.07l3.66 2.84c.87-2.6 3.3-4.53 6.16-4.53z" />
+              <path fill="none" d="M1 1h22v22H1z" />
+            </svg>
+            تسجيل الدخول باستخدام جوجل
+          </button>
         </div>
       </div>
     );
@@ -237,7 +243,12 @@ export default function App() {
             <div className="bg-gradient-to-br from-blue-600 to-indigo-700 text-white p-2.5 rounded-xl shadow-md"><Car size={28} /></div>
             <div>
               <span className="font-extrabold text-2xl text-gray-900 block leading-none">خدني معاك</span>
-              <span className="text-[11px] text-blue-600 font-bold block mt-1 uppercase">مرحباً، {user?.displayName}</span>
+              <div className="flex items-center gap-2 mt-1">
+                <span className="text-[11px] text-blue-600 font-bold uppercase">مرحباً، {user?.displayName?.split(' ')[0]}</span>
+                <button onClick={handleLogout} className="text-[10px] text-gray-400 hover:text-red-500 font-bold flex items-center gap-1 transition-colors">
+                  <LogOut size={10} /> خروج
+                </button>
+              </div>
             </div>
           </div>
           <button onClick={() => setShowAddModal(true)} className="hidden md:flex bg-gray-900 text-white px-6 py-2.5 rounded-xl font-bold hover:bg-gray-800 transition-all shadow-md hover:shadow-lg items-center gap-2">
