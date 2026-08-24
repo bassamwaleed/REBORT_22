@@ -2,9 +2,9 @@ import React, { useState, useEffect, useRef } from 'react';
 import { initializeApp } from 'firebase/app';
 import { getAuth, createUserWithEmailAndPassword, signInWithEmailAndPassword, signInAnonymously, onAuthStateChanged, updateProfile, signOut } from 'firebase/auth';
 import { getFirestore, collection, onSnapshot, addDoc, deleteDoc, updateDoc, doc, setDoc, getDoc, serverTimestamp } from 'firebase/firestore';
-import { MapPin, Navigation, Car, User, MessageCircle, ShieldCheck, X, CheckCircle2, Loader2, Trash2, Send, LogOut, Bell, Phone, Mail, Lock, LogIn, AlertCircle, Settings, Moon, Sun, Info, History, Star, Play, CheckSquare, Megaphone, Calendar, Clock, ChevronLeft, Wallet, Sparkles, ArrowRight } from 'lucide-react';
+import { MapPin, Navigation, Car, User, MessageCircle, ShieldCheck, X, CheckCircle2, Loader2, Trash2, Send, LogOut, Bell, Phone, Mail, Lock, LogIn, AlertCircle, Settings, Moon, Sun, Info, History, Star, Play, CheckSquare, Megaphone, Calendar, Clock, ChevronLeft, Wallet, Sparkles, ArrowRight, Shield, Crown } from 'lucide-react';
 
-// إعدادات فايربيز 
+// إعدادات فايربيز
 const firebaseConfig = {
   apiKey: "AIzaSyC3JM11miWda_leIk0LPViRNVdSZRCQ8N8",
   authDomain: "khodnimaak.firebaseapp.com",
@@ -20,25 +20,22 @@ const db = getFirestore(app);
 const APP_COLLECTION_NAME = 'khodni_maak_trips';
 const USERS_COLLECTION = 'khodni_maak_users';
 
+// --- الإيميل الخاص بصاحب التطبيق (الأدمن الوحيد) ---
+const ADMIN_EMAIL = "bassamwaleed2000@gmail.com".toLowerCase();
+
 // داتا وهمية للبريزنتيشن 
 const DUMMY_TRIPS = [
-  { id: 'dummy_1', type: 'offer', from: 'القاهرة (رمسيس)', to: 'الإسكندرية (محطة مصر)', date: '2026-08-25', time: '08:00 ص', seats: 3, cost: '150', notes: 'عربية مكيفة، رحلة ممتعة إن شاء الله', userId: 'd1', userName: 'أحمد محمود', userPhone: '', verified: true, isDummy: true, status: 'completed', createdAt: { toMillis: () => Date.now() - 1000000 } },
-  { id: 'dummy_2', type: 'request', from: 'المنصورة', to: 'القاهرة (مدينة نصر)', date: '2026-08-26', time: '10:30 ص', seats: 1, cost: '', notes: 'معايا شنطة سفر واحدة صغيرة', userId: 'd2', userName: 'سارة خالد', userPhone: '', verified: false, isDummy: true, status: 'completed', createdAt: { toMillis: () => Date.now() - 2000000 } },
-  { id: 'dummy_3', type: 'offer', from: 'الزقازيق', to: 'العاشر من رمضان', date: '2026-08-24', time: '02:00 م', seats: 2, cost: '40', notes: 'التحرك من موقف الأحرار', userId: 'd3', userName: 'محمود حسن', userPhone: '', verified: true, isDummy: true, status: 'in_progress', createdAt: { toMillis: () => Date.now() - 3000000 } }, 
-  { id: 'dummy_4', type: 'request', from: 'طنطا', to: 'بنها', date: '2026-08-25', time: '05:00 م', seats: 2, cost: '', notes: 'محتاجين عربية في أسرع وقت', userId: 'd4', userName: 'مصطفى كمال', userPhone: '', verified: false, isDummy: true, status: 'completed', createdAt: { toMillis: () => Date.now() - 4000000 } }
-];
-
-const ANNOUNCEMENTS = [
-  "🚀 جاري تحديث وتطوير البرنامج باستمرار لخدمتكم",
-  "🇪🇬 بأيدي شباب مصريين.. تطبيق خدني معاك بيسهل مشوارك",
-  "✨ بنوفرلك السهولة، الراحة، والأمان في كل رحلة",
-  "💰 شارك رحلتك ووفر بنزينك مع ركاب في نفس طريقك"
+  { id: 'dummy_1', type: 'offer', from: 'القاهرة (رمسيس)', to: 'الإسكندرية (محطة مصر)', date: '2026-08-25', time: '08:00 ص', seats: 3, cost: '150', notes: 'عربية مكيفة، رحلة ممتعة إن شاء الله', userId: 'd1', userName: 'أحمد محمود', userPhone: '', verified: true, isDummy: true, status: 'completed', rating: 4.5, totalRatings: 12, createdAt: { toMillis: () => Date.now() - 1000000 } },
+  { id: 'dummy_2', type: 'request', from: 'المنصورة', to: 'القاهرة (مدينة نصر)', date: '2026-08-26', time: '10:30 ص', seats: 1, cost: '', notes: 'معايا شنطة سفر واحدة صغيرة', userId: 'd2', userName: 'سارة خالد', userPhone: '', verified: false, isDummy: true, status: 'completed', rating: 5.0, totalRatings: 4, createdAt: { toMillis: () => Date.now() - 2000000 } },
+  { id: 'dummy_3', type: 'offer', from: 'الزقازيق', to: 'العاشر من رمضان', date: '2026-08-24', time: '02:00 م', seats: 2, cost: '40', notes: 'التحرك من موقف الأحرار', userId: 'd3', userName: 'محمود حسن', userPhone: '', verified: true, isDummy: true, status: 'in_progress', rating: 4.0, totalRatings: 8, createdAt: { toMillis: () => Date.now() - 3000000 } }, 
+  { id: 'dummy_4', type: 'request', from: 'طنطا', to: 'بنها', date: '2026-08-25', time: '05:00 م', seats: 2, cost: '', notes: 'محتاجين عربية في أسرع وقت', userId: 'd4', userName: 'مصطفى كمال', userPhone: '', verified: false, isDummy: true, status: 'completed', rating: 0, totalRatings: 0, createdAt: { toMillis: () => Date.now() - 4000000 } }
 ];
 
 export default function App() {
   const [user, setUser] = useState(null);
   const [userData, setUserData] = useState(null);
   const [isGuest, setIsGuest] = useState(false);
+  const [isAdmin, setIsAdmin] = useState(false); // حالة الأدمن
   const [loading, setLoading] = useState(true);
   
   const [isLoginMode, setIsLoginMode] = useState(true);
@@ -55,6 +52,7 @@ export default function App() {
   const [showInbox, setShowInbox] = useState(false);
   const [showSettings, setShowSettings] = useState(false); 
   const [showMyTrips, setShowMyTrips] = useState(false); 
+  const [showAdminPanel, setShowAdminPanel] = useState(false); // شاشة الأدمن
   
   const [showToast, setShowToast] = useState(false);
   const [toastMessage, setToastMessage] = useState('');
@@ -62,7 +60,17 @@ export default function App() {
   
   const [isDarkMode, setIsDarkMode] = useState(false);
   const [systemNotice, setSystemNotice] = useState(null);
+  
+  const [announcements, setAnnouncements] = useState([
+    "🚀 جاري تحديث وتطوير البرنامج باستمرار لخدمتكم",
+    "🇪🇬 بأيدي شباب مصريين.. تطبيق خدني معاك بيسهل مشوارك",
+    "✨ بنوفرلك السهولة، الراحة، والأمان في كل رحلة",
+    "💰 شارك رحلتك ووفر بنزينك مع ركاب في نفس طريقك"
+  ]);
   const [currentAdIndex, setCurrentAdIndex] = useState(0);
+  const [newAdText, setNewAdText] = useState(''); // لإضافة إعلان جديد من الأدمن
+
+  const [allUsers, setAllUsers] = useState([]);
 
   const [activeChat, setActiveChat] = useState(null);
   const [messages, setMessages] = useState([]);
@@ -75,11 +83,23 @@ export default function App() {
   });
 
   useEffect(() => {
+    const settingsDocRef = doc(db, 'app_settings', 'announcements');
+    const unsubscribe = onSnapshot(settingsDocRef, (docSnap) => {
+      if (docSnap.exists() && docSnap.data().messages && docSnap.data().messages.length > 0) {
+        setAnnouncements(docSnap.data().messages);
+      }
+    });
+    return () => unsubscribe();
+  }, []);
+
+  // تحريك الإعلانات
+  useEffect(() => {
+    if (announcements.length <= 1) return;
     const interval = setInterval(() => {
-      setCurrentAdIndex((prev) => (prev + 1) % ANNOUNCEMENTS.length);
+      setCurrentAdIndex((prev) => (prev + 1) % announcements.length);
     }, 4000); 
     return () => clearInterval(interval);
-  }, []);
+  }, [announcements.length]);
 
   useEffect(() => {
     const savedTheme = localStorage.getItem('khodnimaak_theme');
@@ -105,20 +125,30 @@ export default function App() {
         setUser(currentUser);
         if (currentUser.isAnonymous) {
           setIsGuest(true);
-          setUserData({ name: 'زائر', isVerified: false });
+          setIsAdmin(false);
+          setUserData({ name: 'زائر', isVerified: false, rating: 0, totalRatings: 0 });
         } else {
           setIsGuest(false);
+          
+          // التحقق من الإيميل: هل هو إيميل الأدمن؟ (تجاهل حالة الأحرف)
+          const isUserAdmin = currentUser.email && currentUser.email.toLowerCase() === ADMIN_EMAIL;
+          setIsAdmin(isUserAdmin);
+
           const userDoc = await getDoc(doc(db, USERS_COLLECTION, currentUser.uid));
           if (userDoc.exists()) {
-            setUserData(userDoc.data());
+            const data = userDoc.data();
+            setUserData(data);
           } else {
-            setUserData({ name: currentUser.displayName, isVerified: false });
+            const initialData = { name: currentUser.displayName, isVerified: false, rating: 0, totalRatings: 0, email: currentUser.email };
+            await setDoc(doc(db, USERS_COLLECTION, currentUser.uid), initialData, { merge: true });
+            setUserData(initialData);
           }
         }
       } else {
         setUser(null);
         setUserData(null);
         setIsGuest(false);
+        setIsAdmin(false);
       }
       setLoading(false);
     });
@@ -159,6 +189,39 @@ export default function App() {
     return () => unsubscribe();
   }, [user, activeChat, isGuest]);
 
+  useEffect(() => {
+    if (!user || !isAdmin || !showAdminPanel) return;
+    const usersPath = collection(db, USERS_COLLECTION);
+    const unsubscribe = onSnapshot(usersPath, (snapshot) => {
+      const uData = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+      setAllUsers(uData);
+    });
+    return () => unsubscribe();
+  }, [user, isAdmin, showAdminPanel]);
+
+  const adminAddAnnouncement = async () => {
+    if (!newAdText.trim()) return;
+    const newAdsList = [...announcements, newAdText.trim()];
+    await setDoc(doc(db, 'app_settings', 'announcements'), { messages: newAdsList });
+    setNewAdText('');
+    triggerToast('تمت إضافة الإعلان بنجاح!');
+  };
+
+  const adminDeleteAnnouncement = async (indexToDelete) => {
+    if(announcements.length <= 1) {
+      alert("لا يمكن حذف آخر إعلان، يجب ترك إعلان واحد على الأقل.");
+      return;
+    }
+    const newAdsList = announcements.filter((_, i) => i !== indexToDelete);
+    await setDoc(doc(db, 'app_settings', 'announcements'), { messages: newAdsList });
+    triggerToast('تم حذف الإعلان.');
+  };
+
+  const adminToggleVerification = async (userId, currentStatus) => {
+    await updateDoc(doc(db, USERS_COLLECTION, userId), { isVerified: !currentStatus });
+    triggerToast(!currentStatus ? 'تم توثيق الحساب ✅' : 'تم سحب التوثيق ❌');
+  };
+
   const handleAuth = async (e) => {
     e.preventDefault();
     setAuthLoading(true);
@@ -174,7 +237,7 @@ export default function App() {
         const userCred = await createUserWithEmailAndPassword(auth, authForm.email, authForm.password);
         await updateProfile(userCred.user, { displayName: authForm.name });
         await setDoc(doc(db, USERS_COLLECTION, userCred.user.uid), {
-          phone: authForm.phone, name: authForm.name, email: authForm.email, isVerified: false 
+          phone: authForm.phone, name: authForm.name, email: authForm.email, isVerified: false, rating: 0, totalRatings: 0 
         });
       }
     } catch (error) {
@@ -199,6 +262,7 @@ export default function App() {
     await signOut(auth);
     setShowSettings(false);
     setShowMyTrips(false);
+    setShowAdminPanel(false);
   };
 
   const requireAuth = (actionCallback) => {
@@ -222,6 +286,8 @@ export default function App() {
         userName: userData?.name || user.displayName,
         userPhone: userData?.phone || '',
         verified: userData?.isVerified || false,
+        rating: userData?.rating || 0,
+        totalRatings: userData?.totalRatings || 0,
         status: 'open', 
         createdAt: serverTimestamp()
       });
@@ -296,6 +362,31 @@ export default function App() {
   const filteredTrips = allTrips.filter(t => (filterType === 'all' || t.type === filterType) && (t.from?.includes(searchFrom) && t.to?.includes(searchTo)));
   const myOwnTrips = realTrips.filter(t => t.userId === user?.uid);
 
+  // دالة رسم النجوم التراكمية
+  const renderStars = (rating = 0, total = 0) => {
+    if (!total || total === 0) {
+      return <span className="text-[11px] text-slate-400 font-bold">جديد ✨</span>;
+    }
+    const fullStars = Math.floor(rating);
+    const hasHalfStar = rating % 1 !== 0;
+    
+    return (
+      <div className="flex items-center gap-1">
+        <div className="flex text-amber-400">
+          {[...Array(5)].map((_, i) => (
+            <Star 
+              key={i} 
+              size={12} 
+              fill={i < fullStars ? "currentColor" : (i === fullStars && hasHalfStar ? "url(#half)" : "none")} 
+              className={i < fullStars || (i === fullStars && hasHalfStar) ? "text-amber-400" : "text-slate-300 dark:text-slate-600"}
+            />
+          ))}
+        </div>
+        <span className="text-[11px] font-bold text-slate-500 dark:text-slate-400">({rating.toFixed(1)})</span>
+      </div>
+    );
+  };
+
   const bgMain = isDarkMode ? 'bg-slate-900 text-slate-100' : 'bg-slate-50 text-slate-800';
   const bgCard = isDarkMode ? 'bg-slate-800 border-slate-700' : 'bg-white border-slate-200';
   const bgInput = isDarkMode ? 'bg-slate-700 border-slate-600 text-white placeholder-slate-400 focus:bg-slate-600' : 'bg-slate-50 border-slate-200 text-slate-900 focus:bg-white';
@@ -303,7 +394,6 @@ export default function App() {
 
   if (loading) return <div className={`min-h-screen flex justify-center items-center ${bgMain}`}><Loader2 size={50} className="animate-spin text-indigo-600" /></div>;
 
-  // شاشة المصادقة
   if (!user) {
     return (
       <div dir="rtl" className={`min-h-screen flex items-center justify-center p-4 transition-colors ${bgMain} bg-[url('data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHdpZHRoPSI0MCIgaGVpZ2h0PSI0MCI+PGRlZnM+PHBhdHRlcm4gaWQ9InBhdHRlcm4iIHdpZHRoPSI0MCIgaGVpZ2h0PSI0MCIgcGF0dGVyblVuaXRzPSJ1c2VyU3BhY2VPblVzZSI+PHBhdGggZD0iTTAgMGg0MHY0MEgweiIgZmlsbD0ibm9uZSIvPjxjaXJjbGUgY3g9IjIwIiBjeT0iMjAiIHI9IjEiIGZpbGw9InJnYmEoMTU2LCAxNjMsIDE3NSwgMC4yKSIvPjwvcGF0dGVybj48L2RlZnM+PHJlY3Qgd2lkdGg9IjEwMCUiIGhlaWdodD0iMTAwJSIgZmlsbD0idXJsKCNwYXR0ZXJuKSIvPjwvc3ZnPg==')]`}>
@@ -363,18 +453,7 @@ export default function App() {
     <div dir="rtl" className={`min-h-screen flex flex-col relative transition-colors duration-300 ${bgMain}`}>
       <style dangerouslySetInnerHTML={{__html: `:root { color-scheme: light dark; }`}} />
       
-      {/* Toasts & Notices */}
-      {systemNotice && (
-        <div className="fixed inset-0 bg-black/80 backdrop-blur-sm z-[100] flex justify-center items-center p-4">
-          <div className={`${bgModal} rounded-3xl p-8 max-w-sm w-full text-center shadow-2xl border border-indigo-500/30 transform scale-105 transition-transform`}>
-            <div className="bg-indigo-100 w-20 h-20 rounded-full flex items-center justify-center mx-auto mb-5 animate-bounce"><Megaphone size={40} className="text-indigo-600" /></div>
-            <h2 className="text-2xl font-black mb-3 text-indigo-500">{systemNotice.title}</h2>
-            <p className={`mb-8 leading-relaxed font-medium ${isDarkMode ? 'text-slate-400' : 'text-slate-500'}`}>{systemNotice.body}</p>
-            <button onClick={closeSystemNotice} className="w-full py-3.5 bg-indigo-600 text-white rounded-2xl font-bold hover:bg-indigo-700 transition-colors shadow-lg shadow-indigo-500/30">فهمت، شكراً!</button>
-          </div>
-        </div>
-      )}
-
+      {/* إشعارات النظام (Toasts & Notices) */}
       {showToast && (
         <div className="fixed top-24 left-1/2 transform -translate-x-1/2 z-[60] bg-indigo-600 text-white px-6 py-3.5 rounded-full shadow-xl flex items-center gap-3 animate-fade-in-down border border-indigo-400/30">
           <CheckCircle2 size={20} /><p className="text-sm font-bold whitespace-nowrap">{toastMessage}</p>
@@ -395,7 +474,63 @@ export default function App() {
         </div>
       )}
 
-      {/* الإعدادات */}
+      {/* لوحة تحكم الإدارة (الأدمن) */}
+      {showAdminPanel && isAdmin && (
+        <div className="fixed inset-0 bg-slate-900/80 backdrop-blur-md z-[80] flex justify-center items-center p-4">
+          <div className={`${bgModal} rounded-3xl w-full max-w-2xl h-[85vh] shadow-2xl border flex flex-col ${isDarkMode ? 'border-amber-500/30' : 'border-amber-400'}`}>
+            <div className="bg-gradient-to-r from-amber-500 to-orange-600 text-white p-5 flex justify-between items-center rounded-t-3xl">
+              <h2 className="text-xl font-black flex items-center gap-2"><Crown size={24}/> لوحة تحكم الإدارة</h2>
+              <button onClick={() => setShowAdminPanel(false)} className="p-2 hover:bg-white/20 rounded-full transition-colors"><X size={20} /></button>
+            </div>
+            
+            <div className={`flex-1 overflow-y-auto p-6 space-y-8 ${isDarkMode ? 'bg-slate-900' : 'bg-slate-50'}`}>
+              
+              <div className={`p-5 rounded-2xl border ${bgCard}`}>
+                <h3 className="font-bold text-lg mb-4 flex items-center gap-2"><Megaphone size={18} className="text-indigo-500"/> إدارة شريط الإعلانات</h3>
+                <div className="flex gap-2 mb-4">
+                  <input type="text" value={newAdText} onChange={(e)=>setNewAdText(e.target.value)} placeholder="اكتب إعلان جديد..." className={`flex-1 border py-2 px-3 rounded-xl text-sm outline-none focus:ring-2 focus:ring-indigo-500 ${bgInput}`} />
+                  <button onClick={adminAddAnnouncement} className="bg-indigo-600 text-white px-4 py-2 rounded-xl font-bold text-sm hover:bg-indigo-700">إضافة</button>
+                </div>
+                <div className="space-y-2">
+                  {announcements.map((ad, idx) => (
+                    <div key={idx} className={`flex justify-between items-center p-3 rounded-xl border ${isDarkMode ? 'bg-slate-700 border-slate-600' : 'bg-slate-100 border-slate-200'}`}>
+                      <span className="text-sm font-medium">{ad}</span>
+                      <button onClick={() => adminDeleteAnnouncement(idx)} className="text-rose-500 hover:bg-rose-100 p-1.5 rounded-lg"><Trash2 size={16}/></button>
+                    </div>
+                  ))}
+                </div>
+              </div>
+
+              <div className={`p-5 rounded-2xl border ${bgCard}`}>
+                <h3 className="font-bold text-lg mb-4 flex items-center gap-2"><Shield size={18} className="text-emerald-500"/> توثيق المستخدمين</h3>
+                <div className="space-y-3">
+                  {allUsers.length === 0 ? <p className="text-sm text-slate-500">جاري تحميل المستخدمين...</p> : 
+                    allUsers.map(u => (
+                      <div key={u.id} className={`flex justify-between items-center p-3 rounded-xl border ${isDarkMode ? 'bg-slate-700 border-slate-600' : 'bg-slate-100 border-slate-200'}`}>
+                        <div>
+                          <p className="font-bold text-sm flex items-center gap-1">{u.name} {u.isVerified && <ShieldCheck size={14} className="text-blue-500"/>}</p>
+                          <p className="text-xs text-slate-500">{u.phone}</p>
+                        </div>
+                        <button onClick={() => adminToggleVerification(u.id, u.isVerified)} className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-colors ${u.isVerified ? 'bg-rose-100 text-rose-600 hover:bg-rose-200' : 'bg-emerald-100 text-emerald-700 hover:bg-emerald-200'}`}>
+                          {u.isVerified ? 'سحب التوثيق' : 'إعطاء توثيق'}
+                        </button>
+                      </div>
+                    ))
+                  }
+                </div>
+              </div>
+              
+              <div className="p-4 bg-blue-50 dark:bg-blue-900/20 text-blue-600 dark:text-blue-400 rounded-xl text-sm font-bold flex items-center gap-2">
+                <Info size={18}/> 
+                <span>كأدمن، تمتلك الآن صلاحية حذف أي رحلة لأي مستخدم من الصفحة الرئيسية مباشرة.</span>
+              </div>
+
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* نافذة الإعدادات */}
       {showSettings && (
         <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-sm z-[70] flex justify-end">
           <div className={`${bgModal} w-full sm:w-[400px] h-full shadow-2xl flex flex-col animate-fade-in-right`}>
@@ -405,6 +540,13 @@ export default function App() {
             </div>
             <div className="p-6 flex-1 overflow-y-auto space-y-6">
               
+              {isAdmin && (
+                <button onClick={() => {setShowSettings(false); setShowAdminPanel(true);}} className="w-full p-4 mb-2 rounded-2xl flex justify-between items-center bg-gradient-to-r from-amber-500 to-orange-500 text-white shadow-lg transform active:scale-95 transition-all">
+                  <span className="font-bold">لوحة تحكم الإدارة</span>
+                  <Crown size={20}/>
+                </button>
+              )}
+
               <div className={`p-5 rounded-2xl flex justify-between items-center border transition-colors ${isDarkMode ? 'bg-slate-700/50 border-slate-600' : 'bg-slate-50 border-slate-200'}`}>
                 <div className="flex items-center gap-3">
                   <div className={`p-2 rounded-xl ${isDarkMode ? 'bg-slate-800' : 'bg-white shadow-sm'}`}>
@@ -453,7 +595,7 @@ export default function App() {
         </div>
       )}
 
-      {/* سجل رحلاتي */}
+      {/* نافذة سجل رحلاتي */}
       {showMyTrips && !isGuest && (
         <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-sm z-[65] flex justify-center items-end sm:items-center p-0 sm:p-4">
           <div className={`${bgModal} w-full h-[85vh] sm:h-[650px] sm:max-w-xl rounded-t-[2rem] sm:rounded-3xl shadow-2xl flex flex-col overflow-hidden`}>
@@ -511,6 +653,7 @@ export default function App() {
       {/* الهيدر الأساسي */}
       <header className={`sticky top-0 z-40 transition-all duration-300 border-b backdrop-blur-md ${isDarkMode ? 'bg-slate-900/90 border-slate-800 shadow-md' : 'bg-white/90 border-slate-200 shadow-sm'}`}>
         <div className="max-w-7xl mx-auto px-4 h-20 flex justify-between items-center">
+          
           <div className="flex items-center gap-3">
             <div className="bg-gradient-to-br from-indigo-600 to-blue-600 text-white p-2.5 rounded-2xl shadow-lg shadow-indigo-500/30 transform rotate-3"><Car size={26} className="-rotate-3"/></div>
             <div>
@@ -518,9 +661,11 @@ export default function App() {
               <div className="flex items-center gap-1 mt-0.5">
                 <span className="text-[11px] text-slate-500 font-medium">مرحباً، {isGuest ? 'زائر' : (userData?.name?.split(' ')[0] || 'مستخدم')}</span>
                 {userData?.isVerified && <ShieldCheck size={12} className="text-blue-500" />}
+                {isAdmin && <Crown size={12} className="text-amber-500 ml-1" title="أدمن"/>}
               </div>
             </div>
           </div>
+
           <div className="flex items-center gap-1.5 sm:gap-2">
             {!isGuest && (
               <button onClick={() => setShowMyTrips(true)} className={`p-2.5 rounded-xl transition-all ${isDarkMode ? 'hover:bg-slate-800 text-slate-400 hover:text-slate-200' : 'hover:bg-slate-100 text-slate-500 hover:text-slate-800'}`} title="سجل رحلاتي">
@@ -543,9 +688,9 @@ export default function App() {
         </div>
       </header>
 
-      {/* الإعلانات المتحركة الصغيرة فوق */}
+      {/* الإعلانات المتحركة (Marquee) */}
       <div className={`overflow-hidden relative h-9 flex items-center justify-center transition-colors text-xs sm:text-sm font-medium ${isDarkMode ? 'bg-indigo-950 text-indigo-200' : 'bg-indigo-50 text-indigo-700'}`}>
-        {ANNOUNCEMENTS.map((ad, index) => (
+        {announcements.map((ad, index) => (
           <div
             key={index}
             className={`absolute transition-all duration-700 ease-in-out w-full text-center px-4 flex items-center justify-center gap-2 ${
@@ -560,7 +705,7 @@ export default function App() {
 
       <main className="flex-1 max-w-7xl mx-auto px-4 py-6 w-full pb-28 md:pb-6">
         
-        {/* البانر التفاعلي الجديد (بدلاً من حقول البحث الصامتة) */}
+        {/* البانر التفاعلي */}
         <div className="bg-gradient-to-br from-indigo-600 via-blue-700 to-indigo-900 rounded-[2.5rem] p-7 sm:p-10 mb-8 text-white shadow-xl relative overflow-hidden">
           <div className="absolute top-0 right-0 w-72 h-72 bg-white opacity-5 rounded-full blur-3xl transform translate-x-1/3 -translate-y-1/3"></div>
           <div className="absolute bottom-0 left-0 w-48 h-48 bg-indigo-400 opacity-20 rounded-full blur-2xl transform -translate-x-1/2 translate-y-1/2"></div>
@@ -573,7 +718,6 @@ export default function App() {
             <p className="text-indigo-100 text-sm sm:text-base mb-6 font-medium leading-relaxed">
               سواء معاك عربية وعايز توفر تكاليف البنزين، أو مسافر ومحتاج توصيلة مريحة وآمنة.. "خدني معاك" بيجمعكم في طريق واحد.
             </p>
-            
             <button 
               onClick={() => requireAuth(() => setShowAddModal(true))} 
               className="bg-white text-indigo-700 font-extrabold px-6 py-3.5 rounded-2xl shadow-lg hover:bg-indigo-50 transition-all flex items-center gap-2 transform active:scale-95">
@@ -582,7 +726,7 @@ export default function App() {
           </div>
         </div>
 
-        {/* شريط البحث السريع المطور */}
+        {/* شريط البحث */}
         <div className={`p-4 rounded-2xl shadow-sm border mb-8 flex flex-col sm:flex-row gap-3 ${isDarkMode ? 'bg-slate-800 border-slate-700' : 'bg-white border-slate-200'}`}>
           <div className={`flex-1 flex items-center px-4 py-3 rounded-xl border ${isDarkMode ? 'bg-slate-700/50 border-slate-600' : 'bg-slate-50 border-slate-200'}`}>
             <MapPin className="text-indigo-500 ml-3" size={20} />
@@ -596,24 +740,12 @@ export default function App() {
 
         {/* أزرار الفلترة */}
         <div className={`flex gap-2 p-1.5 mb-8 max-w-lg mx-auto rounded-2xl shadow-inner ${isDarkMode ? 'bg-slate-800' : 'bg-slate-100'}`}>
-          <button 
-            onClick={() => setFilterType('all')} 
-            className={`flex-1 py-2.5 text-sm font-bold rounded-xl transition-all shadow-sm ${filterType === 'all' ? (isDarkMode ? 'bg-slate-200 text-slate-900' : 'bg-slate-800 text-white') : (isDarkMode ? 'bg-slate-800 text-slate-400' : 'bg-white text-slate-500 hover:bg-slate-50')}`}>
-            الكل
-          </button>
-          <button 
-            onClick={() => setFilterType('offer')} 
-            className={`flex-1 py-2.5 text-sm font-bold rounded-xl transition-all shadow-sm ${filterType === 'offer' ? 'bg-emerald-600 text-white' : (isDarkMode ? 'bg-slate-800 text-slate-400' : 'bg-white text-slate-500 hover:bg-slate-50')}`}>
-            أصحاب سيارات 🚗
-          </button>
-          <button 
-            onClick={() => setFilterType('request')} 
-            className={`flex-1 py-2.5 text-sm font-bold rounded-xl transition-all shadow-sm ${filterType === 'request' ? 'bg-orange-500 text-white' : (isDarkMode ? 'bg-slate-800 text-slate-400' : 'bg-white text-slate-500 hover:bg-slate-50')}`}>
-            ركاب 🙋‍♂️
-          </button>
+          <button onClick={() => setFilterType('all')} className={`flex-1 py-2.5 text-sm font-bold rounded-xl transition-all shadow-sm ${filterType === 'all' ? (isDarkMode ? 'bg-slate-200 text-slate-900' : 'bg-slate-800 text-white') : (isDarkMode ? 'bg-slate-800 text-slate-400' : 'bg-white text-slate-500 hover:bg-slate-50')}`}>الكل</button>
+          <button onClick={() => setFilterType('offer')} className={`flex-1 py-2.5 text-sm font-bold rounded-xl transition-all shadow-sm ${filterType === 'offer' ? 'bg-emerald-600 text-white' : (isDarkMode ? 'bg-slate-800 text-slate-400' : 'bg-white text-slate-500 hover:bg-slate-50')}`}>أصحاب سيارات 🚗</button>
+          <button onClick={() => setFilterType('request')} className={`flex-1 py-2.5 text-sm font-bold rounded-xl transition-all shadow-sm ${filterType === 'request' ? 'bg-orange-500 text-white' : (isDarkMode ? 'bg-slate-800 text-slate-400' : 'bg-white text-slate-500 hover:bg-slate-50')}`}>ركاب 🙋‍♂️</button>
         </div>
 
-        {/* قائمة الرحلات */}
+        {/* قائمة الرحلات الرئيسية */}
         {filteredTrips.length === 0 ? (
           <div className={`text-center py-24 rounded-[2rem] border-2 border-dashed flex flex-col items-center justify-center ${isDarkMode ? 'border-slate-700 bg-slate-800/50' : 'border-slate-200 bg-slate-50/50'}`}>
              <div className={`w-20 h-20 rounded-full flex items-center justify-center mb-4 ${isDarkMode ? 'bg-slate-700' : 'bg-slate-200'}`}><Car size={32} className="text-slate-400"/></div>
@@ -629,10 +761,18 @@ export default function App() {
               const isClosedForPublic = (isInProgress || isCompleted) && !isOwner;
               const isPassenger = myInbox.some(chat => chat.tripId === trip.id);
               
+              // كأدمن يقدر يحذف أي رحلة
+              const canDelete = isOwner || isAdmin;
+              
               return (
               <div key={trip.id} className={`rounded-[24px] p-6 shadow-sm hover:shadow-lg hover:-translate-y-1 border relative flex flex-col transition-all duration-300 ${bgCard} ${isCompleted ? 'opacity-75 grayscale-[20%]' : ''}`}>
                 
-                {/* الهيدر: معلومات المستخدم والشارة */}
+                {canDelete && !trip.isDummy && (
+                  <button onClick={() => handleDeleteTrip(trip.id)} className="absolute top-4 left-4 p-2 bg-rose-50 text-rose-600 rounded-full hover:bg-rose-100 z-10 transition-colors">
+                    <Trash2 size={16} />
+                  </button>
+                )}
+
                 <div className="flex items-start justify-between mb-5">
                   <div className="flex items-center gap-3">
                     <div className={`w-12 h-12 rounded-full flex items-center justify-center border shadow-sm shrink-0 ${isDarkMode ? 'bg-slate-700 border-slate-600' : 'bg-slate-100 border-slate-200'}`}>
@@ -642,13 +782,19 @@ export default function App() {
                       <h3 className={`font-bold text-sm flex items-center gap-1 ${isDarkMode ? 'text-white' : 'text-slate-800'}`}>
                         {trip.userName} {trip.verified && <ShieldCheck size={16} className="text-blue-500" />}
                       </h3>
+                      
+                      {/* النجوم التراكمية */}
+                      <div className="mt-0.5">
+                        {renderStars(trip.rating, trip.totalRatings)}
+                      </div>
+
                       <span className={`inline-block mt-1 text-[10px] font-bold px-2 py-0.5 rounded-md ${trip.type === 'offer' ? (isDarkMode ? 'bg-emerald-900/40 text-emerald-400' : 'bg-emerald-100 text-emerald-800') : (isDarkMode ? 'bg-orange-900/40 text-orange-400' : 'bg-orange-100 text-orange-800')}`}>
                         {trip.type === 'offer' ? 'سائق (يعرض توصيلة)' : 'راكب (يطلب توصيلة)'}
                       </span>
                     </div>
                   </div>
                   
-                  {/* حالة الرحلة */}
+                  {/* حالة الرحلة لغير صاحبها */}
                   <div className={`text-[10px] font-bold px-2.5 py-1 rounded-lg border ${isCompleted ? (isDarkMode ? 'bg-slate-700 text-slate-300 border-slate-600' : 'bg-slate-100 text-slate-600 border-slate-200') : isInProgress ? (isDarkMode ? 'bg-amber-900/30 text-amber-400 border-amber-800 animate-pulse' : 'bg-amber-50 text-amber-600 border-amber-200 animate-pulse') : (isDarkMode ? 'bg-indigo-900/30 text-indigo-400 border-indigo-800' : 'bg-indigo-50 text-indigo-600 border-indigo-100')}`}>
                     {isCompleted ? 'مكتملة' : isInProgress ? 'في الطريق' : 'متاحة'}
                   </div>
@@ -663,19 +809,17 @@ export default function App() {
                 {/* مسار الرحلة */}
                 <div className="relative mb-6 flex-1">
                   <div className={`absolute right-[7px] top-2 bottom-2 w-0.5 ${isDarkMode ? 'bg-slate-600' : 'bg-slate-200'}`}></div>
-                  
                   <div className="flex items-start gap-4 mb-4 relative z-10">
                     <div className={`w-4 h-4 rounded-full bg-indigo-500 border-[3px] mt-0.5 shrink-0 shadow-sm ${isDarkMode ? 'border-slate-800' : 'border-white'}`}></div>
                     <p className={`font-bold text-sm leading-snug ${isDarkMode ? 'text-slate-100' : 'text-slate-800'}`}>{trip.from}</p>
                   </div>
-                  
                   <div className="flex items-start gap-4 relative z-10">
                     <div className={`w-4 h-4 rounded-full bg-rose-500 border-[3px] mt-0.5 shrink-0 shadow-sm ${isDarkMode ? 'border-slate-800' : 'border-white'}`}></div>
                     <p className={`font-bold text-sm leading-snug ${isDarkMode ? 'text-slate-100' : 'text-slate-800'}`}>{trip.to}</p>
                   </div>
                 </div>
                 
-                {/* التفاصيل والمقاعد */}
+                {/* التفاصيل */}
                 <div className="flex gap-3 mb-5">
                   <div className={`flex-1 flex flex-col justify-center items-center py-2.5 rounded-xl border ${isDarkMode ? 'bg-slate-700/30 border-slate-600' : 'bg-slate-50 border-slate-100'}`}>
                      <span className="text-[10px] text-slate-400 mb-1">العدد المطلوب</span>
@@ -689,7 +833,6 @@ export default function App() {
                   )}
                 </div>
                 
-                {/* الأزرار */}
                 <div className="mt-auto">
                   {isOwner ? (
                     <div className={`w-full py-3.5 rounded-xl font-bold text-center text-sm border border-dashed ${isDarkMode ? 'bg-slate-700/50 text-slate-400 border-slate-600' : 'bg-slate-50 text-slate-500 border-slate-200'}`}>
@@ -697,6 +840,7 @@ export default function App() {
                     </div>
                   ) : isClosedForPublic ? (
                     isCompleted ? (
+                      // إظهار التقييم لمن اشترك في الرحلة فقط
                       isPassenger ? (
                         <div className={`p-3.5 rounded-xl text-center border ${isDarkMode ? 'bg-slate-700 border-slate-600' : 'bg-slate-50 border-slate-200'}`}>
                           <p className="text-xs font-bold mb-2">تقييمك للرحلة:</p>
@@ -742,14 +886,14 @@ export default function App() {
         )}
       </main>
 
-      {/* زر الإضافة العائم */}
+      {/* زر الإضافة للموبايل */}
       <button 
         onClick={() => requireAuth(() => setShowAddModal(true))} 
         className="md:hidden fixed bottom-8 left-6 w-14 h-14 bg-indigo-600 text-white rounded-full flex items-center justify-center shadow-xl shadow-indigo-500/40 z-40 transform active:scale-95 transition-transform">
         <Navigation size={24} />
       </button>
 
-      {/* الإنبوكس */}
+      {/* شاشة الإنبوكس */}
       {showInbox && !isGuest && (
         <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-sm z-50 flex justify-center items-end sm:items-center p-0 sm:p-4">
           <div className={`${bgModal} w-full h-[80vh] sm:h-[600px] sm:max-w-md rounded-t-[2rem] sm:rounded-3xl shadow-2xl flex flex-col overflow-hidden`}>
@@ -781,7 +925,7 @@ export default function App() {
         </div>
       )}
 
-      {/* الشات */}
+      {/* شاشة الشات المباشر */}
       {activeChat && !isGuest && (
         <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-sm z-[60] flex justify-center items-end sm:items-center p-0 sm:p-4">
           <div className={`${bgModal} w-full h-[85vh] sm:h-[600px] sm:max-w-md rounded-t-[2rem] sm:rounded-3xl shadow-2xl flex flex-col overflow-hidden`}>
@@ -816,7 +960,7 @@ export default function App() {
         </div>
       )}
 
-      {/* شاشة الإضافة */}
+      {/* شاشة الإضافة بكروت التصميم الجديد */}
       {showAddModal && !isGuest && (
         <div className="fixed inset-0 bg-slate-900/70 backdrop-blur-sm z-50 flex justify-center items-center p-4">
           <div className={`${bgModal} rounded-[2rem] w-full max-w-lg shadow-2xl border overflow-hidden ${isDarkMode ? 'border-slate-700' : 'border-slate-100'}`}>
@@ -827,7 +971,6 @@ export default function App() {
             <div className="p-6 max-h-[75vh] overflow-y-auto custom-scrollbar">
               <form onSubmit={handleAddTrip} className="space-y-6">
                 
-                {/* اختيار النوع */}
                 <div>
                   <label className={`block text-sm font-bold mb-3 ${isDarkMode ? 'text-slate-300' : 'text-slate-700'}`}>أنت مسافر بصفتك؟</label>
                   <div className="grid grid-cols-2 gap-4">
@@ -885,7 +1028,7 @@ export default function App() {
                     </div>
                   </div>
                   
-                  <textarea rows="3" value={newTrip.notes} onChange={(e) => setNewTrip({...newTrip, notes: e.target.value})} placeholder="تفاصيل إضافية (أماكن الركوب بالتحديد، حجم الحقائب، الخ...)" className={`w-full border p-4 rounded-2xl resize-none font-medium outline-none focus:ring-2 focus:ring-indigo-500 transition-colors leading-relaxed ${bgInput}`}></textarea>
+                  <textarea rows="3" value={newTrip.notes} onChange={(e) => setNewTrip({...newTrip, notes: e.target.value})} placeholder="تفاصيل إضافية (أماكن الوقوف بالتحديد، حجم الحقائب، الخ...)" className={`w-full border p-4 rounded-2xl resize-none font-medium outline-none focus:ring-2 focus:ring-indigo-500 transition-colors leading-relaxed ${bgInput}`}></textarea>
                 </div>
                 
                 <button type="submit" disabled={isSubmitting} className="w-full bg-indigo-600 text-white py-4 rounded-2xl font-extrabold text-lg hover:bg-indigo-700 shadow-lg shadow-indigo-500/30 flex justify-center items-center gap-2 transition-all transform active:scale-[0.98]">
