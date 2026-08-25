@@ -3,6 +3,7 @@ import { initializeApp } from 'firebase/app';
 import { getAuth, createUserWithEmailAndPassword, signInWithEmailAndPassword, signInAnonymously, onAuthStateChanged, updateProfile, signOut, sendPasswordResetEmail } from 'firebase/auth';
 import { getFirestore, collection, onSnapshot, addDoc, deleteDoc, updateDoc, doc, setDoc, getDoc, serverTimestamp } from 'firebase/firestore';
 import { getStorage, ref, uploadBytes, getDownloadURL } from 'firebase/storage';
+// تم التأكد من استيراد كل الأيقونات المطلوبة بما فيها Image
 import { MapPin, Navigation, Car, User, MessageCircle, ShieldCheck, X, CheckCircle2, Loader2, Trash2, Send, LogOut, Bell, Phone, Mail, Lock, LogIn, AlertCircle, Settings, Moon, Sun, Info, History, Star, Play, CheckSquare, Megaphone, Clock, ChevronLeft, Wallet, Sparkles, ArrowRight, Crown, Shield, Image, Camera, Package, Store, ShoppingBag, Plus, Tag } from 'lucide-react';
 
 const firebaseConfig = {
@@ -556,6 +557,9 @@ export default function App() {
   const handleLogout = async () => {
     await signOut(auth);
     setActiveTab('trips');
+    setShowSettings(false);
+    setShowMyTrips(false);
+    setShowAdminPanel(false);
     setAuthForm({ name: '', phone: '', email: '', password: '' });
   };
 
@@ -721,7 +725,7 @@ export default function App() {
             <Star key={i} size={10} fill={i < fullStars ? "currentColor" : (i === fullStars && hasHalfStar ? "currentColor" : "none")} className={i < fullStars || (i === fullStars && hasHalfStar) ? "text-amber-400" : "text-slate-300 dark:text-slate-600"} />
           ))}
         </div>
-        <span className="text-[10px] font-bold text-slate-500 dark:text-slate-400 mr-1">({numRating.toFixed(1)})</span>
+        <span className="text-[9px] font-bold text-slate-500 dark:text-slate-400 mr-1">({numRating.toFixed(1)})</span>
       </div>
     );
   };
@@ -851,6 +855,7 @@ export default function App() {
             </div>
             <h2 className="text-xl font-extrabold mb-2 text-slate-800 dark:text-white">يرجى تسجيل الدخول أولاً</h2>
             <p className={`mb-6 text-xs leading-relaxed ${textSecondary}`}>لاستخدام هذه الخدمة والتفاعل مع الرحلات أو السوق، يرجى تسجيل الدخول أو إنشاء حساب جديد.</p>
+            
             <div className="space-y-2.5">
               <button onClick={() => { setShowAuthPrompt(false); setIsLoginMode(true); handleLogout(); }} className="w-full bg-indigo-600 text-white py-3.5 rounded-full font-extrabold text-sm hover:bg-indigo-700 shadow-md shadow-indigo-500/30 flex justify-center items-center gap-2">
                 <LogIn size={18}/> تسجيل الدخول
@@ -866,7 +871,7 @@ export default function App() {
         </div>
       )}
 
-      {/* الإشعار العائم المتميز (يعمل في كل الصفحات وللجميع) بلون مميز */}
+      {/* الإشعار العائم المتميز (يظهر للكل في أي صفحة) */}
       {showLiveNotification && currentNotificationTrip && (
         <div className="fixed top-20 left-1/2 transform -translate-x-1/2 z-[200] w-11/12 max-w-sm animate-fade-in-down">
           <div className={`p-3 rounded-2xl border flex flex-col gap-2.5 shadow-2xl ${isDarkMode ? 'bg-indigo-900/95 border-indigo-500/50 shadow-indigo-500/20' : 'bg-indigo-50 border-indigo-200 shadow-indigo-600/20'}`}>
@@ -897,7 +902,7 @@ export default function App() {
             
             <div className={`flex items-center justify-between p-2.5 rounded-xl border ${isDarkMode ? 'bg-indigo-950/50 border-indigo-800/50' : 'bg-white border-indigo-100'}`}>
               <div className="flex items-center gap-2 overflow-hidden pr-1">
-                <span className={`shrink-0 text-[9px] font-bold px-1.5 py-0.5 rounded-md text-white ${currentNotificationTrip.type === 'offer' ? 'bg-emerald-600' : currentNotificationTrip.type === 'delivery' ? 'bg-purple-600' : 'bg-orange-500'}`}>
+                <span className={`shrink-0 text-[9px] font-bold px-1.5 py-0.5 rounded-md ${currentNotificationTrip.type === 'offer' ? (isDarkMode ? 'bg-emerald-900/60 text-emerald-400' : 'bg-emerald-100 text-emerald-800') : currentNotificationTrip.type === 'delivery' ? (isDarkMode ? 'bg-purple-900/60 text-purple-400' : 'bg-purple-100 text-purple-800') : (isDarkMode ? 'bg-orange-900/60 text-orange-400' : 'bg-orange-100 text-orange-800')}`}>
                   {currentNotificationTrip.type === 'offer' ? 'سائق' : currentNotificationTrip.type === 'delivery' ? 'دليفري' : 'راكب'}
                 </span>
                 <span className={`text-xs font-bold truncate ${isDarkMode ? 'text-indigo-100' : 'text-slate-800'}`}>
@@ -935,7 +940,7 @@ export default function App() {
         </div>
       )}
 
-      {/* لوحة تحكم الإدارة الشاملة (آمنة من الكراش 100%) */}
+      {/* لوحة تحكم الإدارة الشاملة */}
       {showAdminPanel && isAdmin && (
         <div className="fixed inset-0 bg-slate-900/80 backdrop-blur-md z-[150] flex justify-center items-center p-4">
           <div className={`${bgModal} rounded-3xl w-full max-w-2xl h-[85vh] shadow-2xl border flex flex-col ${isDarkMode ? 'border-amber-500/30' : 'border-amber-400'}`}>
@@ -1058,7 +1063,7 @@ export default function App() {
       )}
 
       {showToast && (
-        <div className="fixed top-24 left-1/2 transform -translate-x-1/2 z-[250] bg-indigo-600 text-white px-6 py-3.5 rounded-full shadow-xl flex items-center gap-3 animate-fade-in-down border border-indigo-400/30">
+        <div className="fixed top-24 left-1/2 transform -translate-x-1/2 z-[120] bg-indigo-600 text-white px-6 py-3.5 rounded-full shadow-xl flex items-center gap-3 animate-fade-in-down border border-indigo-400/30">
           <CheckCircle2 size={20} /><p className="text-sm font-bold whitespace-nowrap">{toastMessage}</p>
         </div>
       )}
@@ -1067,7 +1072,6 @@ export default function App() {
       <header className={`sticky top-0 z-40 transition-all duration-300 border-b ${isDarkMode ? 'bg-slate-900 border-slate-800' : 'bg-white border-slate-100 shadow-sm'}`}>
         <div className="max-w-7xl mx-auto px-4 h-16 flex justify-between items-center w-full relative">
           
-          {/* الجانب الأيمن: اللوجو وبجواره كلمة خدني معاك */}
           <div className="flex items-center gap-2 cursor-pointer" onClick={() => setActiveTab('trips')}>
             {appLogo ? (
               <img src={appLogo} alt="Logo" className="h-10 sm:h-12 w-auto object-contain" />
@@ -1079,7 +1083,6 @@ export default function App() {
             <span className={`font-extrabold text-lg sm:text-xl tracking-tight ${isDarkMode ? 'text-indigo-400' : 'text-indigo-700'}`}>خدني معاك</span>
           </div>
           
-          {/* الجانب الأيسر: بروفايل المستخدم */}
           <div className="flex items-center gap-2 cursor-pointer" onClick={() => setActiveTab('profile')}>
             <div className="flex flex-col text-right">
               <span className={`text-[10px] font-medium ${textSecondary}`}>مرحباً،</span>
@@ -1186,9 +1189,9 @@ export default function App() {
                   return (
                   <div key={trip.id} className={`rounded-[1.25rem] p-3.5 shadow-sm hover:shadow-md border relative flex flex-col transition-all duration-300 ${bgCard} ${isCompleted ? 'opacity-75 grayscale-[20%]' : ''}`}>
                     
-                    {/* رأس الكارت (الصورة والاسم على اليمين - الحذف على الشمال) */}
+                    {/* تعديل جذري لترتيب الرأس: الصورة والاسم على اليمين - سلة المهملات على الشمال مطلقاً */}
                     <div className="flex items-start justify-between mb-3 relative">
-                      <div className="flex items-center gap-2 overflow-hidden w-full">
+                      <div className="flex items-center gap-2 overflow-hidden pr-1 w-full">
                         {trip.userPhoto ? (
                           <img src={trip.userPhoto} className="w-9 h-9 rounded-full object-cover border border-slate-200 shadow-sm shrink-0" alt="user" />
                         ) : (
@@ -1201,23 +1204,23 @@ export default function App() {
                             {trip.userName ? trip.userName.split(' ')[0] : 'مستخدم'} 
                             {trip.verified && <ShieldCheck size={12} className="text-blue-500 shrink-0" />}
                           </h3>
-                          <div className="flex items-center">{renderStars(trip.rating, trip.totalRatings)}</div>
+                          {renderStars(trip.rating, trip.totalRatings)}
                         </div>
                       </div>
 
                       {canDelete && !trip.isDummy && (
-                        <button onClick={() => {setDeleteType('trip'); setDeleteConfirmId(trip.id);}} className="absolute left-0 top-0 p-1.5 bg-rose-50 text-rose-600 rounded-full hover:bg-rose-100 transition-colors shrink-0 z-10 ml-1">
+                        <button onClick={() => {setDeleteType('trip'); setDeleteConfirmId(trip.id);}} className="absolute left-0 top-0 p-1.5 bg-rose-50 text-rose-600 rounded-full hover:bg-rose-100 transition-colors shrink-0 z-10">
                           <Trash2 size={14} />
                         </button>
                       )}
                     </div>
 
-                    <div className="mb-3 flex gap-1.5 flex-wrap">
-                      {/* البادجات بألوان صلبة للتعامل مع الـ Force Dark Mode في الموبايلات */}
-                      <span className={`inline-block text-white text-[9px] font-bold px-2 py-1 rounded-md ${trip.type === 'offer' ? 'bg-emerald-600' : trip.type === 'delivery' ? 'bg-purple-600' : 'bg-orange-500'}`}>
+                    <div className="mb-3 flex gap-1 flex-wrap">
+                      <span className={`inline-block text-[9px] font-bold px-2 py-0.5 rounded-md text-white border ${trip.type === 'offer' ? 'bg-emerald-600 border-emerald-700' : trip.type === 'delivery' ? 'bg-purple-600 border-purple-700' : 'bg-orange-500 border-orange-600'}`}>
                         {trip.type === 'offer' ? 'سائق' : trip.type === 'delivery' ? 'دليفري' : 'راكب'}
                       </span>
-                      <span className={`inline-block text-[9px] font-bold px-2 py-1 rounded-md text-white ${isCompleted ? 'bg-slate-600' : isInProgress ? 'bg-amber-500' : 'bg-indigo-600'}`}>
+                      {/* عرض حالة الرحلة كبادج بجوار النوع بألوان صلبة */}
+                      <span className={`inline-block text-[9px] font-bold px-2 py-0.5 rounded-md text-white border ${isCompleted ? 'bg-slate-600 border-slate-700' : isInProgress ? 'bg-amber-500 border-amber-600' : 'bg-indigo-600 border-indigo-700'}`}>
                          {isCompleted ? 'مكتملة' : isInProgress ? 'بالطريق' : 'متاحة'}
                       </span>
                     </div>
@@ -1245,29 +1248,14 @@ export default function App() {
                        )}
                     </div>
 
-                    <div className="mt-auto pt-2">
-                      {(!isOwner && !isClosedForPublic) || (isClosedForPublic && isCompleted && isPassenger && !trip.isBot) ? (
-                        <>
-                          {!isOwner && !isClosedForPublic && (
-                            <div className="flex gap-1.5">
-                              <button onClick={() => openChatFromTrip(trip)} className="flex-1 py-1.5 rounded-lg font-bold flex justify-center items-center gap-1 text-[10px] text-white transition-colors shadow-sm bg-indigo-600 hover:bg-indigo-700">
-                                <MessageCircle size={10} /> رسالة
-                              </button>
-                              
-                              <button onClick={() => requireAuth(() => {
-                                if (trip.isDummy || trip.isBot) {
-                                  setAlertMsg('تجريبية فقط 😅');
-                                } else if (!trip.userPhone) {
-                                  setAlertMsg('لا يوجد رقم 📞');
-                                } else {
-                                  window.location.href = `tel:${trip.userPhone}`;
-                                }
-                              })} className="flex-1 bg-emerald-600 text-white py-1.5 rounded-lg font-bold flex justify-center items-center gap-1 text-[10px] hover:bg-emerald-700 transition-colors shadow-sm">
-                                <Phone size={10} /> اتصال
-                              </button>
-                            </div>
-                          )}
-                          {isClosedForPublic && isCompleted && isPassenger && !trip.isBot && (
+                    <div className="mt-auto pt-2 border-t dark:border-slate-700">
+                      {isOwner ? (
+                        <div className={`w-full py-1.5 rounded-lg font-bold text-center text-[10px] border border-dashed ${isDarkMode ? 'bg-slate-700/50 text-slate-400 border-slate-600' : 'bg-slate-50 text-slate-500 border-slate-200'}`}>
+                          {isCompleted ? 'مكتملة ✅' : isInProgress ? 'في الطريق 🚗' : 'إعلاني ✨'}
+                        </div>
+                      ) : isClosedForPublic ? (
+                        isCompleted ? (
+                          !trip.isBot ? (
                             <div className={`py-1.5 px-2 rounded-lg text-center flex items-center justify-center gap-2 border ${isDarkMode ? 'bg-slate-700 border-slate-600' : 'bg-slate-50 border-slate-200'}`}>
                               <span className="text-[9px] font-bold">قيّم:</span>
                               <div className="flex gap-0.5">
@@ -1276,9 +1264,35 @@ export default function App() {
                                 ))}
                               </div>
                             </div>
-                          )}
-                        </>
-                      ) : null}
+                          ) : (
+                            <div className={`w-full py-1.5 rounded-lg font-bold text-center text-[10px] border ${isDarkMode ? 'bg-slate-700 text-slate-400 border-slate-600' : 'bg-slate-100 text-slate-500 border-slate-200'}`}>
+                              مغلقة ✅
+                            </div>
+                          )
+                        ) : (
+                          <div className={`w-full py-1.5 rounded-lg font-bold text-center text-[10px] border ${isDarkMode ? 'bg-amber-900/20 border-amber-800 text-amber-400' : 'bg-amber-50 border-amber-200 text-amber-700'}`}>
+                            جارية 🚗
+                          </div>
+                        )
+                      ) : (
+                        <div className="flex gap-1.5">
+                          <button onClick={() => openChatFromTrip(trip)} className="flex-1 py-1.5 rounded-lg font-bold flex justify-center items-center gap-1 text-[10px] text-white transition-colors shadow-sm bg-indigo-600 hover:bg-indigo-700">
+                            <MessageCircle size={10} /> رسالة
+                          </button>
+                          
+                          <button onClick={() => requireAuth(() => {
+                            if (trip.isDummy || trip.isBot) {
+                              setAlertMsg('تجريبية فقط 😅');
+                            } else if (!trip.userPhone) {
+                              setAlertMsg('لا يوجد رقم 📞');
+                            } else {
+                              window.location.href = `tel:${trip.userPhone}`;
+                            }
+                          })} className="flex-1 bg-emerald-600 text-white py-1.5 rounded-lg font-bold flex justify-center items-center gap-1 text-[10px] hover:bg-emerald-700 transition-colors shadow-sm">
+                            <Phone size={10} /> اتصال
+                          </button>
+                        </div>
+                      )}
                     </div>
                   </div>
                 )})}
@@ -1324,7 +1338,7 @@ export default function App() {
                         ) : (
                           <div className="w-full h-full flex items-center justify-center text-slate-300"><ImageIcon size={40}/></div>
                         )}
-                        <div className="absolute bottom-2 left-2 bg-emerald-600 text-white font-black text-[10px] px-2 py-1 rounded-lg shadow-md border border-emerald-700">
+                        <div className="absolute bottom-2 left-2 bg-emerald-500 text-white font-black text-[10px] px-2 py-1 rounded-lg shadow-md">
                           {product.price} ج
                         </div>
                       </div>
@@ -1344,7 +1358,7 @@ export default function App() {
                             {product.userPhoto ? (
                               <img src={product.userPhoto} className="w-6 h-6 rounded-full object-cover border" alt="seller" />
                             ) : (
-                              <div className="w-6 h-6 rounded-full bg-indigo-100 flex items-center justify-center shrink-0 border border-indigo-200">
+                              <div className="w-6 h-6 rounded-full bg-indigo-100 flex items-center justify-center shrink-0">
                                 <User size={12} className="text-indigo-500"/>
                               </div>
                             )}
@@ -1452,7 +1466,7 @@ export default function App() {
                   <div className="w-20 h-20 bg-slate-100 dark:bg-slate-800 rounded-full flex items-center justify-center mb-4"><User size={30} className="text-slate-400"/></div>
                   <h3 className="font-bold text-lg mb-2">حساب زائر</h3>
                   <p className="text-sm text-slate-500 mb-4">اضغط هنا لإنشاء حساب وتسجيل الدخول.</p>
-                  <button className="bg-indigo-600 text-white px-6 py-2.5 rounded-full font-bold text-sm hover:bg-indigo-700 shadow-md shadow-indigo-500/30">تسجيل حساب</button>
+                  <button className="bg-indigo-600 text-white px-6 py-2.5 rounded-full font-bold text-sm shadow-md shadow-indigo-500/30">تسجيل حساب</button>
                 </div>
               )}
 
@@ -1504,36 +1518,6 @@ export default function App() {
         )}
 
       </main>
-
-      {/* --- شريط التنقل السفلي --- */}
-      <nav className={`fixed bottom-0 w-full z-40 border-t backdrop-blur-xl pb-safe transition-colors duration-300 ${isDarkMode ? 'bg-slate-900/95 border-slate-800' : 'bg-white/95 border-slate-200 shadow-[0_-4px_20px_rgba(0,0,0,0.05)]'}`}>
-        <div className="flex justify-between items-center h-16 w-full max-w-md mx-auto px-2">
-          
-          <button onClick={() => setActiveTab('trips')} className={`flex-1 flex flex-col items-center justify-center h-full gap-1 min-w-0 transition-colors ${activeTab === 'trips' ? 'text-indigo-600 dark:text-indigo-400' : 'text-slate-400 dark:text-slate-500 hover:text-slate-600 dark:hover:text-slate-300'}`}>
-            <Car size={22} className={activeTab === 'trips' ? 'fill-indigo-100 dark:fill-indigo-900/50' : ''}/>
-            <span className={`text-[10px] font-bold ${activeTab === 'trips' ? '' : 'font-medium'}`}>الرحلات</span>
-          </button>
-          
-          <button onClick={() => setActiveTab('market')} className={`flex-1 flex flex-col items-center justify-center h-full gap-1 min-w-0 transition-colors ${activeTab === 'market' ? 'text-indigo-600 dark:text-indigo-400' : 'text-slate-400 dark:text-slate-500 hover:text-slate-600 dark:hover:text-slate-300'}`}>
-            <Store size={22} className={activeTab === 'market' ? 'fill-indigo-100 dark:fill-indigo-900/50' : ''}/>
-            <span className={`text-[10px] font-bold ${activeTab === 'market' ? '' : 'font-medium'}`}>السوق</span>
-          </button>
-
-          <button onClick={() => setActiveTab('inbox')} className={`flex-1 flex flex-col items-center justify-center h-full gap-1 min-w-0 relative transition-colors ${activeTab === 'inbox' ? 'text-indigo-600 dark:text-indigo-400' : 'text-slate-400 dark:text-slate-500 hover:text-slate-600 dark:hover:text-slate-300'}`}>
-            <div className="relative">
-              <MessageCircle size={22} className={activeTab === 'inbox' ? 'fill-indigo-100 dark:fill-indigo-900/50' : ''}/>
-              {myInbox.length > 0 && !isGuest && <span className="absolute -top-1 -right-1 w-2.5 h-2.5 bg-rose-500 rounded-full border-2 border-white dark:border-slate-900"></span>}
-            </div>
-            <span className={`text-[10px] font-bold ${activeTab === 'inbox' ? '' : 'font-medium'}`}>رسائلي</span>
-          </button>
-
-          <button onClick={() => setActiveTab('profile')} className={`flex-1 flex flex-col items-center justify-center h-full gap-1 min-w-0 transition-colors ${activeTab === 'profile' ? 'text-indigo-600 dark:text-indigo-400' : 'text-slate-400 dark:text-slate-500 hover:text-slate-600 dark:hover:text-slate-300'}`}>
-            <User size={22} className={activeTab === 'profile' ? 'fill-indigo-100 dark:fill-indigo-900/50' : ''}/>
-            <span className={`text-[10px] font-bold ${activeTab === 'profile' ? '' : 'font-medium'}`}>حسابي</span>
-          </button>
-
-        </div>
-      </nav>
 
     </div>
   );
