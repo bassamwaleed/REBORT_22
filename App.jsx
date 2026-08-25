@@ -93,7 +93,6 @@ export default function App() {
   
   const [showAddModal, setShowAddModal] = useState(false);
   const [showAddProductModal, setShowAddProductModal] = useState(false);
-  const [showSettings, setShowSettings] = useState(false); 
   const [showMyTrips, setShowMyTrips] = useState(false); 
   const [showAdminPanel, setShowAdminPanel] = useState(false); 
   
@@ -158,7 +157,7 @@ export default function App() {
     }, 20000); 
 
     return () => clearInterval(notificationCycle);
-  }, [realTrips, user]);
+  }, [realTrips, user, notificationIndex]);
 
   useEffect(() => {
     if (!isAdmin || realTrips.length === 0) return;
@@ -556,9 +555,6 @@ export default function App() {
   const handleLogout = async () => {
     await signOut(auth);
     setActiveTab('trips');
-    setShowSettings(false);
-    setShowMyTrips(false);
-    setShowAdminPanel(false);
     setAuthForm({ name: '', phone: '', email: '', password: '' });
   };
 
@@ -692,7 +688,6 @@ export default function App() {
       setActiveChat({
         chatId: chatId, tripId: trip.id, otherPersonId: trip.userId, otherPersonName: trip.userName || 'مستخدم', otherPersonPhoto: trip.userPhoto || null, otherPersonVerified: trip.verified || false, tripInfo: `${trip.from} ➔ ${trip.to}`
       });
-      setActiveTab('inbox');
     });
   };
 
@@ -703,7 +698,6 @@ export default function App() {
       setActiveChat({
         chatId: chatId, tripId: product.id, otherPersonId: product.userId, otherPersonName: product.userName || 'مستخدم', otherPersonPhoto: product.userPhoto || null, otherPersonVerified: product.verified || false, tripInfo: `مهتم بشراء: ${product.title}`
       });
-      setActiveTab('inbox');
     });
   };
 
@@ -742,9 +736,8 @@ export default function App() {
   if (!user) {
     return (
       <div dir="rtl" className={`min-h-screen flex items-center justify-center p-4 transition-colors ${bgMain} overflow-x-hidden w-full bg-[url('data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHdpZHRoPSI0MCIgaGVpZ2h0PSI0MCI+PGRlZnM+PHBhdHRlcm4gaWQ9InBhdHRlcm4iIHdpZHRoPSI0MCIgaGVpZ2h0PSI0MCIgcGF0dGVyblVuaXRzPSJ1c2VyU3BhY2VPblVzZSI+PHBhdGggZD0iTTAgMGg0MHY0MEgweiIgZmlsbD0ibm9uZSIvPjxjaXJjbGUgY3g9IjIwIiBjeT0iMjAiIHI9IjEiIGZpbGw9InJnYmEoMTU2LCAxNjMsIDE3NSwgMC4yKSIvPjwvcGF0dGVybj48L2RlZnM+PHJlY3Qgd2lkdGg9IjEwMCUiIGhlaWdodD0iMTAwJSIgZmlsbD0idXJsKCNwYXR0ZXJuKSIvPjwvc3ZnPg==')]`}>
-        
         {alertMsg && (
-          <div className="fixed inset-0 bg-slate-900/70 backdrop-blur-sm z-[110] flex justify-center items-center p-4">
+          <div className="fixed inset-0 bg-slate-900/70 backdrop-blur-sm z-[100] flex justify-center items-center p-4">
             <div className={`${bgModal} rounded-3xl p-6 max-w-sm w-full text-center shadow-2xl`}>
               <div className="bg-rose-100 w-16 h-16 rounded-full flex items-center justify-center mx-auto mb-4"><AlertCircle size={30} className="text-rose-600" /></div>
               <p className="font-bold text-lg mb-6">{alertMsg}</p>
@@ -763,6 +756,11 @@ export default function App() {
               <p className={`text-sm mb-4 leading-relaxed ${textSecondary}`}>أدخل البريد الإلكتروني الخاص بك لاستعادة الحساب.</p>
               <form onSubmit={handleForgotPassword}>
                 <input type="text" required placeholder="الإيميل المسجل" value={forgotPassInput} onChange={e => setForgotPassInput(e.target.value)} className={`w-full border rounded-full py-3 px-5 outline-none focus:ring-2 focus:ring-indigo-500 font-bold text-[16px] text-left transition-all mb-4 ${bgInput}`} dir="ltr" />
+                
+                {!forgotPassInput.includes('@') && forgotPassInput.length > 3 && (
+                  <input type="tel" required placeholder="رقم بديل للتواصل (للدعم)" value={supportPhone} onChange={e => setSupportPhone(e.target.value)} className={`w-full border rounded-full py-3 px-5 outline-none focus:ring-2 focus:ring-amber-500 font-bold text-[16px] text-left transition-all mb-4 ${isDarkMode ? 'bg-amber-900/20 border-amber-700/50' : 'bg-amber-50 border-amber-200'}`} dir="ltr" />
+                )}
+
                 <button type="submit" disabled={isSubmitting} className="w-full bg-indigo-600 text-white py-3.5 rounded-full font-bold hover:bg-indigo-700 flex justify-center items-center gap-2">
                   {isSubmitting ? <Loader2 className="animate-spin" size={20} /> : 'تأكيد'}
                 </button>
@@ -846,15 +844,16 @@ export default function App() {
   return (
     <div dir="rtl" className={`min-h-screen flex flex-col relative transition-colors duration-300 ${bgMain} overflow-x-hidden w-full pb-20`}>
       
-      {/* نافذة تنبيه الزائر المنبثقة (Modal) مع أزرار بارزة */}
+      {/* 1. Global Modals and Overlays (بدون تكرار) */}
+      
       {showAuthPrompt && (
-        <div className="fixed inset-0 bg-slate-900/70 backdrop-blur-sm z-[200] flex justify-center items-center p-4">
+        <div className="fixed inset-0 bg-slate-900/70 backdrop-blur-sm z-[250] flex justify-center items-center p-4">
           <div className={`${bgModal} rounded-3xl p-8 max-w-sm w-full text-center shadow-2xl animate-fade-in-up border ${isDarkMode ? 'border-slate-700' : 'border-transparent'}`}>
             <div className="bg-amber-100 text-amber-600 w-16 h-16 rounded-2xl flex items-center justify-center mx-auto mb-4 shadow-inner transform -rotate-6">
               <Lock size={30} className="transform rotate-6"/>
             </div>
             <h2 className="text-xl font-extrabold mb-2 text-slate-800 dark:text-white">يرجى تسجيل الدخول أولاً</h2>
-            <p className={`mb-6 text-xs leading-relaxed ${textSecondary}`}>لاستخدام هذه الخدمة والتفاعل مع الرحلات أو السوق، يرجى تسجيل الدخول أو إنشاء حساب جديد.</p>
+            <p className={`mb-6 text-xs leading-relaxed ${textSecondary}`}>عشان تقدر تستخدم الخدمة دي وتتفاعل مع الرحلات أو السوق، لازم تسجل حساب معانا في ثواني.</p>
             
             <div className="space-y-2.5">
               <button onClick={() => { setShowAuthPrompt(false); setIsLoginMode(true); handleLogout(); }} className="w-full bg-indigo-600 text-white py-3.5 rounded-full font-extrabold text-sm hover:bg-indigo-700 shadow-md shadow-indigo-500/30 flex justify-center items-center gap-2">
@@ -871,17 +870,16 @@ export default function App() {
         </div>
       )}
 
-      {/* الإشعار العائم المتميز (يعمل في كل الصفحات وللجميع) بلون مميز */}
       {showLiveNotification && currentNotificationTrip && (
         <div className="fixed top-20 left-1/2 transform -translate-x-1/2 z-[200] w-11/12 max-w-sm animate-fade-in-down">
-          <div className={`p-3 rounded-2xl border flex flex-col gap-2.5 shadow-2xl ${isDarkMode ? 'bg-indigo-900/95 border-indigo-500/50 shadow-indigo-500/20' : 'bg-indigo-50 border-indigo-200 shadow-indigo-600/20'}`}>
+          <div className={`p-3 rounded-2xl border flex flex-col gap-2.5 shadow-2xl ${isDarkMode ? 'bg-indigo-900/95 border-indigo-500/50 shadow-[0_10px_40px_-10px_rgba(99,102,241,0.4)]' : 'bg-indigo-50 border-indigo-200 shadow-[0_10px_40px_-10px_rgba(79,70,229,0.3)]'}`}>
             <div className="flex justify-between items-start">
               <div className="flex items-center gap-2.5 overflow-hidden">
                 {currentNotificationTrip.userPhoto ? (
-                  <img src={currentNotificationTrip.userPhoto} className="w-9 h-9 rounded-full object-cover border border-white/30 shadow-sm shrink-0" alt="user" />
+                  <img src={currentNotificationTrip.userPhoto} className="w-9 h-9 rounded-full object-cover border border-indigo-200 dark:border-indigo-700 shadow-sm shrink-0" alt="user" />
                 ) : (
-                  <div className={`w-9 h-9 rounded-full flex items-center justify-center border shadow-sm shrink-0 ${isDarkMode ? 'bg-indigo-800' : 'bg-white'}`}>
-                    <User size={18} className={isDarkMode ? 'text-indigo-300' : 'text-indigo-500'} />
+                  <div className={`w-9 h-9 rounded-full flex items-center justify-center border shadow-sm shrink-0 ${isDarkMode ? 'bg-indigo-800 border-indigo-700' : 'bg-white border-indigo-200'}`}>
+                    <User size={18} className={isDarkMode ? 'text-indigo-400' : 'text-indigo-500'} />
                   </div>
                 )}
                 <div className="overflow-hidden">
@@ -902,7 +900,7 @@ export default function App() {
             
             <div className={`flex items-center justify-between p-2.5 rounded-xl border ${isDarkMode ? 'bg-indigo-950/50 border-indigo-800/50' : 'bg-white border-indigo-100'}`}>
               <div className="flex items-center gap-2 overflow-hidden pr-1">
-                <span className={`shrink-0 text-[9px] font-bold px-1.5 py-0.5 rounded-md ${currentNotificationTrip.type === 'offer' ? (isDarkMode ? 'bg-emerald-900/60 text-emerald-400' : 'bg-emerald-100 text-emerald-800') : currentNotificationTrip.type === 'delivery' ? (isDarkMode ? 'bg-purple-900/60 text-purple-400' : 'bg-purple-100 text-purple-800') : (isDarkMode ? 'bg-orange-900/60 text-orange-400' : 'bg-orange-100 text-orange-800')}`}>
+                <span className={`shrink-0 text-[9px] font-bold px-1.5 py-0.5 rounded-md ${currentNotificationTrip.type === 'offer' ? 'bg-emerald-500 text-white border-emerald-600' : currentNotificationTrip.type === 'delivery' ? 'bg-purple-500 text-white border-purple-600' : 'bg-orange-500 text-white border-orange-600'}`}>
                   {currentNotificationTrip.type === 'offer' ? 'سائق' : currentNotificationTrip.type === 'delivery' ? 'دليفري' : 'راكب'}
                 </span>
                 <span className={`text-xs font-bold truncate ${isDarkMode ? 'text-indigo-100' : 'text-slate-800'}`}>
@@ -940,7 +938,6 @@ export default function App() {
         </div>
       )}
 
-      {/* لوحة تحكم الإدارة الشاملة (آمنة من الكراش 100%) */}
       {showAdminPanel && isAdmin && (
         <div className="fixed inset-0 bg-slate-900/80 backdrop-blur-md z-[150] flex justify-center items-center p-4">
           <div className={`${bgModal} rounded-3xl w-full max-w-2xl h-[85vh] shadow-2xl border flex flex-col ${isDarkMode ? 'border-amber-500/30' : 'border-amber-400'}`}>
@@ -1068,11 +1065,219 @@ export default function App() {
         </div>
       )}
 
+      {showMyTrips && !isGuest && (
+        <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-sm z-[150] flex justify-center items-end sm:items-center p-0 sm:p-4">
+          <div className={`${bgModal} w-full h-[85vh] sm:h-[650px] sm:max-w-xl rounded-t-[2rem] sm:rounded-3xl shadow-2xl flex flex-col overflow-hidden`}>
+            <div className="bg-indigo-600 text-white p-5 flex justify-between items-center">
+              <h3 className="font-bold flex items-center gap-2"><History size={20}/> سجل رحلاتي</h3>
+              <button onClick={() => setShowMyTrips(false)} className="p-2 hover:bg-indigo-700 rounded-full transition-colors"><X size={20} /></button>
+            </div>
+            <div className={`flex-1 overflow-y-auto p-5 space-y-4 ${isDarkMode ? 'bg-slate-900/50' : 'bg-slate-50'}`}>
+              {myOwnTrips.length === 0 ? (
+                <div className="text-center text-slate-500 mt-20 flex flex-col items-center">
+                  <div className={`w-24 h-24 rounded-full flex items-center justify-center mb-4 ${isDarkMode ? 'bg-slate-800' : 'bg-slate-200'}`}><Car size={40} className="text-slate-400"/></div>
+                  <p className="font-bold">لم تقم بنشر أي رحلات حتى الآن.</p>
+                </div>
+              ) : (
+                myOwnTrips.map(trip => (
+                  <div key={trip.id} className={`p-5 rounded-2xl shadow-sm border relative flex flex-col ${bgCard}`}>
+                    <div className="flex justify-between items-start mb-4">
+                      <span className={`text-xs font-bold px-3 py-1.5 rounded-lg text-white ${trip.type === 'offer' ? 'bg-emerald-500' : trip.type === 'delivery' ? 'bg-purple-500' : 'bg-orange-500'}`}>
+                        {trip.type === 'offer' ? 'سائق' : trip.type === 'delivery' ? 'دليفري' : 'راكب'}
+                      </span>
+                      <span className={`text-xs font-bold px-3 py-1.5 rounded-lg text-white ${trip.status === 'completed' ? 'bg-slate-500' : trip.status === 'in_progress' ? 'bg-amber-500' : 'bg-indigo-500'}`}>
+                        {trip.status === 'completed' ? 'مكتملة ✅' : trip.status === 'in_progress' ? 'في الطريق 🚗' : 'متاحة الآن'}
+                      </span>
+                    </div>
+                    
+                    <div className="relative mb-5 pr-4 border-r-2 border-dashed border-slate-200 dark:border-slate-700 mr-2">
+                       <div className="absolute -right-[7px] top-0 w-3 h-3 rounded-full bg-indigo-500 shadow-sm border-2 border-white dark:border-slate-800"></div>
+                       <p className={`font-bold text-sm leading-snug break-words mb-3 ${textPrimary}`}>{trip.from}</p>
+
+                       <div className="absolute -right-[7px] bottom-0 w-3 h-3 rounded-full bg-rose-500 shadow-sm border-2 border-white dark:border-slate-800"></div>
+                       <p className={`font-bold text-sm leading-snug break-words ${textPrimary}`}>{trip.to}</p>
+                    </div>
+
+                    <div className={`flex flex-wrap gap-2 mt-auto border-t pt-4 ${isDarkMode ? 'border-slate-700' : 'border-slate-100'}`}>
+                      {(trip.status === 'open' || !trip.status) && (
+                        <button onClick={() => handleUpdateTripStatus(trip.id, 'in_progress')} className={`flex-1 text-xs py-2.5 font-bold rounded-xl flex items-center justify-center gap-2 transition-colors ${isDarkMode ? 'bg-indigo-900/20 text-indigo-400 hover:bg-indigo-900/40' : 'bg-indigo-50 text-indigo-700 hover:bg-indigo-100'}`}><Play size={16}/> بدء الرحلة</button>
+                      )}
+                      {trip.status === 'in_progress' && (
+                        <button onClick={() => handleUpdateTripStatus(trip.id, 'completed')} className={`flex-1 text-xs py-2.5 font-bold rounded-xl flex items-center justify-center gap-2 transition-colors ${isDarkMode ? 'bg-emerald-900/20 text-emerald-400 hover:bg-emerald-900/40' : 'bg-emerald-50 text-emerald-700 hover:bg-emerald-100'}`}><CheckSquare size={16}/> إنهاء الرحلة</button>
+                      )}
+                      <button onClick={() => setDeleteConfirmId(trip.id)} className={`text-xs py-2.5 px-4 font-bold rounded-xl flex items-center justify-center gap-2 transition-colors ${isDarkMode ? 'bg-rose-900/20 text-rose-400 hover:bg-rose-900/40' : 'bg-rose-50 text-rose-600 hover:bg-rose-100'}`}><Trash2 size={16}/></button>
+                    </div>
+                  </div>
+                ))
+              )}
+            </div>
+          </div>
+        </div>
+      )}
+
+      {showAddModal && !isGuest && (
+        <div className="fixed inset-0 bg-slate-900/70 backdrop-blur-sm z-[150] flex justify-center items-center p-4">
+          <div className={`${bgModal} rounded-[1.5rem] w-full max-w-lg shadow-2xl border overflow-hidden ${isDarkMode ? 'border-slate-700' : 'border-slate-100'} animate-fade-in-up`}>
+            <div className={`flex justify-between items-center p-5 border-b ${isDarkMode ? 'bg-slate-800/80 border-slate-700' : 'bg-slate-50/80 border-slate-100 backdrop-blur-md'}`}>
+              <h2 className="text-lg font-extrabold flex items-center gap-2"><Navigation className="text-indigo-500" size={20}/> إضافة رحلة أو طلب</h2>
+              <button onClick={() => setShowAddModal(false)} className="p-1.5 hover:bg-rose-50 hover:text-rose-500 text-slate-400 rounded-full transition-colors"><X size={20} /></button>
+            </div>
+            <div className="p-5 max-h-[75vh] overflow-y-auto custom-scrollbar">
+              <form onSubmit={handleAddTrip} className="space-y-5">
+                <div>
+                  <label className={`block text-xs font-bold mb-2 ${isDarkMode ? 'text-slate-300' : 'text-slate-700'}`}>نوع إعلانك؟</label>
+                  <div className="grid grid-cols-3 gap-2">
+                    <div onClick={() => setNewTrip({...newTrip, type: 'request'})} className={`cursor-pointer p-2.5 rounded-xl border-2 flex flex-col items-center justify-center gap-1.5 transition-all ${newTrip.type === 'request' ? (isDarkMode ? 'border-indigo-600 bg-indigo-900/30 shadow-sm' : 'border-indigo-600 bg-indigo-50 shadow-sm') : (isDarkMode ? 'border-slate-700 bg-slate-800 hover:bg-slate-700' : 'border-slate-200 bg-white hover:bg-slate-50')}`}>
+                      <User size={20} className={newTrip.type === 'request' ? (isDarkMode ? 'text-indigo-400' : 'text-indigo-600') : (isDarkMode ? 'text-slate-400' : 'text-slate-400')}/>
+                      <span className={`font-extrabold text-[10px] ${newTrip.type === 'request' ? (isDarkMode ? 'text-indigo-400' : 'text-indigo-700') : (isDarkMode ? 'text-slate-400' : 'text-slate-500')}`}>أنا راكب</span>
+                    </div>
+                    <div onClick={() => setNewTrip({...newTrip, type: 'offer'})} className={`cursor-pointer p-2.5 rounded-xl border-2 flex flex-col items-center justify-center gap-1.5 transition-all ${newTrip.type === 'offer' ? (isDarkMode ? 'border-emerald-500 bg-emerald-900/30 shadow-sm' : 'border-emerald-500 bg-emerald-50 shadow-sm') : (isDarkMode ? 'border-slate-700 bg-slate-800 hover:bg-slate-700' : 'border-slate-200 bg-white hover:bg-slate-50')}`}>
+                      <Car size={20} className={newTrip.type === 'offer' ? (isDarkMode ? 'text-emerald-400' : 'text-emerald-500') : (isDarkMode ? 'text-slate-400' : 'text-slate-400')}/>
+                      <span className={`font-extrabold text-[10px] ${newTrip.type === 'offer' ? (isDarkMode ? 'text-emerald-400' : 'text-emerald-700') : (isDarkMode ? 'text-slate-400' : 'text-slate-500')}`}>معي سيارة</span>
+                    </div>
+                    <div onClick={() => setNewTrip({...newTrip, type: 'delivery'})} className={`cursor-pointer p-2.5 rounded-xl border-2 flex flex-col items-center justify-center gap-1.5 transition-all ${newTrip.type === 'delivery' ? (isDarkMode ? 'border-purple-500 bg-purple-900/30 shadow-sm' : 'border-purple-500 bg-purple-50 shadow-sm') : (isDarkMode ? 'border-slate-700 bg-slate-800 hover:bg-slate-700' : 'border-slate-200 bg-white hover:bg-slate-50')}`}>
+                      <Package size={20} className={newTrip.type === 'delivery' ? (isDarkMode ? 'text-purple-400' : 'text-purple-600') : (isDarkMode ? 'text-slate-400' : 'text-slate-400')}/>
+                      <span className={`font-extrabold text-[10px] ${newTrip.type === 'delivery' ? (isDarkMode ? 'text-purple-400' : 'text-purple-700') : (isDarkMode ? 'text-slate-400' : 'text-slate-500')}`}>دليفري وطرود</span>
+                    </div>
+                  </div>
+                </div>
+
+                <div className="space-y-4">
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                    <div className="relative">
+                      <MapPin size={18} className="absolute right-4 top-3.5 text-slate-400" />
+                      <input type="text" required value={newTrip.from} onChange={(e) => setNewTrip({...newTrip, from: e.target.value})} placeholder={newTrip.type === 'delivery' ? "مكان استلام الطرد" : "نقطة التحرك"} className={`w-full border py-3 pr-10 pl-3 rounded-xl font-bold text-[16px] outline-none focus:ring-2 focus:ring-indigo-500 transition-colors ${bgInput}`} />
+                    </div>
+                    <div className="relative">
+                      <Navigation size={18} className="absolute right-4 top-3.5 text-slate-400" />
+                      <input type="text" required value={newTrip.to} onChange={(e) => setNewTrip({...newTrip, to: e.target.value})} placeholder={newTrip.type === 'delivery' ? "مكان تسليم الطرد" : "نقطة الوصول"} className={`w-full border py-3 pr-10 pl-3 rounded-xl font-bold text-[16px] outline-none focus:ring-2 focus:ring-indigo-500 transition-colors ${bgInput}`} />
+                    </div>
+                  </div>
+
+                  <div className="grid grid-cols-2 gap-4">
+                    <input type="date" required value={newTrip.date} onChange={(e) => setNewTrip({...newTrip, date: e.target.value})} className={`w-full border p-3 rounded-xl font-bold text-[16px] outline-none focus:ring-2 focus:ring-indigo-500 transition-colors ${bgInput}`} />
+                    <input type="time" required value={newTrip.time} onChange={(e) => setNewTrip({...newTrip, time: e.target.value})} className={`w-full border p-3 rounded-xl font-bold text-[16px] outline-none focus:ring-2 focus:ring-indigo-500 transition-colors ${bgInput}`} />
+                  </div>
+
+                  <div className="grid grid-cols-2 gap-4">
+                    <div className="relative">
+                      <User size={18} className="absolute right-4 top-3.5 text-slate-400" />
+                      <input type="number" min="1" required placeholder={newTrip.type === 'delivery' ? 'عدد الطرود' : newTrip.type === 'offer' ? 'المقاعد المتاحة' : 'عدد الركاب'} value={newTrip.seats} onChange={(e) => setNewTrip({...newTrip, seats: parseInt(e.target.value)})} className={`w-full border py-3 pr-10 pl-3 rounded-xl font-bold text-[16px] outline-none focus:ring-2 focus:ring-indigo-500 transition-colors ${bgInput}`} />
+                    </div>
+                    <div className="relative">
+                      <Wallet size={18} className="absolute right-4 top-3.5 text-slate-400" />
+                      <input type="number" min="0" placeholder={newTrip.type === 'delivery' ? "أجرة التوصيل (ج)" : "المساهمة (ج)"} value={newTrip.cost} onChange={(e) => setNewTrip({...newTrip, cost: e.target.value})} className={`w-full border py-3 pr-10 pl-3 rounded-xl font-bold text-[16px] outline-none focus:ring-2 focus:ring-indigo-500 transition-colors ${bgInput}`} />
+                    </div>
+                  </div>
+                  
+                  <textarea rows="3" value={newTrip.notes} onChange={(e) => setNewTrip({...newTrip, notes: e.target.value})} placeholder={newTrip.type === 'delivery' ? "تفاصيل الطرد (وزنه، نوعه، قابل للكسر...)" : "تفاصيل إضافية (أماكن الوقوف بالتحديد، حجم الحقائب...)"} className={`w-full border p-3 rounded-xl resize-none font-bold text-[16px] outline-none focus:ring-2 focus:ring-indigo-500 transition-colors leading-relaxed ${bgInput}`}></textarea>
+                </div>
+                
+                <button type="submit" disabled={isSubmitting} className="w-full bg-indigo-600 text-white py-3.5 rounded-xl font-extrabold text-sm hover:bg-indigo-700 shadow-md shadow-indigo-500/30 flex justify-center items-center gap-2 transition-all transform active:scale-[0.98]">
+                  {isSubmitting ? <><Loader2 className="animate-spin" size={20}/> جاري النشر...</> : 'نشر الإعلان الآن'}
+                </button>
+              </form>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {showAddProductModal && !isGuest && (
+        <div className="fixed inset-0 bg-slate-900/70 backdrop-blur-sm z-[150] flex justify-center items-center p-4">
+          <div className={`${bgModal} rounded-[1.5rem] w-full max-w-md shadow-2xl border overflow-hidden ${isDarkMode ? 'border-slate-700' : 'border-slate-100'} animate-fade-in-up`}>
+            <div className={`flex justify-between items-center p-5 border-b ${isDarkMode ? 'bg-slate-800/80 border-slate-700' : 'bg-slate-50/80 border-slate-100 backdrop-blur-md'}`}>
+              <h2 className="text-lg font-extrabold flex items-center gap-2"><ShoppingBag className="text-indigo-500" size={20}/> عرض منتج للبيع</h2>
+              <button onClick={() => setShowAddProductModal(false)} className="p-1.5 hover:bg-rose-50 hover:text-rose-500 text-slate-400 rounded-full transition-colors"><X size={20} /></button>
+            </div>
+            <div className="p-5 max-h-[75vh] overflow-y-auto custom-scrollbar">
+              <form onSubmit={handleAddProduct} className="space-y-4">
+                
+                <div className="relative group w-full h-40 rounded-2xl border-2 border-dashed flex flex-col items-center justify-center overflow-hidden cursor-pointer transition-colors hover:bg-slate-50 dark:hover:bg-slate-800">
+                  {newProduct.image ? (
+                    <img src={newProduct.image} className="w-full h-full object-cover" alt="Product preview" />
+                  ) : (
+                    <>
+                      <ImageIcon size={32} className="text-slate-400 mb-2"/>
+                      <span className="text-xs font-bold text-slate-500">اضغط لرفع صورة المنتج</span>
+                    </>
+                  )}
+                  <input type="file" accept="image/*" onChange={handleProductImageUpload} className="absolute inset-0 opacity-0 cursor-pointer w-full h-full" />
+                </div>
+
+                <div className="relative">
+                  <Tag size={18} className="absolute right-4 top-3.5 text-slate-400" />
+                  <input type="text" required value={newProduct.title} onChange={(e) => setNewProduct({...newProduct, title: e.target.value})} placeholder="اسم المنتج (مثال: موبايل مستعمل)" className={`w-full border py-3 pr-10 pl-3 rounded-xl font-bold text-[16px] outline-none focus:ring-2 focus:ring-indigo-500 transition-colors ${bgInput}`} />
+                </div>
+
+                <div className="relative">
+                  <Wallet size={18} className="absolute right-4 top-3.5 text-slate-400" />
+                  <input type="number" min="0" required value={newProduct.price} onChange={(e) => setNewProduct({...newProduct, price: e.target.value})} placeholder="السعر المطلوب (ج)" className={`w-full border py-3 pr-10 pl-3 rounded-xl font-bold text-[16px] outline-none focus:ring-2 focus:ring-indigo-500 transition-colors ${bgInput}`} />
+                </div>
+                
+                <textarea rows="4" required value={newProduct.desc} onChange={(e) => setNewProduct({...newProduct, desc: e.target.value})} placeholder="تفاصيل المنتج (الحالة، مدة الاستخدام، الملحقات...)" className={`w-full border p-3 rounded-xl resize-none font-bold text-[16px] outline-none focus:ring-2 focus:ring-indigo-500 transition-colors leading-relaxed ${bgInput}`}></textarea>
+                
+                <button type="submit" disabled={isSubmitting} className="w-full bg-indigo-600 text-white py-3.5 rounded-xl font-extrabold text-sm hover:bg-indigo-700 shadow-md shadow-indigo-500/30 flex justify-center items-center gap-2 transition-all transform active:scale-[0.98]">
+                  {isSubmitting ? <><Loader2 className="animate-spin" size={20}/> جاري العرض...</> : 'عرض للبيع الآن'}
+                </button>
+              </form>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* شاشة الشات المباشر (مضبوطة بعد الحذف، ومفيش فيها تكرار) */}
+      {activeChat && !isGuest && (
+        <div className="fixed inset-0 bg-slate-900/80 backdrop-blur-md z-[150] flex justify-center items-end sm:items-center p-0 sm:p-4">
+          <div className={`${bgModal} w-full h-[85vh] sm:h-[600px] sm:max-w-md rounded-t-[2rem] sm:rounded-3xl shadow-2xl flex flex-col overflow-hidden animate-fade-in-up`}>
+            <div className={`text-white p-4 flex items-center gap-3 ${activeChat.otherPersonId === 'admin' ? 'bg-rose-600' : 'bg-indigo-600'}`}>
+              <button onClick={() => setActiveChat(null)} className={`p-2 rounded-full transition-colors ${activeChat.otherPersonId === 'admin' ? 'hover:bg-rose-700' : 'hover:bg-indigo-700'}`}><ChevronLeft size={24} /></button>
+              {activeChat.otherPersonId === 'admin' ? (
+                <div className="w-10 h-10 bg-white/20 rounded-full flex items-center justify-center shrink-0"><Crown size={20}/></div>
+              ) : activeChat.otherPersonPhoto ? (
+                <img src={activeChat.otherPersonPhoto} className="w-10 h-10 rounded-full object-cover border-2 border-white/20 shrink-0" alt="avatar" />
+              ) : (
+                <div className="w-10 h-10 bg-white/20 rounded-full flex items-center justify-center shrink-0"><User size={20}/></div>
+              )}
+              <div className="flex-1">
+                <h3 className="font-bold text-sm leading-tight flex items-center gap-1">
+                  {activeChat.otherPersonName || 'مستخدم'}
+                  {activeChat.otherPersonVerified && <ShieldCheck size={14} className="text-blue-200"/>}
+                </h3>
+                {activeChat.tripInfo && activeChat.tripInfo !== 'system' && <span className="text-[10px] text-indigo-200 leading-tight block mt-0.5 truncate">{activeChat.tripInfo}</span>}
+              </div>
+            </div>
+            <div className={`flex-1 overflow-y-auto p-4 space-y-4 ${isDarkMode ? 'bg-slate-900/80' : 'bg-slate-100'} bg-[url('data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHdpZHRoPSI0MCIgaGVpZ2h0PSI0MCI+PGRlZnM+PHBhdHRlcm4gaWQ9InBhdHRlcm4iIHdpZHRoPSI0MCIgaGVpZ2h0PSI0MCIgcGF0dGVyblVuaXRzPSJ1c2VyU3BhY2VPblVzZSI+PHBhdGggZD0iTTAgMGg0MHY0MEgweiIgZmlsbD0ibm9uZSIvPjxjaXJjbGUgY3g9IjIwIiBjeT0iMjAiIHI9IjEiIGZpbGw9InJnYmEoMTU2LCAxNjMsIDE3NSwgMC4yKSIvPjwvcGF0dGVybj48L2RlZnM+PHJlY3Qgd2lkdGg9IjEwMCUiIGhlaWdodD0iMTAwJSIgZmlsbD0idXJsKCNwYXR0ZXJuKSIvPjwvc3ZnPg==')]`}>
+              {messages.map(msg => {
+                const isMe = msg.senderId === user.uid;
+                const isAdminMsg = msg.senderId === 'admin';
+                return (
+                  <div key={msg.id} className={`flex ${isMe ? 'justify-end' : 'justify-start'}`}>
+                    <div className={`max-w-[85%] p-2.5 rounded-xl text-xs shadow-sm ${isMe ? 'bg-indigo-600 text-white rounded-tl-sm' : (isAdminMsg ? 'bg-rose-100 text-rose-900 border border-rose-200 rounded-tr-sm' : (isDarkMode ? 'bg-slate-800 text-white border border-slate-700 rounded-tr-sm' : 'bg-white border border-slate-200 text-slate-800 rounded-tr-sm'))}`}>
+                      {msg.text}
+                    </div>
+                  </div>
+                )
+              })}
+              <div ref={messagesEndRef} />
+            </div>
+            <div className={`p-4 border-t ${isDarkMode ? 'bg-slate-800 border-slate-700' : 'bg-white border-slate-200'}`}>
+              {activeChat.otherPersonId === 'admin' ? (
+                <div className="text-center text-[10px] font-bold text-slate-400">هذه رسالة إدارية رسمية للمعلومية فقط.</div>
+              ) : (
+                <form onSubmit={handleSendMessage} className="flex gap-2 items-center">
+                  <input type="text" value={newMessage} onChange={(e) => setNewMessage(e.target.value)} placeholder="اكتب رسالة..." className={`flex-1 rounded-xl px-4 py-3 text-[16px] outline-none focus:ring-2 focus:ring-indigo-500 transition-colors ${bgInput}`} />
+                  <button type="submit" disabled={!newMessage.trim()} className="bg-indigo-600 text-white w-12 h-12 flex items-center justify-center rounded-xl hover:bg-indigo-700 disabled:opacity-50 disabled:bg-slate-400 transition-all shadow-md"><Send size={20} className="rtl:rotate-180" /></button>
+                </form>
+              )}
+            </div>
+          </div>
+        </div>
+      )}
+
       {/* --- الهيدر الرئيسي (كلمة خدني معاك على اليمين بجوار اللوجو) --- */}
       <header className={`sticky top-0 z-40 transition-all duration-300 border-b ${isDarkMode ? 'bg-slate-900 border-slate-800' : 'bg-white border-slate-100 shadow-sm'}`}>
         <div className="max-w-7xl mx-auto px-4 h-16 flex justify-between items-center w-full relative">
           
-          {/* الجانب الأيمن: اللوجو وبجواره كلمة خدني معاك */}
           <div className="flex items-center gap-2 cursor-pointer" onClick={() => setActiveTab('trips')}>
             {appLogo ? (
               <img src={appLogo} alt="Logo" className="h-10 sm:h-12 w-auto object-contain" />
@@ -1084,7 +1289,6 @@ export default function App() {
             <span className={`font-extrabold text-lg sm:text-xl tracking-tight ${isDarkMode ? 'text-indigo-400' : 'text-indigo-700'}`}>خدني معاك</span>
           </div>
           
-          {/* الجانب الأيسر: بروفايل المستخدم */}
           <div className="flex items-center gap-2 cursor-pointer" onClick={() => setActiveTab('profile')}>
             <div className="flex flex-col text-right">
               <span className={`text-[10px] font-medium ${textSecondary}`}>مرحباً،</span>
@@ -1165,12 +1369,11 @@ export default function App() {
               </div>
             </div>
 
-            {/* فلاتر ظاهرة بالكامل ومضغوطة عشان مفيش دليفري تهرب بره الشاشة */}
-            <div className="grid grid-cols-4 gap-1 sm:gap-1.5 mb-6 max-w-2xl mx-auto pb-2">
-              <button onClick={() => setFilterType('all')} className={`py-2 px-1 text-[11px] sm:text-xs font-bold rounded-full transition-all shadow-sm truncate text-center border ${filterType === 'all' ? 'bg-slate-800 text-white border-slate-800 dark:bg-slate-200 dark:text-slate-900 dark:border-slate-200' : 'bg-white text-slate-600 border-slate-200 hover:bg-slate-50 dark:bg-slate-800 dark:text-slate-400 dark:border-slate-700 dark:hover:bg-slate-700'}`}>الكل</button>
-              <button onClick={() => setFilterType('offer')} className={`py-2 px-1 text-[11px] sm:text-xs font-bold rounded-full transition-all shadow-sm truncate text-center border ${filterType === 'offer' ? 'bg-slate-800 text-white border-slate-800 dark:bg-slate-200 dark:text-slate-900 dark:border-slate-200' : 'bg-white text-slate-600 border-slate-200 hover:bg-slate-50 dark:bg-slate-800 dark:text-slate-400 dark:border-slate-700 dark:hover:bg-slate-700'}`}>توصيلات 🚗</button>
-              <button onClick={() => setFilterType('request')} className={`py-2 px-1 text-[11px] sm:text-xs font-bold rounded-full transition-all shadow-sm truncate text-center border ${filterType === 'request' ? 'bg-slate-800 text-white border-slate-800 dark:bg-slate-200 dark:text-slate-900 dark:border-slate-200' : 'bg-white text-slate-600 border-slate-200 hover:bg-slate-50 dark:bg-slate-800 dark:text-slate-400 dark:border-slate-700 dark:hover:bg-slate-700'}`}>ركاب 🙋‍♂️</button>
-              <button onClick={() => setFilterType('delivery')} className={`py-2 px-1 text-[11px] sm:text-xs font-bold rounded-full transition-all shadow-sm truncate text-center border ${filterType === 'delivery' ? 'bg-slate-800 text-white border-slate-800 dark:bg-slate-200 dark:text-slate-900 dark:border-slate-200' : 'bg-white text-slate-600 border-slate-200 hover:bg-slate-50 dark:bg-slate-800 dark:text-slate-400 dark:border-slate-700 dark:hover:bg-slate-700'}`}>دليفري 📦</button>
+            <div className="flex flex-wrap sm:flex-nowrap gap-2 p-1.5 mb-6 max-w-xl mx-auto rounded-full shadow-sm border border-slate-100 dark:border-slate-800 overflow-hidden hide-scrollbar ${isDarkMode ? 'bg-slate-800' : 'bg-white'}">
+              <button onClick={() => setFilterType('all')} className={`flex-1 min-w-[70px] py-2 px-1 text-[11px] sm:text-xs font-bold rounded-full transition-all text-center ${filterType === 'all' ? 'bg-slate-800 text-white dark:bg-slate-200 dark:text-slate-900' : 'text-slate-600 hover:bg-slate-50 dark:text-slate-400 dark:hover:bg-slate-700'}`}>الكل</button>
+              <button onClick={() => setFilterType('offer')} className={`flex-1 min-w-[70px] py-2 px-1 text-[11px] sm:text-xs font-bold rounded-full transition-all text-center ${filterType === 'offer' ? 'bg-slate-800 text-white dark:bg-slate-200 dark:text-slate-900' : 'text-slate-600 hover:bg-slate-50 dark:text-slate-400 dark:hover:bg-slate-700'}`}>توصيلات 🚗</button>
+              <button onClick={() => setFilterType('request')} className={`flex-1 min-w-[70px] py-2 px-1 text-[11px] sm:text-xs font-bold rounded-full transition-all text-center ${filterType === 'request' ? 'bg-slate-800 text-white dark:bg-slate-200 dark:text-slate-900' : 'text-slate-600 hover:bg-slate-50 dark:text-slate-400 dark:hover:bg-slate-700'}`}>ركاب 🙋‍♂️</button>
+              <button onClick={() => setFilterType('delivery')} className={`flex-1 min-w-[70px] py-2 px-1 text-[11px] sm:text-xs font-bold rounded-full transition-all text-center ${filterType === 'delivery' ? 'bg-slate-800 text-white dark:bg-slate-200 dark:text-slate-900' : 'text-slate-600 hover:bg-slate-50 dark:text-slate-400 dark:hover:bg-slate-700'}`}>دليفري 📦</button>
             </div>
 
             {filteredTrips.length === 0 ? (
@@ -1186,15 +1389,13 @@ export default function App() {
                   const isCompleted = trip.status === 'completed';
                   const isInProgress = trip.status === 'in_progress';
                   const isClosedForPublic = (isInProgress || isCompleted) && !isOwner;
-                  const isPassenger = myInbox.some(chat => chat.tripId === trip.id);
                   const canDelete = isOwner || isAdmin;
                   
                   return (
                   <div key={trip.id} className={`rounded-[1.25rem] p-3.5 shadow-sm hover:shadow-md border relative flex flex-col transition-all duration-300 ${bgCard} ${isCompleted ? 'opacity-75 grayscale-[20%]' : ''}`}>
                     
-                    {/* رأس الكارت (الصورة والاسم على اليمين - الحذف على الشمال) */}
                     <div className="flex items-start justify-between mb-3 relative">
-                      <div className="flex items-center gap-2 overflow-hidden w-full">
+                      <div className="flex items-center gap-2 overflow-hidden text-right w-full pr-1">
                         {trip.userPhoto ? (
                           <img src={trip.userPhoto} className="w-9 h-9 rounded-full object-cover border border-slate-200 shadow-sm shrink-0" alt="user" />
                         ) : (
@@ -1212,34 +1413,27 @@ export default function App() {
                       </div>
 
                       {canDelete && !trip.isDummy && (
-                        <button onClick={() => {setDeleteType('trip'); setDeleteConfirmId(trip.id);}} className="p-1.5 bg-rose-50 text-rose-600 rounded-full hover:bg-rose-100 transition-colors shrink-0 z-10 ml-1">
+                        <button onClick={() => {setDeleteType('trip'); setDeleteConfirmId(trip.id);}} className="absolute left-0 top-0 p-1.5 bg-rose-50 text-rose-600 rounded-full hover:bg-rose-100 transition-colors shrink-0 z-10">
                           <Trash2 size={14} />
                         </button>
                       )}
                     </div>
 
                     <div className="mb-3 flex gap-1 flex-wrap">
-                      <span className={`inline-block text-[9px] font-bold px-2 py-0.5 rounded-md border ${trip.type === 'offer' ? 'bg-emerald-50 text-emerald-700 border-emerald-200 dark:bg-emerald-900/40 dark:text-emerald-400 dark:border-emerald-800' : trip.type === 'delivery' ? 'bg-purple-50 text-purple-700 border-purple-200 dark:bg-purple-900/40 dark:text-purple-400 dark:border-purple-800' : 'bg-orange-50 text-orange-700 border-orange-200 dark:bg-orange-900/40 dark:text-orange-400 dark:border-orange-800'}`}>
+                      <span className={`inline-block text-[9px] font-bold px-2 py-0.5 rounded-md text-white ${trip.type === 'offer' ? 'bg-emerald-500 border border-emerald-600' : trip.type === 'delivery' ? 'bg-purple-500 border border-purple-600' : 'bg-orange-500 border border-orange-600'}`}>
                         {trip.type === 'offer' ? 'سائق' : trip.type === 'delivery' ? 'دليفري' : 'راكب'}
                       </span>
-                      {/* عرض حالة الرحلة كبادج بجوار النوع */}
-                      <span className={`inline-block text-[9px] font-bold px-2 py-0.5 rounded-md border ${isCompleted ? 'bg-slate-100 text-slate-600 border-slate-200 dark:bg-slate-800 dark:text-slate-300 dark:border-slate-700' : isInProgress ? 'bg-amber-50 text-amber-600 border-amber-200 dark:bg-amber-900/30 dark:text-amber-400 dark:border-amber-800' : 'bg-indigo-50 text-indigo-600 border-indigo-200 dark:bg-indigo-900/30 dark:text-indigo-400 dark:border-indigo-800'}`}>
+                      <span className={`inline-block text-[9px] font-bold px-2 py-0.5 rounded-md text-white border ${isCompleted ? 'bg-slate-500 border-slate-600' : isInProgress ? 'bg-amber-500 border-amber-600' : 'bg-indigo-500 border-indigo-600'}`}>
                          {isCompleted ? 'مكتملة' : isInProgress ? 'بالطريق' : 'متاحة'}
                       </span>
                     </div>
 
-                    {/* مسار الرحلة المعالج تماماً لمنع تداخل النص مع النقط */}
-                    <div className="flex flex-col gap-2 mb-4 mr-1">
-                       <div className="flex items-start gap-2">
-                          <div className="w-3 h-3 rounded-full bg-indigo-500 shrink-0 mt-1 relative z-10 shadow-sm">
-                             <div className="absolute top-3 right-[5px] w-0.5 h-6 bg-slate-200 dark:bg-slate-700"></div>
-                          </div>
-                          <p className={`font-bold text-[11px] leading-snug break-words flex-1 ${textPrimary}`}>{trip.from}</p>
-                       </div>
-                       <div className="flex items-start gap-2">
-                          <div className="w-3 h-3 rounded-full bg-rose-500 shrink-0 mt-0.5 relative z-10 shadow-sm"></div>
-                          <p className={`font-bold text-[11px] leading-snug break-words flex-1 ${textPrimary}`}>{trip.to}</p>
-                       </div>
+                    <div className="relative pr-4 border-r-2 border-dashed border-slate-200 dark:border-slate-700 mb-4 mr-2">
+                       <div className="absolute -right-[7px] top-0 w-3 h-3 rounded-full bg-indigo-500 shadow-sm border-2 border-white dark:border-slate-800"></div>
+                       <p className={`font-bold text-[11px] leading-snug break-words mb-3 ${textPrimary}`}>{trip.from}</p>
+
+                       <div className="absolute -right-[7px] bottom-0 w-3 h-3 rounded-full bg-rose-500 shadow-sm border-2 border-white dark:border-slate-800"></div>
+                       <p className={`font-bold text-[11px] leading-snug break-words ${textPrimary}`}>{trip.to}</p>
                     </div>
                     
                     <div className={`text-[10px] font-bold flex justify-between items-center px-1.5 mb-3 ${textSecondary}`}>
@@ -1256,52 +1450,58 @@ export default function App() {
                        )}
                     </div>
 
-                    {/* الأزرار السفلية تم تبسيطها للمحافظة على مساحة الكارت */}
-                    {(!isOwner && !isClosedForPublic) || (isClosedForPublic && isCompleted && isPassenger && !trip.isBot) ? (
-                      <div className="mt-auto pt-2">
-                        {!isOwner && !isClosedForPublic && (
-                          <div className="flex gap-1.5">
-                            <button onClick={() => openChatFromTrip(trip)} className="flex-1 py-1.5 rounded-lg font-bold flex justify-center items-center gap-1 text-[10px] text-white transition-colors shadow-sm bg-indigo-600 hover:bg-indigo-700">
-                              <MessageCircle size={12} /> رسالة
-                            </button>
-                            
-                            <button onClick={() => requireAuth(() => {
-                              if (trip.isDummy || trip.isBot) {
-                                setAlertMsg('تجريبية فقط 😅');
-                              } else if (!trip.userPhone) {
-                                setAlertMsg('لا يوجد رقم 📞');
-                              } else {
-                                window.location.href = `tel:${trip.userPhone}`;
-                              }
-                            })} className="flex-1 bg-emerald-500 text-white py-1.5 rounded-lg font-bold flex justify-center items-center gap-1 text-[10px] hover:bg-emerald-600 transition-colors shadow-sm">
-                              <Phone size={12} /> اتصال
-                            </button>
-                          </div>
-                        )}
-                        {isClosedForPublic && isCompleted && isPassenger && !trip.isBot && (
-                          <div className={`p-1.5 rounded-lg text-center flex items-center justify-center gap-2 border ${isDarkMode ? 'bg-slate-700 border-slate-600' : 'bg-slate-50 border-slate-200'}`}>
-                            <span className="text-[9px] font-bold">قيّم الرحلة:</span>
-                            <div className="flex gap-0.5">
-                              {[1,2,3,4,5].map(star => (
-                                <Star key={star} onClick={() => handleRateTrip(trip.id, star)} className={`cursor-pointer transition-colors ${isDarkMode ? 'text-slate-500 hover:text-amber-400' : 'text-slate-300 hover:text-amber-500'}`} size={12} fill="currentColor" />
-                              ))}
+                    {/* إخفاء الأزرار السفلية لو الرحلة مكتملة/جارية للزوار لتقليص الكارت */}
+                    <div className="mt-auto pt-2">
+                      {isOwner ? (
+                        <div className={`w-full py-1.5 rounded-lg font-bold text-center text-[10px] border border-dashed ${isDarkMode ? 'bg-slate-700/50 text-slate-400 border-slate-600' : 'bg-slate-50 text-slate-500 border-slate-200'}`}>
+                          إعلاني ✨
+                        </div>
+                      ) : isClosedForPublic ? (
+                        isCompleted && !trip.isBot && isPassenger ? (
+                            <div className={`py-1.5 px-2 rounded-lg text-center flex items-center justify-center gap-2 border ${isDarkMode ? 'bg-slate-700 border-slate-600' : 'bg-slate-50 border-slate-200'}`}>
+                              <span className="text-[9px] font-bold">قيّم:</span>
+                              <div className="flex gap-0.5">
+                                {[1,2,3,4,5].map(star => (
+                                  <Star key={star} onClick={() => handleRateTrip(trip.id, star)} className={`cursor-pointer transition-colors ${isDarkMode ? 'text-slate-500 hover:text-amber-400' : 'text-slate-300 hover:text-amber-500'}`} size={12} fill="currentColor" />
+                                ))}
+                              </div>
                             </div>
-                          </div>
-                        )}
-                      </div>
-                    ) : null}
+                        ) : (
+                          // إخفاء المساحة إذا لم تكن لصاحبها أو كانت منتهية/بالطريق ولا تحتاج تقييم
+                          <div className="hidden"></div>
+                        )
+                      ) : (
+                        <div className="flex gap-1.5">
+                          <button onClick={() => openChatFromTrip(trip)} className="flex-1 py-2 rounded-lg font-bold flex justify-center items-center gap-1.5 text-[10px] text-white transition-colors shadow-sm bg-indigo-600 hover:bg-indigo-700">
+                            <MessageCircle size={12} /> رسالة
+                          </button>
+                          
+                          <button onClick={() => requireAuth(() => {
+                            if (trip.isDummy || trip.isBot) {
+                              setAlertMsg('تجريبية فقط 😅');
+                            } else if (!trip.userPhone) {
+                              setAlertMsg('لا يوجد رقم 📞');
+                            } else {
+                              window.location.href = `tel:${trip.userPhone}`;
+                            }
+                          })} className="flex-1 bg-emerald-500 text-white py-2 rounded-lg font-bold flex justify-center items-center gap-1.5 text-[10px] hover:bg-emerald-600 transition-colors shadow-sm">
+                            <Phone size={12} /> اتصال
+                          </button>
+                        </div>
+                      )}
+                    </div>
                   </div>
                 )})}
               </div>
             )}
             
-            <button onClick={() => requireAuth(() => setShowAddModal(true))} className="fixed bottom-20 left-4 w-14 h-14 bg-indigo-600 text-white rounded-full flex items-center justify-center shadow-lg shadow-indigo-500/40 z-30 hover:bg-indigo-700 transform active:scale-95 transition-all">
+            <button onClick={() => requireAuth(() => setShowAddModal(true))} className="md:hidden fixed bottom-20 left-4 w-14 h-14 bg-indigo-600 text-white rounded-full flex items-center justify-center shadow-lg shadow-indigo-500/40 z-30 hover:bg-indigo-700 transform active:scale-95 transition-all">
               <Plus size={28} />
             </button>
           </div>
         )}
 
-        {/* --- Tab 2: Market (السوق) --- */}
+        {/* --- Tab 2: Market --- */}
         {activeTab === 'market' && (
           <div className="animate-fade-in-up">
             <div className="flex items-center justify-between mb-6 px-2">
@@ -1373,7 +1573,7 @@ export default function App() {
               </div>
             )}
             
-            <button onClick={() => requireAuth(() => setShowAddProductModal(true))} className="fixed bottom-20 left-4 w-14 h-14 bg-indigo-600 text-white rounded-full flex items-center justify-center shadow-lg shadow-indigo-500/40 z-30 hover:bg-indigo-700 transform active:scale-95 transition-all">
+            <button onClick={() => requireAuth(() => setShowAddProductModal(true))} className="md:hidden fixed bottom-20 left-4 w-14 h-14 bg-indigo-600 text-white rounded-full flex items-center justify-center shadow-lg shadow-indigo-500/40 z-30 hover:bg-indigo-700 transform active:scale-95 transition-all">
               <Plus size={28} />
             </button>
           </div>
