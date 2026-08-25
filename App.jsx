@@ -22,13 +22,6 @@ const APP_COLLECTION_NAME = 'khodni_maak_trips';
 const USERS_COLLECTION = 'khodni_maak_users';
 const ADMIN_EMAIL = "bassamwaleed2000@gmail.com".toLowerCase();
 
-// مسح الملاحظات وتصفير التقييمات للرحلات الوهمية القديمة
-const DUMMY_TRIPS = [
-  { id: 'dummy_1', type: 'offer', from: 'القاهرة (رمسيس)', to: 'الإسكندرية (محطة مصر)', date: '2026-08-25', time: '08:00 ص', seats: 3, cost: '150', notes: '', userId: 'd1', userName: 'أحمد محمود', userPhone: '', verified: true, isDummy: true, status: 'completed', rating: 0, totalRatings: 0, createdAt: { toMillis: () => Date.now() - 1000000 } },
-  { id: 'dummy_2', type: 'request', from: 'المنصورة', to: 'القاهرة (مدينة نصر)', date: '2026-08-26', time: '10:30 ص', seats: 1, cost: '', notes: '', userId: 'd2', userName: 'سارة خالد', userPhone: '', verified: false, isDummy: true, status: 'completed', rating: 0, totalRatings: 0, createdAt: { toMillis: () => Date.now() - 2000000 } },
-  { id: 'dummy_3', type: 'delivery', from: 'الزقازيق', to: 'العاشر من رمضان', date: '2026-08-24', time: '02:00 م', seats: 1, cost: '50', notes: '', userId: 'd3', userName: 'محمود حسن', userPhone: '', verified: true, isDummy: true, status: 'in_progress', rating: 0, totalRatings: 0, createdAt: { toMillis: () => Date.now() - 3000000 } }
-];
-
 export default function App() {
   const [user, setUser] = useState(null);
   const [userData, setUserData] = useState(null);
@@ -61,11 +54,7 @@ export default function App() {
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [isUploading, setIsUploading] = useState(false);
   
-  // الوضع الليلي كافتراضي
-  const [isDarkMode, setIsDarkMode] = useState(() => {
-    const savedTheme = localStorage.getItem('khodnimaak_theme');
-    return savedTheme !== 'light'; 
-  });
+  const [isDarkMode, setIsDarkMode] = useState(false);
   
   const [announcements, setAnnouncements] = useState(["🚀 جاري تحديث وتطوير البرنامج باستمرار لخدمتكم"]);
   const [currentAdIndex, setCurrentAdIndex] = useState(0);
@@ -133,6 +122,11 @@ export default function App() {
     }, 5000); 
     return () => clearInterval(interval);
   }, [bannerImages.length]);
+
+  useEffect(() => {
+    const savedTheme = localStorage.getItem('khodnimaak_theme');
+    if (savedTheme !== 'light') setIsDarkMode(true);
+  }, []);
 
   const toggleTheme = () => {
     const newTheme = !isDarkMode;
@@ -207,6 +201,7 @@ export default function App() {
           }
         });
       }
+
       setRealTrips(tripsData);
     });
     return () => unsubscribe();
@@ -273,8 +268,8 @@ export default function App() {
         userName: randomName,
         userPhone: "",
         verified: true,
-        rating: 0,
-        totalRatings: 0,
+        rating: Number((Math.random() * 2 + 3).toFixed(1)),
+        totalRatings: 5,
         status: "open",
         isBot: true, 
         createdAt: serverTimestamp()
@@ -375,36 +370,21 @@ export default function App() {
     e.preventDefault();
     setAuthLoading(true);
     
-    let emailForFirebase = '';
-    let phoneToSave = '';
-
-    if (authMethod === 'phone') {
-      emailForFirebase = `${authForm.phone.trim()}@khodnimaak.com`;
-      phoneToSave = authForm.phone.trim();
-    } else {
-      emailForFirebase = authForm.email.trim();
-      phoneToSave = '';
-    }
+    let identifier = authForm.identifier.trim();
+    let emailForFirebase = identifier.includes('@') ? identifier : `${identifier}@khodnimaak.com`;
 
     try {
       if (isLoginMode) {
         await signInWithEmailAndPassword(auth, emailForFirebase, authForm.password);
       } else {
-        if (!authForm.name) {
+        if (!authForm.name || !identifier) {
           setAuthLoading(false);
-          return setAlertMsg("برجاء إدخال الاسم");
+          return setAlertMsg("برجاء إدخال الاسم ورقم الموبايل أو الإيميل");
         }
-        if (authMethod === 'phone' && !authForm.phone) {
-          setAuthLoading(false);
-          return setAlertMsg("برجاء إدخال رقم الموبايل");
-        }
-        if (authMethod === 'email' && !authForm.email) {
-          setAuthLoading(false);
-          return setAlertMsg("برجاء إدخال البريد الإلكتروني");
-        }
-
         const userCred = await createUserWithEmailAndPassword(auth, emailForFirebase, authForm.password);
         await updateProfile(userCred.user, { displayName: authForm.name });
+        
+        const phoneToSave = identifier.includes('@') ? '' : identifier;
         
         await setDoc(doc(db, USERS_COLLECTION, userCred.user.uid), {
           phone: phoneToSave, 
@@ -438,7 +418,7 @@ export default function App() {
     setShowSettings(false);
     setShowMyTrips(false);
     setShowAdminPanel(false);
-    setAuthForm({ name: '', phone: '', email: '', password: '' });
+    setAuthForm({ name: '', identifier: '', password: '' });
   };
 
   const requireAuth = (actionCallback) => {
@@ -541,10 +521,9 @@ export default function App() {
     });
   };
 
-  const allTrips = [...realTrips, ...DUMMY_TRIPS];
-  allTrips.sort((a, b) => (b.createdAt?.toMillis() || 0) - (a.createdAt?.toMillis() || 0));
-
-  const filteredTrips = allTrips.filter(t => (filterType === 'all' || t.type === filterType) && (t.from?.includes(searchFrom) && t.to?.includes(searchTo)));
+  const filteredTrips = realTrips.filter(t => (filterType === 'all' || t.type === filterType) && (t.from?.includes(searchFrom) && t.to?.includes(searchTo)));
+  filteredTrips.sort((a, b) => (b.createdAt?.toMillis() || 0) - (a.createdAt?.toMillis() || 0));
+  
   const myOwnTrips = realTrips.filter(t => t.userId === user?.uid);
 
   const renderStars = (rating = 0, total = 0) => {
@@ -573,8 +552,8 @@ export default function App() {
 
   if (!user) {
     return (
-      <div dir="rtl" className={`min-h-screen flex items-center justify-center p-4 transition-colors ${bgMain} bg-[url('data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHdpZHRoPSI0MCIgaGVpZ2h0PSI0MCI+PGRlZnM+PHBhdHRlcm4gaWQ9InBhdHRlcm4iIHdpZHRoPSI0MCIgaGVpZ2h0PSI0MCIgcGF0dGVyblVuaXRzPSJ1c2VyU3BhY2VPblVzZSI+PHBhdGggZD0iTTAgMGg0MHY0MEgweiIgZmlsbD0ibm9uZSIvPjxjaXJjbGUgY3g9IjIwIiBjeT0iMjAiIHI9IjEiIGZpbGw9InJnYmEoMTU2LCAxNjMsIDE3NSwgMC4yKSIvPjwvcGF0dGVybj48L2RlZnM+PHJlY3Qgd2lkdGg9IjEwMCUiIGhlaWdodD0iMTAwJSIgZmlsbD0idXJsKCNwYXR0ZXJuKSIvPjwvc3ZnPg==')]`}>
-        <div className={`${bgCard} p-6 sm:p-10 rounded-3xl shadow-2xl max-w-md w-full border-t-8 border-indigo-600 relative overflow-hidden`}>
+      <div dir="rtl" className={`min-h-screen flex items-center justify-center p-4 transition-colors ${bgMain} overflow-x-hidden w-full bg-[url('data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHdpZHRoPSI0MCIgaGVpZ2h0PSI0MCI+PGRlZnM+PHBhdHRlcm4gaWQ9InBhdHRlcm4iIHdpZHRoPSI0MCIgaGVpZ2h0PSI0MCIgcGF0dGVyblVuaXRzPSJ1c2VyU3BhY2VPblVzZSI+PHBhdGggZD0iTTAgMGg0MHY0MEgweiIgZmlsbD0ibm9uZSIvPjxjaXJjbGUgY3g9IjIwIiBjeT0iMjAiIHI9IjEiIGZpbGw9InJnYmEoMTU2LCAxNjMsIDE3NSwgMC4yKSIvPjwvcGF0dGVybj48L2RlZnM+PHJlY3Qgd2lkdGg9IjEwMCUiIGhlaWdodD0iMTAwJSIgZmlsbD0idXJsKCNwYXR0ZXJuKSIvPjwvc3ZnPg==')]`}>
+        <div className={`${bgCard} p-6 sm:p-8 rounded-3xl shadow-2xl max-w-md w-full border-t-8 border-indigo-600 relative overflow-hidden`}>
           {alertMsg && (
             <div className="mb-4 bg-rose-100 text-rose-600 p-3 rounded-lg text-sm text-center font-bold flex justify-between items-center">
               <span>{alertMsg}</span>
@@ -588,15 +567,16 @@ export default function App() {
           <h1 className="text-2xl font-extrabold mb-1 text-center bg-gradient-to-l from-indigo-600 to-blue-500 bg-clip-text text-transparent">خدني معاك</h1>
           <p className={`${isDarkMode ? 'text-slate-400' : 'text-slate-500'} mb-6 text-center text-xs font-medium`}>{isLoginMode ? 'مرحباً بعودتك! سجل دخولك للمتابعة' : 'انضم إلينا وابدأ رحلتك التوفيرية'}</p>
           
-          <div className={`flex gap-2 p-1.5 mb-6 rounded-xl shadow-inner ${isDarkMode ? 'bg-slate-700' : 'bg-slate-100'}`}>
+          {/* تبويبات طريقة التسجيل */}
+          <div className={`flex gap-2 p-1 mb-5 rounded-xl shadow-inner ${isDarkMode ? 'bg-slate-700' : 'bg-slate-100'}`}>
             <button 
               onClick={() => setAuthMethod('phone')} 
-              className={`flex-1 py-2 text-xs font-bold rounded-lg transition-all ${authMethod === 'phone' ? (isDarkMode ? 'bg-indigo-600 text-white shadow' : 'bg-white text-indigo-700 shadow') : (isDarkMode ? 'text-slate-400' : 'text-slate-500')}`}>
+              className={`flex-1 py-2 text-[16px] sm:text-xs font-bold rounded-lg transition-all ${authMethod === 'phone' ? (isDarkMode ? 'bg-indigo-600 text-white shadow' : 'bg-white text-indigo-700 shadow') : (isDarkMode ? 'text-slate-400' : 'text-slate-500')}`}>
               رقم الموبايل 📱
             </button>
             <button 
               onClick={() => setAuthMethod('email')} 
-              className={`flex-1 py-2 text-xs font-bold rounded-lg transition-all ${authMethod === 'email' ? (isDarkMode ? 'bg-indigo-600 text-white shadow' : 'bg-white text-indigo-700 shadow') : (isDarkMode ? 'text-slate-400' : 'text-slate-500')}`}>
+              className={`flex-1 py-2 text-[16px] sm:text-xs font-bold rounded-lg transition-all ${authMethod === 'email' ? (isDarkMode ? 'bg-indigo-600 text-white shadow' : 'bg-white text-indigo-700 shadow') : (isDarkMode ? 'text-slate-400' : 'text-slate-500')}`}>
               البريد الإلكتروني ✉️
             </button>
           </div>
@@ -605,40 +585,40 @@ export default function App() {
             {!isLoginMode && (
               <div className="relative group">
                 <User size={18} className={`absolute right-4 top-3.5 transition-colors ${isDarkMode ? 'text-slate-500 group-focus-within:text-indigo-400' : 'text-slate-400 group-focus-within:text-indigo-600'}`} />
-                <input type="text" required placeholder="الاسم الكامل" value={authForm.name} onChange={e => setAuthForm({...authForm, name: e.target.value})} className={`w-full border rounded-xl py-3 px-11 outline-none focus:ring-2 focus:ring-indigo-500 font-medium text-sm transition-all ${bgInput}`} />
+                <input type="text" required placeholder="الاسم الكامل" value={authForm.name} onChange={e => setAuthForm({...authForm, name: e.target.value})} className={`w-full border rounded-xl py-3 px-11 outline-none focus:ring-2 focus:ring-indigo-500 font-bold text-[16px] transition-all ${bgInput}`} />
               </div>
             )}
             
             {authMethod === 'phone' ? (
               <div className="relative group">
                 <Phone size={18} className={`absolute right-4 top-3.5 transition-colors ${isDarkMode ? 'text-slate-500 group-focus-within:text-indigo-400' : 'text-slate-400 group-focus-within:text-indigo-600'}`} />
-                <input type="tel" required placeholder="رقم الموبايل" value={authForm.phone} onChange={e => setAuthForm({...authForm, phone: e.target.value})} className={`w-full border rounded-xl py-3 px-11 outline-none focus:ring-2 focus:ring-indigo-500 font-medium text-sm text-left transition-all ${bgInput}`} dir="ltr" />
+                <input type="tel" required placeholder="رقم الموبايل" value={authForm.identifier} onChange={e => setAuthForm({...authForm, identifier: e.target.value})} className={`w-full border rounded-xl py-3 px-11 outline-none focus:ring-2 focus:ring-indigo-500 font-bold text-[16px] text-left transition-all ${bgInput}`} dir="ltr" />
               </div>
             ) : (
               <div className="relative group">
                 <Mail size={18} className={`absolute right-4 top-3.5 transition-colors ${isDarkMode ? 'text-slate-500 group-focus-within:text-indigo-400' : 'text-slate-400 group-focus-within:text-indigo-600'}`} />
-                <input type="email" required placeholder="البريد الإلكتروني" value={authForm.email} onChange={e => setAuthForm({...authForm, email: e.target.value})} className={`w-full border rounded-xl py-3 px-11 outline-none focus:ring-2 focus:ring-indigo-500 font-medium text-sm text-left transition-all ${bgInput}`} dir="ltr" />
+                <input type="email" required placeholder="البريد الإلكتروني" value={authForm.identifier} onChange={e => setAuthForm({...authForm, identifier: e.target.value})} className={`w-full border rounded-xl py-3 px-11 outline-none focus:ring-2 focus:ring-indigo-500 font-bold text-[16px] text-left transition-all ${bgInput}`} dir="ltr" />
               </div>
             )}
 
             <div className="relative group">
               <Lock size={18} className={`absolute right-4 top-3.5 transition-colors ${isDarkMode ? 'text-slate-500 group-focus-within:text-indigo-400' : 'text-slate-400 group-focus-within:text-indigo-600'}`} />
-              <input type="password" required placeholder="كلمة المرور" value={authForm.password} onChange={e => setAuthForm({...authForm, password: e.target.value})} className={`w-full border rounded-xl py-3 px-11 outline-none focus:ring-2 focus:ring-indigo-500 font-medium text-sm text-left transition-all ${bgInput}`} dir="ltr" />
+              <input type="password" required placeholder="كلمة المرور" value={authForm.password} onChange={e => setAuthForm({...authForm, password: e.target.value})} className={`w-full border rounded-xl py-3 px-11 outline-none focus:ring-2 focus:ring-indigo-500 font-bold text-[16px] text-left transition-all ${bgInput}`} dir="ltr" />
             </div>
 
-            <button type="submit" disabled={authLoading} className="w-full bg-gradient-to-r from-indigo-600 to-blue-600 text-white py-3.5 rounded-xl font-bold hover:from-indigo-700 hover:to-blue-700 shadow-lg shadow-indigo-500/30 flex justify-center items-center gap-2 transition-all transform active:scale-[0.98]">
+            <button type="submit" disabled={authLoading} className="w-full bg-gradient-to-r from-indigo-600 to-blue-600 text-white py-3 rounded-xl font-bold hover:from-indigo-700 hover:to-blue-700 shadow-lg shadow-indigo-500/30 flex justify-center items-center gap-2 transition-all transform active:scale-[0.98]">
               {authLoading ? <Loader2 className="animate-spin" size={20}/> : (isLoginMode ? 'تسجيل الدخول' : 'إنشاء حساب جديد')}
             </button>
           </form>
           
-          <div className="mt-6 text-center space-y-5">
+          <div className="mt-5 text-center space-y-4">
             <button onClick={() => setIsLoginMode(!isLoginMode)} className={`font-bold text-xs hover:underline block w-full transition-all ${isDarkMode ? 'text-indigo-400' : 'text-indigo-600'}`}>
               {isLoginMode ? 'ليس لديك حساب؟ أنشئ حساباً الآن' : 'لديك حساب بالفعل؟ سجل دخولك'}
             </button>
             <div className={`flex items-center justify-center gap-3 text-sm ${isDarkMode ? 'text-slate-400' : 'text-slate-500'}`}>
               <span className={`w-10 h-px ${isDarkMode ? 'bg-slate-700' : 'bg-slate-200'}`}></span> أو <span className={`w-10 h-px ${isDarkMode ? 'bg-slate-700' : 'bg-slate-200'}`}></span>
             </div>
-            <button onClick={handleGuestLogin} disabled={authLoading} className={`w-full py-3 rounded-xl text-sm font-bold transition-all border ${isDarkMode ? 'bg-slate-800 border-slate-700 hover:bg-slate-700 text-slate-200' : 'bg-white border-slate-200 hover:bg-slate-50 text-slate-700'}`}>
+            <button onClick={handleGuestLogin} disabled={authLoading} className={`w-full py-2.5 rounded-xl text-sm font-bold transition-all border ${isDarkMode ? 'bg-slate-800 border-slate-700 hover:bg-slate-700 text-slate-200' : 'bg-white border-slate-200 hover:bg-slate-50 text-slate-700'}`}>
               تصفح التطبيق كزائر 👀
             </button>
           </div>
@@ -648,7 +628,7 @@ export default function App() {
   }
 
   return (
-    <div dir="rtl" className={`min-h-screen flex flex-col relative transition-colors duration-300 ${bgMain}`}>
+    <div dir="rtl" className={`min-h-screen flex flex-col relative transition-colors duration-300 ${bgMain} overflow-x-hidden w-full`}>
       
       {/* Alert Modal */}
       {alertMsg && (
@@ -717,7 +697,7 @@ export default function App() {
                   value={broadcastMsg} 
                   onChange={(e) => setBroadcastMsg(e.target.value)} 
                   placeholder="اكتب الإشعار هنا وسيصل لجميع المسجلين كرسالة إدارية..." 
-                  className={`w-full border p-3.5 rounded-xl resize-none font-medium outline-none focus:ring-2 focus:ring-indigo-500 transition-colors mb-3 ${bgInput}`}
+                  className={`w-full border p-3.5 rounded-xl resize-none font-bold text-[16px] outline-none focus:ring-2 focus:ring-indigo-500 transition-colors mb-3 ${bgInput}`}
                   rows="3"
                 ></textarea>
                 <button 
@@ -732,7 +712,7 @@ export default function App() {
               <div className={`p-5 rounded-2xl border ${bgCard}`}>
                 <h3 className="font-bold text-lg mb-4 flex items-center gap-2"><Megaphone size={18} className="text-indigo-500"/> إدارة شريط الإعلانات</h3>
                 <div className="flex gap-2 mb-4">
-                  <input type="text" value={newAdText} onChange={(e)=>setNewAdText(e.target.value)} placeholder="اكتب إعلان جديد..." className={`flex-1 border py-2 px-3 rounded-xl text-sm outline-none focus:ring-2 focus:ring-indigo-500 ${bgInput}`} />
+                  <input type="text" value={newAdText} onChange={(e)=>setNewAdText(e.target.value)} placeholder="اكتب إعلان جديد..." className={`flex-1 border py-2 px-3 rounded-xl font-bold text-[16px] outline-none focus:ring-2 focus:ring-indigo-500 ${bgInput}`} />
                   <button onClick={adminAddAnnouncement} className="bg-indigo-600 text-white px-4 py-2 rounded-xl font-bold text-sm hover:bg-indigo-700">إضافة</button>
                 </div>
                 <div className="space-y-2">
@@ -866,7 +846,7 @@ export default function App() {
                 <div className="w-10 h-10 rounded-full bg-indigo-100 flex items-center justify-center text-indigo-600 font-bold">{(userData?.name || 'م').charAt(0)}</div>
                 <div>
                   <p className="font-bold text-sm">{userData?.name || 'زائر'}</p>
-                  <p className="text-xs text-slate-500">{userData?.phone || 'لا يوجد رقم'}</p>
+                  <p className="text-xs text-slate-500">{userData?.phone || userData?.email || 'لا يوجد معلومات'}</p>
                 </div>
               </div>
               <button onClick={handleLogout} className={`w-full py-3.5 rounded-xl font-bold flex justify-center items-center gap-2 transition-colors ${isDarkMode ? 'bg-rose-500/10 text-rose-400 hover:bg-rose-500/20' : 'bg-rose-50 text-rose-600 hover:bg-rose-100'}`}>
@@ -932,7 +912,7 @@ export default function App() {
       )}
 
       <header className={`sticky top-0 z-40 transition-all duration-300 border-b backdrop-blur-md ${isDarkMode ? 'bg-slate-900/90 border-slate-800 shadow-md' : 'bg-white/90 border-slate-200 shadow-sm'}`}>
-        <div className="max-w-7xl mx-auto px-4 h-16 flex justify-between items-center">
+        <div className="max-w-7xl mx-auto px-4 h-16 flex justify-between items-center w-full">
           <div className="flex items-center gap-2">
             <div className="bg-gradient-to-br from-indigo-600 to-blue-600 text-white p-2 rounded-xl shadow-md transform rotate-3"><Car size={22} className="-rotate-3"/></div>
             <div>
@@ -977,9 +957,10 @@ export default function App() {
         ))}
       </div>
 
-      <main className="flex-1 max-w-7xl mx-auto px-4 py-4 w-full pb-24 md:pb-4">
+      <main className="flex-1 max-w-7xl mx-auto px-4 py-4 w-full pb-24 md:pb-4 overflow-hidden">
         
-        <div className="relative bg-gradient-to-br from-indigo-700 via-blue-800 to-indigo-950 rounded-[1.5rem] p-5 sm:p-6 mb-6 text-white shadow-lg overflow-hidden max-w-2xl mx-auto border border-white/10 min-h-[180px] flex items-center justify-center">
+        {/* البانر المدمج المضغوط  */}
+        <div className="relative bg-gradient-to-br from-indigo-700 via-blue-800 to-indigo-950 rounded-[1.5rem] p-4 sm:p-6 mb-6 text-white shadow-lg overflow-hidden max-w-2xl mx-auto border border-white/10">
           {bannerImages.length > 0 ? (
             bannerImages.map((img, idx) => (
               <img key={idx} src={img} alt="Banner" className={`absolute inset-0 w-full h-full object-cover transition-opacity duration-1000 ${idx === currentBannerIndex ? 'opacity-100 z-0' : 'opacity-0 -z-10'}`} />
@@ -995,16 +976,16 @@ export default function App() {
           
           <div className="relative z-10 w-full">
             <h2 className="text-xl sm:text-2xl font-black mb-1 tracking-tight drop-shadow-md text-center">إلى أين تتجه اليوم؟</h2>
-            <p className="text-indigo-100 text-[10px] sm:text-xs mb-4 font-medium drop-shadow-sm text-center">ابحث، تواصل، وسافر بأمان وتكلفة أقل.</p>
+            <p className="text-indigo-100 text-[10px] sm:text-xs mb-3 font-medium drop-shadow-sm text-center">ابحث، تواصل، وسافر بأمان وتكلفة أقل.</p>
             
-            <div className="space-y-2 mb-4">
+            <div className="space-y-1.5 mb-3">
               <div className="flex items-center bg-white/90 backdrop-blur-sm rounded-xl px-3 py-2 shadow-inner">
                 <MapPin className="text-indigo-600 ml-2 shrink-0" size={16} />
-                <input type="text" placeholder="من (القاهرة)" value={searchFrom} onChange={(e) => setSearchFrom(e.target.value)} className="bg-transparent border-none w-full text-slate-800 outline-none text-xs font-bold placeholder-slate-500" />
+                <input type="text" placeholder="من (القاهرة)" value={searchFrom} onChange={(e) => setSearchFrom(e.target.value)} className="bg-transparent border-none w-full text-slate-800 outline-none text-[16px] font-bold placeholder-slate-500" />
               </div>
               <div className="flex items-center bg-white/90 backdrop-blur-sm rounded-xl px-3 py-2 shadow-inner">
                 <Navigation className="text-rose-600 ml-2 shrink-0" size={16} />
-                <input type="text" placeholder="إلى (الإسكندرية)" value={searchTo} onChange={(e) => setSearchTo(e.target.value)} className="bg-transparent border-none w-full text-slate-800 outline-none text-xs font-bold placeholder-slate-500" />
+                <input type="text" placeholder="إلى (الإسكندرية)" value={searchTo} onChange={(e) => setSearchTo(e.target.value)} className="bg-transparent border-none w-full text-slate-800 outline-none text-[16px] font-bold placeholder-slate-500" />
               </div>
             </div>
 
@@ -1016,26 +997,26 @@ export default function App() {
           </div>
         </div>
 
-        <div className={`flex gap-1 p-1 mb-6 max-w-xl mx-auto rounded-xl shadow-inner ${isDarkMode ? 'bg-slate-800' : 'bg-slate-100'}`}>
+        <div className={`flex flex-wrap sm:flex-nowrap gap-2 p-1.5 mb-6 max-w-xl mx-auto rounded-2xl shadow-inner ${isDarkMode ? 'bg-slate-800' : 'bg-slate-100'}`}>
           <button 
             onClick={() => setFilterType('all')} 
-            className={`flex-1 py-2 text-[10px] sm:text-xs font-bold rounded-lg transition-all shadow-sm ${filterType === 'all' ? (isDarkMode ? 'bg-slate-200 text-slate-900' : 'bg-slate-800 text-white') : (isDarkMode ? 'bg-slate-800 text-slate-400' : 'bg-white text-slate-500 hover:bg-slate-50')}`}>
+            className={`flex-1 py-2 text-xs font-bold rounded-xl transition-all shadow-sm ${filterType === 'all' ? (isDarkMode ? 'bg-slate-200 text-slate-900' : 'bg-slate-800 text-white') : (isDarkMode ? 'bg-slate-800 text-slate-400' : 'bg-white text-slate-500 hover:bg-slate-50')}`}>
             الكل
           </button>
           <button 
             onClick={() => setFilterType('offer')} 
-            className={`flex-1 py-2 text-[10px] sm:text-xs font-bold rounded-lg transition-all shadow-sm ${filterType === 'offer' ? 'bg-emerald-600 text-white' : (isDarkMode ? 'bg-slate-800 text-slate-400' : 'bg-white text-slate-500 hover:bg-slate-50')}`}>
+            className={`flex-1 py-2 text-xs font-bold rounded-xl transition-all shadow-sm ${filterType === 'offer' ? 'bg-emerald-600 text-white' : (isDarkMode ? 'bg-slate-800 text-slate-400' : 'bg-white text-slate-500 hover:bg-slate-50')}`}>
             توصيلات 🚗
           </button>
           <button 
             onClick={() => setFilterType('request')} 
-            className={`flex-1 py-2 text-[10px] sm:text-xs font-bold rounded-lg transition-all shadow-sm ${filterType === 'request' ? 'bg-orange-500 text-white' : (isDarkMode ? 'bg-slate-800 text-slate-400' : 'bg-white text-slate-500 hover:bg-slate-50')}`}>
+            className={`flex-1 py-2 text-xs font-bold rounded-xl transition-all shadow-sm ${filterType === 'request' ? 'bg-orange-500 text-white' : (isDarkMode ? 'bg-slate-800 text-slate-400' : 'bg-white text-slate-500 hover:bg-slate-50')}`}>
             ركاب 🙋‍♂️
           </button>
           <button 
             onClick={() => setFilterType('delivery')} 
-            className={`flex-1 py-2 text-[10px] sm:text-xs font-bold rounded-lg transition-all shadow-sm ${filterType === 'delivery' ? 'bg-purple-600 text-white' : (isDarkMode ? 'bg-slate-800 text-slate-400' : 'bg-white text-slate-500 hover:bg-slate-50')}`}>
-            شحن ودليفري 📦
+            className={`flex-1 py-2 text-xs font-bold rounded-xl transition-all shadow-sm ${filterType === 'delivery' ? 'bg-purple-600 text-white' : (isDarkMode ? 'bg-slate-800 text-slate-400' : 'bg-white text-slate-500 hover:bg-slate-50')}`}>
+            دليفري 📦
           </button>
         </div>
 
@@ -1046,125 +1027,124 @@ export default function App() {
             <p className="text-slate-500 text-xs">جرب تغيير كلمات البحث أو كن أول من ينشر رحلة في هذا المسار!</p>
           </div>
         ) : (
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
             {filteredTrips.map(trip => {
               const isOwner = user?.uid === trip.userId && !isGuest;
               const isCompleted = trip.status === 'completed';
               const isInProgress = trip.status === 'in_progress';
               const isClosedForPublic = (isInProgress || isCompleted) && !isOwner;
-              // يتم التأكد هنا أن المستخدم لديه محادثة لهذه الرحلة ليتم اعتباره شريكاً فيها
               const isPassenger = myInbox.some(chat => chat.tripId === trip.id);
               const canDelete = isOwner || isAdmin;
               
               return (
-              <div key={trip.id} className={`rounded-[20px] p-5 shadow-sm hover:shadow-md hover:-translate-y-0.5 border relative flex flex-col transition-all duration-300 ${bgCard} ${isCompleted ? 'opacity-75 grayscale-[20%]' : ''}`}>
+              <div key={trip.id} className={`rounded-[24px] p-6 shadow-sm hover:shadow-lg hover:-translate-y-1 border relative flex flex-col transition-all duration-300 ${bgCard} ${isCompleted ? 'opacity-75 grayscale-[20%]' : ''}`}>
                 
                 {canDelete && !trip.isDummy && (
-                  <button onClick={() => setDeleteConfirmId(trip.id)} className="absolute top-4 left-4 p-1.5 bg-rose-50 text-rose-600 rounded-full hover:bg-rose-100 z-10 transition-colors">
-                    <Trash2 size={14} />
+                  <button onClick={() => setDeleteConfirmId(trip.id)} className="absolute top-4 left-4 p-2 bg-rose-50 text-rose-600 rounded-full hover:bg-rose-100 z-10 transition-colors">
+                    <Trash2 size={16} />
                   </button>
                 )}
 
-                <div className="flex items-start justify-between mb-4">
+                <div className="flex items-start justify-between mb-5">
                   <div className="flex items-center gap-3">
                     {trip.userPhoto ? (
-                      <img src={trip.userPhoto} className="w-10 h-10 rounded-full object-cover border border-slate-200 shadow-sm shrink-0" alt="user" />
+                      <img src={trip.userPhoto} className="w-12 h-12 rounded-full object-cover border border-slate-200 shadow-sm shrink-0" alt="user" />
                     ) : (
-                      <div className={`w-10 h-10 rounded-full flex items-center justify-center border shadow-sm shrink-0 ${isDarkMode ? 'bg-slate-700 border-slate-600' : 'bg-slate-100 border-slate-200'}`}>
-                        <User size={20} className="text-slate-400" />
+                      <div className={`w-12 h-12 rounded-full flex items-center justify-center border shadow-sm shrink-0 ${isDarkMode ? 'bg-slate-700 border-slate-600' : 'bg-slate-100 border-slate-200'}`}>
+                        <User size={24} className="text-slate-400" />
                       </div>
                     )}
                     <div>
-                      <h3 className={`font-bold text-xs flex items-center gap-1 ${isDarkMode ? 'text-white' : 'text-slate-800'}`}>
-                        {trip.userName || 'مستخدم'} {trip.verified && <ShieldCheck size={12} className="text-blue-500" />}
+                      <h3 className={`font-bold text-sm flex items-center gap-1 ${isDarkMode ? 'text-white' : 'text-slate-800'}`}>
+                        {trip.userName || 'مستخدم'} {trip.verified && <ShieldCheck size={14} className="text-blue-500" />}
                       </h3>
                       
                       <div className="mt-0.5">
                         {renderStars(trip.rating, trip.totalRatings)}
                       </div>
 
-                      <span className={`inline-block mt-1 text-[9px] font-bold px-1.5 py-0.5 rounded-md ${trip.type === 'offer' ? (isDarkMode ? 'bg-emerald-900/40 text-emerald-400' : 'bg-emerald-100 text-emerald-800') : trip.type === 'delivery' ? (isDarkMode ? 'bg-purple-900/40 text-purple-400' : 'bg-purple-100 text-purple-800') : (isDarkMode ? 'bg-orange-900/40 text-orange-400' : 'bg-orange-100 text-orange-800')}`}>
+                      <span className={`inline-block mt-1 text-[10px] font-bold px-2 py-0.5 rounded-md ${trip.type === 'offer' ? (isDarkMode ? 'bg-emerald-900/40 text-emerald-400' : 'bg-emerald-100 text-emerald-800') : trip.type === 'delivery' ? (isDarkMode ? 'bg-purple-900/40 text-purple-400' : 'bg-purple-100 text-purple-800') : (isDarkMode ? 'bg-orange-900/40 text-orange-400' : 'bg-orange-100 text-orange-800')}`}>
                         {trip.type === 'offer' ? 'سائق (يعرض توصيلة)' : trip.type === 'delivery' ? 'دليفري (شحن وتوصيل)' : 'راكب (يطلب توصيلة)'}
                       </span>
                     </div>
                   </div>
                   
-                  <div className={`text-[9px] font-bold px-2 py-1 rounded-lg border ${isCompleted ? (isDarkMode ? 'bg-slate-700 text-slate-300 border-slate-600' : 'bg-slate-100 text-slate-600 border-slate-200') : isInProgress ? (isDarkMode ? 'bg-amber-900/30 text-amber-400 border-amber-800 animate-pulse' : 'bg-amber-50 text-amber-600 border-amber-200 animate-pulse') : (isDarkMode ? 'bg-indigo-900/30 text-indigo-400 border-indigo-800' : 'bg-indigo-50 text-indigo-600 border-indigo-100')}`}>
+                  <div className={`text-[10px] font-bold px-2.5 py-1 rounded-lg border ${isCompleted ? (isDarkMode ? 'bg-slate-700 text-slate-300 border-slate-600' : 'bg-slate-100 text-slate-600 border-slate-200') : isInProgress ? (isDarkMode ? 'bg-amber-900/30 text-amber-400 border-amber-800 animate-pulse' : 'bg-amber-50 text-amber-600 border-amber-200 animate-pulse') : (isDarkMode ? 'bg-indigo-900/30 text-indigo-400 border-indigo-800' : 'bg-indigo-50 text-indigo-600 border-indigo-100')}`}>
                     {isCompleted ? 'مكتملة' : isInProgress ? 'في الطريق' : 'متاحة'}
                   </div>
                 </div>
 
-                <div className={`flex items-center gap-4 text-[11px] font-bold px-3 py-2 rounded-lg mb-4 ${isDarkMode ? 'bg-slate-700/40 text-slate-300' : 'bg-slate-50 text-slate-600'}`}>
-                  <div className="flex items-center gap-1.5"><Calendar size={13} className="text-indigo-500"/> {trip.date || 'اليوم'}</div>
-                  <div className="flex items-center gap-1.5"><Clock size={13} className="text-amber-500"/> {trip.time || 'الآن'}</div>
+                <div className={`flex items-center gap-5 text-xs font-bold px-4 py-2.5 rounded-xl mb-5 ${isDarkMode ? 'bg-slate-700/40 text-slate-300' : 'bg-slate-50 text-slate-600'}`}>
+                  <div className="flex items-center gap-1.5"><Calendar size={15} className="text-indigo-500"/> {trip.date || 'اليوم'}</div>
+                  <div className="flex items-center gap-1.5"><Clock size={15} className="text-amber-500"/> {trip.time || 'الآن'}</div>
                 </div>
                 
-                <div className="relative mb-5 flex-1">
-                  <div className={`absolute right-[6px] top-1.5 bottom-1.5 w-0.5 ${isDarkMode ? 'bg-slate-600' : 'bg-slate-200'}`}></div>
+                <div className="relative mb-6 flex-1">
+                  <div className={`absolute right-[7px] top-2 bottom-2 w-0.5 ${isDarkMode ? 'bg-slate-600' : 'bg-slate-200'}`}></div>
                   
-                  <div className="flex items-start gap-3 mb-3 relative z-10">
-                    <div className={`w-3.5 h-3.5 rounded-full bg-indigo-500 border-2 mt-0.5 shrink-0 shadow-sm ${isDarkMode ? 'border-slate-800' : 'border-white'}`}></div>
-                    <p className={`font-bold text-xs leading-snug ${isDarkMode ? 'text-slate-100' : 'text-slate-800'}`}>{trip.from}</p>
+                  <div className="flex items-start gap-4 mb-4 relative z-10">
+                    <div className={`w-4 h-4 rounded-full bg-indigo-500 border-[3px] mt-0.5 shrink-0 shadow-sm ${isDarkMode ? 'border-slate-800' : 'border-white'}`}></div>
+                    <p className={`font-bold text-sm leading-snug ${isDarkMode ? 'text-slate-100' : 'text-slate-800'}`}>{trip.from}</p>
                   </div>
                   
-                  <div className="flex items-start gap-3 relative z-10">
-                    <div className={`w-3.5 h-3.5 rounded-full bg-rose-500 border-2 mt-0.5 shrink-0 shadow-sm ${isDarkMode ? 'border-slate-800' : 'border-white'}`}></div>
-                    <p className={`font-bold text-xs leading-snug ${isDarkMode ? 'text-slate-100' : 'text-slate-800'}`}>{trip.to}</p>
+                  <div className="flex items-start gap-4 relative z-10">
+                    <div className={`w-4 h-4 rounded-full bg-rose-500 border-[3px] mt-0.5 shrink-0 shadow-sm ${isDarkMode ? 'border-slate-800' : 'border-white'}`}></div>
+                    <p className={`font-bold text-sm leading-snug ${isDarkMode ? 'text-slate-100' : 'text-slate-800'}`}>{trip.to}</p>
                   </div>
                 </div>
                 
-                <div className="flex gap-2 mb-4">
-                  <div className={`flex-1 flex flex-col justify-center items-center py-2 rounded-lg border ${isDarkMode ? 'bg-slate-700/30 border-slate-600' : 'bg-slate-50 border-slate-100'}`}>
-                     <span className="text-[9px] text-slate-400 mb-0.5">{trip.type === 'delivery' ? 'عدد الطرود' : 'العدد المطلوب'}</span>
-                     <span className={`text-xs font-extrabold flex items-center gap-1 ${isDarkMode ? 'text-slate-200' : 'text-slate-700'}`}>
-                       {trip.type === 'delivery' ? <Package size={13} className="text-purple-400"/> : <User size={13} className="text-indigo-400"/>} 
+                <div className="flex gap-3 mb-5">
+                  <div className={`flex-1 flex flex-col justify-center items-center py-2.5 rounded-xl border ${isDarkMode ? 'bg-slate-700/30 border-slate-600' : 'bg-slate-50 border-slate-100'}`}>
+                     <span className="text-[10px] text-slate-400 mb-1">{trip.type === 'delivery' ? 'عدد الطرود' : 'العدد المطلوب'}</span>
+                     <span className={`text-sm font-extrabold flex items-center gap-1.5 ${isDarkMode ? 'text-slate-200' : 'text-slate-700'}`}>
+                       {trip.type === 'delivery' ? <Package size={15} className="text-purple-400"/> : <User size={15} className="text-indigo-400"/>} 
                        {trip.seats}
                      </span>
                   </div>
                   {trip.cost && !trip.isBot && (
-                    <div className={`flex-1 flex flex-col justify-center items-center py-2 rounded-lg border ${isDarkMode ? 'bg-slate-700/30 border-slate-600' : 'bg-slate-50 border-slate-100'}`}>
-                      <span className="text-[9px] text-slate-400 mb-0.5">{trip.type === 'delivery' ? 'أجرة التوصيل' : 'المساهمة'}</span>
-                      <span className={`text-xs font-extrabold flex items-center gap-1 ${isDarkMode ? 'text-emerald-400' : 'text-emerald-600'}`}><Wallet size={13}/> {trip.cost} ج</span>
+                    <div className={`flex-1 flex flex-col justify-center items-center py-2.5 rounded-xl border ${isDarkMode ? 'bg-slate-700/30 border-slate-600' : 'bg-slate-50 border-slate-100'}`}>
+                      <span className="text-[10px] text-slate-400 mb-1">{trip.type === 'delivery' ? 'أجرة التوصيل' : 'المساهمة'}</span>
+                      <span className={`text-sm font-extrabold flex items-center gap-1.5 ${isDarkMode ? 'text-emerald-400' : 'text-emerald-600'}`}><Wallet size={15}/> {trip.cost} ج</span>
                     </div>
                   )}
                 </div>
 
                 {trip.notes && (
-                  <p className={`text-[10px] font-medium p-2 rounded-lg mb-4 italic ${isDarkMode ? 'bg-slate-700/30 text-slate-300' : 'bg-slate-50 text-slate-600'}`}>
+                  <p className={`text-xs font-medium p-3 rounded-xl mb-5 italic ${isDarkMode ? 'bg-slate-700/30 text-slate-300' : 'bg-slate-50 text-slate-600'}`}>
                     "{trip.notes}"
                   </p>
                 )}
                 
                 <div className="mt-auto">
                   {isOwner ? (
-                    <div className={`w-full py-2.5 rounded-lg font-bold text-center text-xs border border-dashed ${isDarkMode ? 'bg-slate-700/50 text-slate-400 border-slate-600' : 'bg-slate-50 text-slate-500 border-slate-200'}`}>
+                    <div className={`w-full py-3.5 rounded-xl font-bold text-center text-sm border border-dashed ${isDarkMode ? 'bg-slate-700/50 text-slate-400 border-slate-600' : 'bg-slate-50 text-slate-500 border-slate-200'}`}>
                       {isCompleted ? 'رحلتك (مكتملة)' : isInProgress ? 'رحلتك (في الطريق)' : 'هذه رحلتك'}
                     </div>
                   ) : isClosedForPublic ? (
                     isCompleted ? (
                       isPassenger && !trip.isBot ? (
-                        <div className={`p-2.5 rounded-lg text-center border ${isDarkMode ? 'bg-slate-700 border-slate-600' : 'bg-slate-50 border-slate-200'}`}>
-                          <p className="text-[10px] font-bold mb-1.5">تقييمك للرحلة:</p>
+                        <div className={`p-3.5 rounded-xl text-center border ${isDarkMode ? 'bg-slate-700 border-slate-600' : 'bg-slate-50 border-slate-200'}`}>
+                          <p className="text-xs font-bold mb-2">تقييمك للرحلة:</p>
                           <div className="flex justify-center gap-1">
                             {[1,2,3,4,5].map(star => (
-                              <Star key={star} onClick={() => handleRateTrip(trip.id, star)} className={`cursor-pointer transition-colors ${isDarkMode ? 'text-slate-500 hover:text-amber-400' : 'text-slate-300 hover:text-amber-500'}`} size={16} fill="currentColor" />
+                              <Star key={star} onClick={() => handleRateTrip(trip.id, star)} className={`cursor-pointer transition-colors ${isDarkMode ? 'text-slate-500 hover:text-amber-400' : 'text-slate-300 hover:text-amber-500'}`} size={20} fill="currentColor" />
                             ))}
                           </div>
                         </div>
                       ) : (
-                        <div className={`w-full py-2.5 rounded-lg font-bold text-center text-xs border ${isDarkMode ? 'bg-slate-700 text-slate-400 border-slate-600' : 'bg-slate-100 text-slate-500 border-slate-200'}`}>
+                        <div className={`w-full py-3.5 rounded-xl font-bold text-center text-sm border ${isDarkMode ? 'bg-slate-700 text-slate-400 border-slate-600' : 'bg-slate-100 text-slate-500 border-slate-200'}`}>
                           الرحلة مكتملة ✅
                         </div>
                       )
                     ) : (
-                      <div className={`w-full py-2.5 rounded-lg font-bold text-center text-xs border ${isDarkMode ? 'bg-amber-900/20 border-amber-800 text-amber-400' : 'bg-amber-50 border-amber-200 text-amber-700'}`}>
+                      <div className={`w-full py-3.5 rounded-xl font-bold text-center text-sm border ${isDarkMode ? 'bg-amber-900/20 border-amber-800 text-amber-400' : 'bg-amber-50 border-amber-200 text-amber-700'}`}>
                         الرحلة جارية الآن 🚗
                       </div>
                     )
                   ) : (
                     <div className="flex gap-2">
-                      <button onClick={() => openChatFromTrip(trip)} className={`flex-1 py-2.5 rounded-lg font-bold flex justify-center items-center gap-1.5 text-xs text-white transition-colors shadow-md ${isDarkMode ? 'bg-indigo-600 hover:bg-indigo-700' : 'bg-slate-900 hover:bg-slate-800'}`}>
-                        <MessageCircle size={14} /> رسالة
+                      <button onClick={() => openChatFromTrip(trip)} className={`flex-1 py-3.5 rounded-xl font-bold flex justify-center items-center gap-2 text-sm text-white transition-colors shadow-md ${isDarkMode ? 'bg-indigo-600 hover:bg-indigo-700' : 'bg-slate-900 hover:bg-slate-800'}`}>
+                        <MessageCircle size={18} /> رسالة
                       </button>
                       
                       <button onClick={() => requireAuth(() => {
@@ -1175,8 +1155,8 @@ export default function App() {
                         } else {
                           window.location.href = `tel:${trip.userPhone}`;
                         }
-                      })} className="flex-1 bg-emerald-500 text-white py-2.5 rounded-lg font-bold flex justify-center items-center gap-1.5 text-xs hover:bg-emerald-600 transition-colors shadow-md shadow-emerald-500/20">
-                        <Phone size={14} /> اتصال
+                      })} className="flex-1 bg-emerald-500 text-white py-3.5 rounded-xl font-bold flex justify-center items-center gap-2 text-sm hover:bg-emerald-600 transition-colors shadow-md shadow-emerald-500/20">
+                        <Phone size={18} /> اتصال
                       </button>
                     </div>
                   )}
@@ -1189,8 +1169,8 @@ export default function App() {
 
       <button 
         onClick={() => requireAuth(() => setShowAddModal(true))} 
-        className="md:hidden fixed bottom-6 left-5 w-12 h-12 bg-indigo-600 text-white rounded-full flex items-center justify-center shadow-xl shadow-indigo-500/40 z-40 transform active:scale-95 transition-transform">
-        <Navigation size={20} />
+        className="md:hidden fixed bottom-6 left-5 w-14 h-14 bg-indigo-600 text-white rounded-full flex items-center justify-center shadow-xl shadow-indigo-500/40 z-40 transform active:scale-95 transition-transform">
+        <Navigation size={24} />
       </button>
 
       {showInbox && !isGuest && (
@@ -1266,7 +1246,7 @@ export default function App() {
                 <div className="text-center text-[10px] font-bold text-slate-400">هذه رسالة إدارية رسمية للمعلومية فقط.</div>
               ) : (
                 <form onSubmit={handleSendMessage} className="flex gap-2 items-center">
-                  <input type="text" value={newMessage} onChange={(e) => setNewMessage(e.target.value)} placeholder="اكتب رسالة..." className={`flex-1 rounded-xl px-3 py-2.5 text-xs outline-none focus:ring-2 focus:ring-indigo-500 transition-colors ${bgInput}`} />
+                  <input type="text" value={newMessage} onChange={(e) => setNewMessage(e.target.value)} placeholder="اكتب رسالة..." className={`flex-1 rounded-xl px-3 py-2.5 text-[16px] outline-none focus:ring-2 focus:ring-indigo-500 transition-colors ${bgInput}`} />
                   <button type="submit" disabled={!newMessage.trim()} className="bg-indigo-600 text-white w-10 h-10 flex items-center justify-center rounded-xl hover:bg-indigo-700 disabled:opacity-50 disabled:bg-slate-400 transition-all shadow-md"><Send size={16} className="rtl:rotate-180" /></button>
                 </form>
               )}
@@ -1330,31 +1310,31 @@ export default function App() {
                   <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                     <div className="relative">
                       <MapPin size={16} className="absolute right-3 top-3 text-slate-400" />
-                      <input type="text" required value={newTrip.from} onChange={(e) => setNewTrip({...newTrip, from: e.target.value})} placeholder={newTrip.type === 'delivery' ? "مكان استلام الطرد" : "نقطة التحرك"} className={`w-full border py-2.5 pr-9 pl-3 rounded-xl text-xs font-bold outline-none focus:ring-2 focus:ring-indigo-500 transition-colors ${bgInput}`} />
+                      <input type="text" required value={newTrip.from} onChange={(e) => setNewTrip({...newTrip, from: e.target.value})} placeholder={newTrip.type === 'delivery' ? "مكان استلام الطرد" : "نقطة التحرك"} className={`w-full border py-2.5 pr-9 pl-3 rounded-xl font-bold text-[16px] outline-none focus:ring-2 focus:ring-indigo-500 transition-colors ${bgInput}`} />
                     </div>
                     <div className="relative">
                       <Navigation size={16} className="absolute right-3 top-3 text-slate-400" />
-                      <input type="text" required value={newTrip.to} onChange={(e) => setNewTrip({...newTrip, to: e.target.value})} placeholder={newTrip.type === 'delivery' ? "مكان تسليم الطرد" : "نقطة الوصول"} className={`w-full border py-2.5 pr-9 pl-3 rounded-xl text-xs font-bold outline-none focus:ring-2 focus:ring-indigo-500 transition-colors ${bgInput}`} />
+                      <input type="text" required value={newTrip.to} onChange={(e) => setNewTrip({...newTrip, to: e.target.value})} placeholder={newTrip.type === 'delivery' ? "مكان تسليم الطرد" : "نقطة الوصول"} className={`w-full border py-2.5 pr-9 pl-3 rounded-xl font-bold text-[16px] outline-none focus:ring-2 focus:ring-indigo-500 transition-colors ${bgInput}`} />
                     </div>
                   </div>
 
                   <div className="grid grid-cols-2 gap-3">
-                    <input type="date" required value={newTrip.date} onChange={(e) => setNewTrip({...newTrip, date: e.target.value})} className={`w-full border p-2.5 rounded-xl text-xs font-bold outline-none focus:ring-2 focus:ring-indigo-500 transition-colors ${bgInput}`} />
-                    <input type="time" required value={newTrip.time} onChange={(e) => setNewTrip({...newTrip, time: e.target.value})} className={`w-full border p-2.5 rounded-xl text-xs font-bold outline-none focus:ring-2 focus:ring-indigo-500 transition-colors ${bgInput}`} />
+                    <input type="date" required value={newTrip.date} onChange={(e) => setNewTrip({...newTrip, date: e.target.value})} className={`w-full border p-2.5 rounded-xl font-bold text-[16px] outline-none focus:ring-2 focus:ring-indigo-500 transition-colors ${bgInput}`} />
+                    <input type="time" required value={newTrip.time} onChange={(e) => setNewTrip({...newTrip, time: e.target.value})} className={`w-full border p-2.5 rounded-xl font-bold text-[16px] outline-none focus:ring-2 focus:ring-indigo-500 transition-colors ${bgInput}`} />
                   </div>
 
                   <div className="grid grid-cols-2 gap-3">
                     <div className="relative">
                       <User size={16} className="absolute right-3 top-3 text-slate-400" />
-                      <input type="number" min="1" required placeholder={newTrip.type === 'delivery' ? 'عدد الطرود' : newTrip.type === 'offer' ? 'المقاعد المتاحة' : 'عدد الركاب'} value={newTrip.seats} onChange={(e) => setNewTrip({...newTrip, seats: parseInt(e.target.value)})} className={`w-full border py-2.5 pr-9 pl-3 rounded-xl text-xs font-bold outline-none focus:ring-2 focus:ring-indigo-500 transition-colors ${bgInput}`} />
+                      <input type="number" min="1" required placeholder={newTrip.type === 'delivery' ? 'عدد الطرود' : newTrip.type === 'offer' ? 'المقاعد المتاحة' : 'عدد الركاب'} value={newTrip.seats} onChange={(e) => setNewTrip({...newTrip, seats: parseInt(e.target.value)})} className={`w-full border py-2.5 pr-9 pl-3 rounded-xl font-bold text-[16px] outline-none focus:ring-2 focus:ring-indigo-500 transition-colors ${bgInput}`} />
                     </div>
                     <div className="relative">
                       <Wallet size={16} className="absolute right-3 top-3 text-slate-400" />
-                      <input type="number" min="0" placeholder={newTrip.type === 'delivery' ? "أجرة التوصيل (ج)" : "المساهمة (ج)"} value={newTrip.cost} onChange={(e) => setNewTrip({...newTrip, cost: e.target.value})} className={`w-full border py-2.5 pr-9 pl-3 rounded-xl text-xs font-bold outline-none focus:ring-2 focus:ring-indigo-500 transition-colors ${bgInput}`} />
+                      <input type="number" min="0" placeholder={newTrip.type === 'delivery' ? "أجرة التوصيل (ج)" : "المساهمة (ج)"} value={newTrip.cost} onChange={(e) => setNewTrip({...newTrip, cost: e.target.value})} className={`w-full border py-2.5 pr-9 pl-3 rounded-xl font-bold text-[16px] outline-none focus:ring-2 focus:ring-indigo-500 transition-colors ${bgInput}`} />
                     </div>
                   </div>
                   
-                  <textarea rows="3" value={newTrip.notes} onChange={(e) => setNewTrip({...newTrip, notes: e.target.value})} placeholder={newTrip.type === 'delivery' ? "تفاصيل الطرد (وزنه، نوعه، قابل للكسر...)" : "تفاصيل إضافية (أماكن الوقوف بالتحديد، حجم الحقائب...)"} className={`w-full border p-3 rounded-xl resize-none text-xs font-medium outline-none focus:ring-2 focus:ring-indigo-500 transition-colors leading-relaxed ${bgInput}`}></textarea>
+                  <textarea rows="3" value={newTrip.notes} onChange={(e) => setNewTrip({...newTrip, notes: e.target.value})} placeholder={newTrip.type === 'delivery' ? "تفاصيل الطرد (وزنه، نوعه، قابل للكسر...)" : "تفاصيل إضافية (أماكن الوقوف بالتحديد، حجم الحقائب...)"} className={`w-full border p-3 rounded-xl resize-none font-bold text-[16px] outline-none focus:ring-2 focus:ring-indigo-500 transition-colors leading-relaxed ${bgInput}`}></textarea>
                 </div>
                 
                 <button type="submit" disabled={isSubmitting} className="w-full bg-indigo-600 text-white py-3 rounded-xl font-extrabold text-sm hover:bg-indigo-700 shadow-md shadow-indigo-500/30 flex justify-center items-center gap-2 transition-all transform active:scale-[0.98]">
