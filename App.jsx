@@ -22,7 +22,6 @@ const APP_COLLECTION_NAME = 'khodni_maak_trips';
 const USERS_COLLECTION = 'khodni_maak_users';
 const ADMIN_EMAIL = "bassamwaleed2000@gmail.com".toLowerCase();
 
-// دالة ضغط وتحويل الصور إلى Base64 لتخفيف الحمل على قاعدة البيانات
 const resizeAndConvertToBase64 = (file, maxWidth = 800, maxHeight = 800, quality = 0.7) => {
   return new Promise((resolve, reject) => {
     const reader = new FileReader();
@@ -322,21 +321,15 @@ export default function App() {
     }
   };
 
-  // تعديل جذري لرفع الصورة الشخصية بدون Firebase Auth photoURL
   const handleAvatarUpload = async (e) => {
     const file = e.target.files[0];
     if (!file) return;
     setIsUploading(true);
     triggerToast('جاري معالجة ورفع الصورة...');
     try {
-      // ضغط الصورة إلى Base64
       const base64String = await resizeAndConvertToBase64(file, 400, 400, 0.7);
-      
-      // حفظ الصورة في داتابيز Firestore العادية (USERS_COLLECTION) فقط
-      // لأن Firebase Auth Profile يرفض كود الـ Base64 الطويل
       await updateDoc(doc(db, USERS_COLLECTION, user.uid), { photoURL: base64String });
       setUserData(prev => ({...prev, photoURL: base64String}));
-      
       triggerToast('تم تحديث صورتك بنجاح! 📸');
     } catch (err) {
       console.error(err);
@@ -1003,44 +996,46 @@ export default function App() {
 
       <main className="flex-1 max-w-7xl mx-auto px-4 py-4 w-full pb-24 md:pb-4 overflow-hidden">
         
-        <div className="relative bg-gradient-to-br from-indigo-700 via-blue-800 to-indigo-950 rounded-[1.5rem] p-4 sm:p-5 mb-6 text-white shadow-lg overflow-hidden max-w-2xl mx-auto border border-white/10 flex flex-col justify-center items-center">
+        {/* البانر المدمج المضغوط (طوله مكبر شوية حسب طلبك) */}
+        <div className="relative bg-gradient-to-br from-indigo-700 via-blue-800 to-indigo-950 rounded-[1.5rem] p-6 sm:p-8 mb-5 text-white shadow-lg overflow-hidden max-w-2xl mx-auto border border-white/10 flex flex-col justify-center items-start min-h-[240px] text-right">
           {bannerImages.length > 0 ? (
             bannerImages.map((img, idx) => (
               <img key={idx} src={img} alt="Banner" className={`absolute inset-0 w-full h-full object-cover transition-opacity duration-1000 ${idx === currentBannerIndex ? 'opacity-100 z-0' : 'opacity-0 -z-10'}`} />
             ))
           ) : (
             <div className="absolute inset-0 z-0">
-              <div className="absolute top-0 right-0 w-32 h-32 bg-white opacity-5 rounded-full blur-2xl transform translate-x-1/3 -translate-y-1/3"></div>
-              <div className="absolute bottom-0 left-0 w-32 h-32 bg-indigo-400 opacity-20 rounded-full blur-2xl transform -translate-x-1/2 translate-y-1/2"></div>
+              <div className="absolute top-0 right-0 w-48 h-48 bg-white opacity-5 rounded-full blur-2xl transform translate-x-1/3 -translate-y-1/3"></div>
+              <div className="absolute bottom-0 left-0 w-48 h-48 bg-indigo-400 opacity-20 rounded-full blur-2xl transform -translate-x-1/2 translate-y-1/2"></div>
             </div>
           )}
           
           {bannerImages.length > 0 && <div className="absolute inset-0 bg-black/40 z-0"></div>}
           
           <div className="relative z-10 w-full">
-            <h2 className="text-xl sm:text-2xl font-black mb-0.5 tracking-tight drop-shadow-md text-center">إلى أين تتجه اليوم؟</h2>
-            <p className="text-indigo-100 text-[10px] sm:text-xs mb-3 font-medium drop-shadow-sm text-center">ابحث، تواصل، وسافر بأمان وتكلفة أقل.</p>
-            
-            <div className="space-y-1.5 mb-3">
-              <div className="flex items-center bg-white/90 backdrop-blur-sm rounded-xl px-3 py-2 shadow-inner">
-                <MapPin className="text-indigo-600 ml-2 shrink-0" size={16} />
-                <input type="text" placeholder="من (القاهرة)" value={searchFrom} onChange={(e) => setSearchFrom(e.target.value)} className="bg-transparent border-none w-full text-slate-800 outline-none text-[16px] font-bold placeholder-slate-500" />
-              </div>
-              <div className="flex items-center bg-white/90 backdrop-blur-sm rounded-xl px-3 py-2 shadow-inner">
-                <Navigation className="text-rose-600 ml-2 shrink-0" size={16} />
-                <input type="text" placeholder="إلى (الإسكندرية)" value={searchTo} onChange={(e) => setSearchTo(e.target.value)} className="bg-transparent border-none w-full text-slate-800 outline-none text-[16px] font-bold placeholder-slate-500" />
-              </div>
-            </div>
+            <h2 className="text-2xl sm:text-3xl font-black mb-2 tracking-tight drop-shadow-md">إلى أين تتجه اليوم؟</h2>
+            <p className="text-indigo-100 text-xs sm:text-sm mb-6 font-medium drop-shadow-sm">ابحث، تواصل، وسافر بأمان وتكلفة أقل.</p>
 
             <button 
               onClick={() => requireAuth(() => setShowAddModal(true))} 
-              className="w-full bg-white text-indigo-700 font-extrabold py-2.5 rounded-xl shadow-md hover:bg-indigo-50 transition-all flex justify-center items-center gap-2 transform active:scale-95 text-xs sm:text-sm">
-              <Car size={16}/> انشر رحلتك أو اطلب دليفري الآن <ArrowRight size={14} className="rtl:rotate-180"/>
+              className="inline-flex bg-white text-indigo-700 font-extrabold px-5 py-2.5 rounded-xl shadow-md hover:bg-indigo-50 transition-all justify-center items-center gap-2 transform active:scale-95 text-xs sm:text-sm w-auto">
+              <Car size={16}/> انشر رحلتك أو اطلب دليفري <ArrowRight size={14} className="rtl:rotate-180"/>
             </button>
           </div>
         </div>
 
-        <div className={`flex flex-wrap sm:flex-nowrap gap-2 p-1.5 mb-6 max-w-xl mx-auto rounded-2xl shadow-inner ${isDarkMode ? 'bg-slate-800' : 'bg-slate-100'}`}>
+        {/* خانات البحث المنفصلة (مقاس 16px للموبايل لمنع الزوم) */}
+        <div className="flex gap-2 mb-5 max-w-2xl mx-auto">
+          <div className={`flex-1 flex items-center px-3 py-2 rounded-xl shadow-sm border transition-colors ${isDarkMode ? 'bg-slate-800 border-slate-700' : 'bg-white border-slate-200'}`}>
+            <MapPin className="text-indigo-500 ml-1.5 shrink-0" size={16} />
+            <input type="text" placeholder="من (القاهرة)" value={searchFrom} onChange={(e) => setSearchFrom(e.target.value)} className={`bg-transparent border-none w-full outline-none text-[16px] font-bold transition-colors ${isDarkMode ? 'text-white placeholder-slate-500' : 'text-slate-800 placeholder-slate-400'}`} />
+          </div>
+          <div className={`flex-1 flex items-center px-3 py-2 rounded-xl shadow-sm border transition-colors ${isDarkMode ? 'bg-slate-800 border-slate-700' : 'bg-white border-slate-200'}`}>
+            <Navigation className="text-rose-500 ml-1.5 shrink-0" size={16} />
+            <input type="text" placeholder="إلى (المنصورة)" value={searchTo} onChange={(e) => setSearchTo(e.target.value)} className={`bg-transparent border-none w-full outline-none text-[16px] font-bold transition-colors ${isDarkMode ? 'text-white placeholder-slate-500' : 'text-slate-800 placeholder-slate-400'}`} />
+          </div>
+        </div>
+
+        <div className={`flex flex-wrap sm:flex-nowrap gap-2 p-1.5 mb-6 max-w-2xl mx-auto rounded-2xl shadow-inner ${isDarkMode ? 'bg-slate-800' : 'bg-slate-100'}`}>
           <button 
             onClick={() => setFilterType('all')} 
             className={`flex-1 py-2.5 text-xs sm:text-sm font-bold rounded-xl transition-all shadow-sm ${filterType === 'all' ? (isDarkMode ? 'bg-slate-200 text-slate-900' : 'bg-slate-800 text-white') : (isDarkMode ? 'bg-slate-800 text-slate-400' : 'bg-white text-slate-500 hover:bg-slate-50')}`}>
@@ -1227,7 +1222,7 @@ export default function App() {
               {myInbox.length === 0 ? (
                 <div className="text-center text-slate-500 mt-20 flex flex-col items-center">
                   <MessageCircle size={40} className="text-slate-300 mb-4"/>
-                  <span className="font-bold">لا توجد رسائل حالياً</span>
+                  <span className="font-bold text-sm">لا توجد رسائل حالياً</span>
                 </div>
               ) : (
                 myInbox.map(chat => (
@@ -1286,7 +1281,7 @@ export default function App() {
             </div>
             <div className={`p-4 border-t ${isDarkMode ? 'bg-slate-800 border-slate-700' : 'bg-white border-slate-200'}`}>
               {activeChat.otherPersonId === 'admin' ? (
-                <div className="text-center text-[11px] font-bold text-slate-400">هذه رسالة إدارية رسمية للمعلومية فقط.</div>
+                <div className="text-center text-[10px] font-bold text-slate-400">هذه رسالة إدارية رسمية للمعلومية فقط.</div>
               ) : (
                 <form onSubmit={handleSendMessage} className="flex gap-2 items-center">
                   <input type="text" value={newMessage} onChange={(e) => setNewMessage(e.target.value)} placeholder="اكتب رسالة..." className={`flex-1 rounded-xl px-4 py-3 text-[16px] outline-none focus:ring-2 focus:ring-indigo-500 transition-colors ${bgInput}`} />
