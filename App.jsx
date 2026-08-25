@@ -22,6 +22,12 @@ const APP_COLLECTION_NAME = 'khodni_maak_trips';
 const USERS_COLLECTION = 'khodni_maak_users';
 const ADMIN_EMAIL = "bassamwaleed2000@gmail.com".toLowerCase();
 
+const DUMMY_TRIPS = [
+  { id: 'dummy_1', type: 'offer', from: 'القاهرة (رمسيس)', to: 'الإسكندرية (محطة مصر)', date: '2026-08-25', time: '08:00 ص', seats: 3, cost: '150', notes: '', userId: 'd1', userName: 'أحمد محمود', userPhone: '', verified: true, isDummy: true, status: 'completed', rating: 0, totalRatings: 0, createdAt: { toMillis: () => Date.now() - 1000000 } },
+  { id: 'dummy_2', type: 'request', from: 'المنصورة', to: 'القاهرة (مدينة نصر)', date: '2026-08-26', time: '10:30 ص', seats: 1, cost: '', notes: '', userId: 'd2', userName: 'سارة خالد', userPhone: '', verified: false, isDummy: true, status: 'completed', rating: 0, totalRatings: 0, createdAt: { toMillis: () => Date.now() - 2000000 } },
+  { id: 'dummy_3', type: 'delivery', from: 'الزقازيق', to: 'العاشر من رمضان', date: '2026-08-24', time: '02:00 م', seats: 1, cost: '50', notes: '', userId: 'd3', userName: 'محمود حسن', userPhone: '', verified: true, isDummy: true, status: 'in_progress', rating: 0, totalRatings: 0, createdAt: { toMillis: () => Date.now() - 3000000 } }
+];
+
 export default function App() {
   const [user, setUser] = useState(null);
   const [userData, setUserData] = useState(null);
@@ -54,7 +60,10 @@ export default function App() {
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [isUploading, setIsUploading] = useState(false);
   
-  const [isDarkMode, setIsDarkMode] = useState(false);
+  const [isDarkMode, setIsDarkMode] = useState(() => {
+    const savedTheme = localStorage.getItem('khodnimaak_theme');
+    return savedTheme !== 'light'; 
+  });
   
   const [announcements, setAnnouncements] = useState(["🚀 جاري تحديث وتطوير البرنامج باستمرار لخدمتكم"]);
   const [currentAdIndex, setCurrentAdIndex] = useState(0);
@@ -75,6 +84,13 @@ export default function App() {
   const [newTrip, setNewTrip] = useState({
     type: 'request', from: '', to: '', date: '', time: '', seats: 1, cost: '', notes: ''
   });
+
+  // حل مشكلة التمرير: إجبار الصفحة على الصعود لأعلى عند تسجيل الدخول
+  useEffect(() => {
+    if (user) {
+      window.scrollTo({ top: 0, behavior: 'smooth' });
+    }
+  }, [user]);
 
   useEffect(() => {
     if (!isAdmin || realTrips.length === 0) return;
@@ -122,11 +138,6 @@ export default function App() {
     }, 5000); 
     return () => clearInterval(interval);
   }, [bannerImages.length]);
-
-  useEffect(() => {
-    const savedTheme = localStorage.getItem('khodnimaak_theme');
-    if (savedTheme !== 'light') setIsDarkMode(true);
-  }, []);
 
   const toggleTheme = () => {
     const newTheme = !isDarkMode;
@@ -201,7 +212,6 @@ export default function App() {
           }
         });
       }
-
       setRealTrips(tripsData);
     });
     return () => unsubscribe();
@@ -552,7 +562,7 @@ export default function App() {
 
   if (!user) {
     return (
-      <div dir="rtl" className={`min-h-screen flex items-center justify-center p-4 transition-colors ${bgMain} overflow-x-hidden w-full bg-[url('data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHdpZHRoPSI0MCIgaGVpZ2h0PSI0MCI+PGRlZnM+PHBhdHRlcm4gaWQ9InBhdHRlcm4iIHdpZHRoPSI0MCIgaGVpZ2h0PSI0MCIgcGF0dGVyblVuaXRzPSJ1c2VyU3BhY2VPblVzZSI+PHBhdGggZD0iTTAgMGg0MHY0MEgweiIgZmlsbD0ibm9uZSIvPjxjaXJjbGUgY3g9IjIwIiBjeT0iMjAiIHI9IjEiIGZpbGw9InJnYmEoMTU2LCAxNjMsIDE3NSwgMC4yKSIvPjwvcGF0dGVybj48L2RlZnM+PHJlY3Qgd2lkdGg9IjEwMCUiIGhlaWdodD0iMTAwJSIgZmlsbD0idXJsKCNwYXR0ZXJuKSIvPjwvc3ZnPg==')]`}>
+      <div dir="rtl" className={`min-h-screen flex items-center justify-center p-4 transition-colors ${bgMain} bg-[url('data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHdpZHRoPSI0MCIgaGVpZ2h0PSI0MCI+PGRlZnM+PHBhdHRlcm4gaWQ9InBhdHRlcm4iIHdpZHRoPSI0MCIgaGVpZ2h0PSI0MCIgcGF0dGVyblVuaXRzPSJ1c2VyU3BhY2VPblVzZSI+PHBhdGggZD0iTTAgMGg0MHY0MEgweiIgZmlsbD0ibm9uZSIvPjxjaXJjbGUgY3g9IjIwIiBjeT0iMjAiIHI9IjEiIGZpbGw9InJnYmEoMTU2LCAxNjMsIDE3NSwgMC4yKSIvPjwvcGF0dGVybj48L2RlZnM+PHJlY3Qgd2lkdGg9IjEwMCUiIGhlaWdodD0iMTAwJSIgZmlsbD0idXJsKCNwYXR0ZXJuKSIvPjwvc3ZnPg==')]`}>
         <div className={`${bgCard} p-6 sm:p-8 rounded-3xl shadow-2xl max-w-md w-full border-t-8 border-indigo-600 relative overflow-hidden`}>
           {alertMsg && (
             <div className="mb-4 bg-rose-100 text-rose-600 p-3 rounded-lg text-sm text-center font-bold flex justify-between items-center">
@@ -567,7 +577,6 @@ export default function App() {
           <h1 className="text-2xl font-extrabold mb-1 text-center bg-gradient-to-l from-indigo-600 to-blue-500 bg-clip-text text-transparent">خدني معاك</h1>
           <p className={`${isDarkMode ? 'text-slate-400' : 'text-slate-500'} mb-6 text-center text-xs font-medium`}>{isLoginMode ? 'مرحباً بعودتك! سجل دخولك للمتابعة' : 'انضم إلينا وابدأ رحلتك التوفيرية'}</p>
           
-          {/* تبويبات طريقة التسجيل */}
           <div className={`flex gap-2 p-1 mb-5 rounded-xl shadow-inner ${isDarkMode ? 'bg-slate-700' : 'bg-slate-100'}`}>
             <button 
               onClick={() => setAuthMethod('phone')} 
@@ -606,7 +615,7 @@ export default function App() {
               <input type="password" required placeholder="كلمة المرور" value={authForm.password} onChange={e => setAuthForm({...authForm, password: e.target.value})} className={`w-full border rounded-xl py-3 px-11 outline-none focus:ring-2 focus:ring-indigo-500 font-bold text-[16px] text-left transition-all ${bgInput}`} dir="ltr" />
             </div>
 
-            <button type="submit" disabled={authLoading} className="w-full bg-gradient-to-r from-indigo-600 to-blue-600 text-white py-3 rounded-xl font-bold hover:from-indigo-700 hover:to-blue-700 shadow-lg shadow-indigo-500/30 flex justify-center items-center gap-2 transition-all transform active:scale-[0.98]">
+            <button type="submit" disabled={authLoading} className="w-full bg-gradient-to-r from-indigo-600 to-blue-600 text-white py-3.5 rounded-xl font-bold hover:from-indigo-700 hover:to-blue-700 shadow-lg shadow-indigo-500/30 flex justify-center items-center gap-2 transition-all transform active:scale-[0.98]">
               {authLoading ? <Loader2 className="animate-spin" size={20}/> : (isLoginMode ? 'تسجيل الدخول' : 'إنشاء حساب جديد')}
             </button>
           </form>
@@ -628,7 +637,7 @@ export default function App() {
   }
 
   return (
-    <div dir="rtl" className={`min-h-screen flex flex-col relative transition-colors duration-300 ${bgMain} overflow-x-hidden w-full`}>
+    <div dir="rtl" className={`min-h-screen flex flex-col relative transition-colors duration-300 ${bgMain}`}>
       
       {/* Alert Modal */}
       {alertMsg && (
@@ -959,8 +968,7 @@ export default function App() {
 
       <main className="flex-1 max-w-7xl mx-auto px-4 py-4 w-full pb-24 md:pb-4 overflow-hidden">
         
-        {/* البانر المدمج المضغوط  */}
-        <div className="relative bg-gradient-to-br from-indigo-700 via-blue-800 to-indigo-950 rounded-[1.5rem] p-4 sm:p-6 mb-6 text-white shadow-lg overflow-hidden max-w-2xl mx-auto border border-white/10">
+        <div className="relative bg-gradient-to-br from-indigo-700 via-blue-800 to-indigo-950 rounded-[1.5rem] p-6 sm:p-8 mb-6 text-white shadow-lg overflow-hidden max-w-2xl mx-auto border border-white/10 min-h-[200px] flex items-center justify-center">
           {bannerImages.length > 0 ? (
             bannerImages.map((img, idx) => (
               <img key={idx} src={img} alt="Banner" className={`absolute inset-0 w-full h-full object-cover transition-opacity duration-1000 ${idx === currentBannerIndex ? 'opacity-100 z-0' : 'opacity-0 -z-10'}`} />
@@ -975,24 +983,24 @@ export default function App() {
           {bannerImages.length > 0 && <div className="absolute inset-0 bg-black/40 z-0"></div>}
           
           <div className="relative z-10 w-full">
-            <h2 className="text-xl sm:text-2xl font-black mb-1 tracking-tight drop-shadow-md text-center">إلى أين تتجه اليوم؟</h2>
-            <p className="text-indigo-100 text-[10px] sm:text-xs mb-3 font-medium drop-shadow-sm text-center">ابحث، تواصل، وسافر بأمان وتكلفة أقل.</p>
+            <h2 className="text-2xl sm:text-3xl font-black mb-1 tracking-tight drop-shadow-md text-center">إلى أين تتجه اليوم؟</h2>
+            <p className="text-indigo-100 text-xs sm:text-sm mb-4 font-medium drop-shadow-sm text-center">ابحث، تواصل، وسافر بأمان وتكلفة أقل.</p>
             
-            <div className="space-y-1.5 mb-3">
-              <div className="flex items-center bg-white/90 backdrop-blur-sm rounded-xl px-3 py-2 shadow-inner">
-                <MapPin className="text-indigo-600 ml-2 shrink-0" size={16} />
+            <div className="space-y-2 mb-4">
+              <div className="flex items-center bg-white/90 backdrop-blur-sm rounded-xl px-3 py-3 shadow-inner">
+                <MapPin className="text-indigo-600 ml-2 shrink-0" size={18} />
                 <input type="text" placeholder="من (القاهرة)" value={searchFrom} onChange={(e) => setSearchFrom(e.target.value)} className="bg-transparent border-none w-full text-slate-800 outline-none text-[16px] font-bold placeholder-slate-500" />
               </div>
-              <div className="flex items-center bg-white/90 backdrop-blur-sm rounded-xl px-3 py-2 shadow-inner">
-                <Navigation className="text-rose-600 ml-2 shrink-0" size={16} />
+              <div className="flex items-center bg-white/90 backdrop-blur-sm rounded-xl px-3 py-3 shadow-inner">
+                <Navigation className="text-rose-600 ml-2 shrink-0" size={18} />
                 <input type="text" placeholder="إلى (الإسكندرية)" value={searchTo} onChange={(e) => setSearchTo(e.target.value)} className="bg-transparent border-none w-full text-slate-800 outline-none text-[16px] font-bold placeholder-slate-500" />
               </div>
             </div>
 
             <button 
               onClick={() => requireAuth(() => setShowAddModal(true))} 
-              className="w-full bg-white text-indigo-700 font-extrabold py-2.5 rounded-xl shadow-md hover:bg-indigo-50 transition-all flex justify-center items-center gap-2 transform active:scale-95 text-xs sm:text-sm">
-              <Car size={16}/> انشر رحلتك أو اطلب دليفري الآن <ArrowRight size={14} className="rtl:rotate-180"/>
+              className="w-full bg-white text-indigo-700 font-extrabold py-3 rounded-xl shadow-md hover:bg-indigo-50 transition-all flex justify-center items-center gap-2 transform active:scale-95 text-sm sm:text-base">
+              <Car size={18}/> انشر رحلتك أو اطلب دليفري الآن <ArrowRight size={16} className="rtl:rotate-180"/>
             </button>
           </div>
         </div>
@@ -1000,22 +1008,22 @@ export default function App() {
         <div className={`flex flex-wrap sm:flex-nowrap gap-2 p-1.5 mb-6 max-w-xl mx-auto rounded-2xl shadow-inner ${isDarkMode ? 'bg-slate-800' : 'bg-slate-100'}`}>
           <button 
             onClick={() => setFilterType('all')} 
-            className={`flex-1 py-2 text-xs font-bold rounded-xl transition-all shadow-sm ${filterType === 'all' ? (isDarkMode ? 'bg-slate-200 text-slate-900' : 'bg-slate-800 text-white') : (isDarkMode ? 'bg-slate-800 text-slate-400' : 'bg-white text-slate-500 hover:bg-slate-50')}`}>
+            className={`flex-1 py-2.5 text-xs sm:text-sm font-bold rounded-xl transition-all shadow-sm ${filterType === 'all' ? (isDarkMode ? 'bg-slate-200 text-slate-900' : 'bg-slate-800 text-white') : (isDarkMode ? 'bg-slate-800 text-slate-400' : 'bg-white text-slate-500 hover:bg-slate-50')}`}>
             الكل
           </button>
           <button 
             onClick={() => setFilterType('offer')} 
-            className={`flex-1 py-2 text-xs font-bold rounded-xl transition-all shadow-sm ${filterType === 'offer' ? 'bg-emerald-600 text-white' : (isDarkMode ? 'bg-slate-800 text-slate-400' : 'bg-white text-slate-500 hover:bg-slate-50')}`}>
+            className={`flex-1 py-2.5 text-xs sm:text-sm font-bold rounded-xl transition-all shadow-sm ${filterType === 'offer' ? 'bg-emerald-600 text-white' : (isDarkMode ? 'bg-slate-800 text-slate-400' : 'bg-white text-slate-500 hover:bg-slate-50')}`}>
             توصيلات 🚗
           </button>
           <button 
             onClick={() => setFilterType('request')} 
-            className={`flex-1 py-2 text-xs font-bold rounded-xl transition-all shadow-sm ${filterType === 'request' ? 'bg-orange-500 text-white' : (isDarkMode ? 'bg-slate-800 text-slate-400' : 'bg-white text-slate-500 hover:bg-slate-50')}`}>
+            className={`flex-1 py-2.5 text-xs sm:text-sm font-bold rounded-xl transition-all shadow-sm ${filterType === 'request' ? 'bg-orange-500 text-white' : (isDarkMode ? 'bg-slate-800 text-slate-400' : 'bg-white text-slate-500 hover:bg-slate-50')}`}>
             ركاب 🙋‍♂️
           </button>
           <button 
             onClick={() => setFilterType('delivery')} 
-            className={`flex-1 py-2 text-xs font-bold rounded-xl transition-all shadow-sm ${filterType === 'delivery' ? 'bg-purple-600 text-white' : (isDarkMode ? 'bg-slate-800 text-slate-400' : 'bg-white text-slate-500 hover:bg-slate-50')}`}>
+            className={`flex-1 py-2.5 text-xs sm:text-sm font-bold rounded-xl transition-all shadow-sm ${filterType === 'delivery' ? 'bg-purple-600 text-white' : (isDarkMode ? 'bg-slate-800 text-slate-400' : 'bg-white text-slate-500 hover:bg-slate-50')}`}>
             دليفري 📦
           </button>
         </div>
@@ -1037,7 +1045,7 @@ export default function App() {
               const canDelete = isOwner || isAdmin;
               
               return (
-              <div key={trip.id} className={`rounded-[24px] p-6 shadow-sm hover:shadow-lg hover:-translate-y-1 border relative flex flex-col transition-all duration-300 ${bgCard} ${isCompleted ? 'opacity-75 grayscale-[20%]' : ''}`}>
+              <div key={trip.id} className={`rounded-[24px] p-6 shadow-sm hover:shadow-md hover:-translate-y-1 border relative flex flex-col transition-all duration-300 ${bgCard} ${isCompleted ? 'opacity-75 grayscale-[20%]' : ''}`}>
                 
                 {canDelete && !trip.isDummy && (
                   <button onClick={() => setDeleteConfirmId(trip.id)} className="absolute top-4 left-4 p-2 bg-rose-50 text-rose-600 rounded-full hover:bg-rose-100 z-10 transition-colors">
@@ -1175,23 +1183,23 @@ export default function App() {
 
       {showInbox && !isGuest && (
         <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-sm z-50 flex justify-center items-end sm:items-center p-0 sm:p-4">
-          <div className={`${bgModal} w-full h-[80vh] sm:h-[600px] sm:max-w-md rounded-t-[1.5rem] sm:rounded-2xl shadow-2xl flex flex-col overflow-hidden`}>
-            <div className="bg-indigo-600 text-white p-4 flex justify-between items-center">
-              <h3 className="font-bold flex items-center gap-2"><Bell size={18}/> رسائلي</h3>
-              <button onClick={() => setShowInbox(false)} className="p-1.5 hover:bg-indigo-700 rounded-full transition-colors"><X size={18} /></button>
+          <div className={`${bgModal} w-full h-[80vh] sm:h-[600px] sm:max-w-md rounded-t-[2rem] sm:rounded-3xl shadow-2xl flex flex-col overflow-hidden`}>
+            <div className="bg-indigo-600 text-white p-5 flex justify-between items-center">
+              <h3 className="font-bold flex items-center gap-2"><Bell size={20}/> رسائلي</h3>
+              <button onClick={() => setShowInbox(false)} className="p-2 hover:bg-indigo-700 rounded-full transition-colors"><X size={20} /></button>
             </div>
-            <div className={`flex-1 overflow-y-auto p-3 ${isDarkMode ? 'bg-slate-900/50' : 'bg-slate-50'}`}>
+            <div className={`flex-1 overflow-y-auto p-4 ${isDarkMode ? 'bg-slate-900/50' : 'bg-slate-50'}`}>
               {myInbox.length === 0 ? (
-                <div className="text-center text-slate-500 mt-16 flex flex-col items-center">
-                  <MessageCircle size={36} className="text-slate-300 mb-3"/>
+                <div className="text-center text-slate-500 mt-20 flex flex-col items-center">
+                  <MessageCircle size={40} className="text-slate-300 mb-4"/>
                   <span className="font-bold text-sm">لا توجد رسائل حالياً</span>
                 </div>
               ) : (
                 myInbox.map(chat => (
-                  <div key={chat.chatId} onClick={() => { setShowInbox(false); setActiveChat(chat); }} className={`p-3 rounded-xl shadow-sm mb-2 cursor-pointer border transition-all ${bgCard} ${isDarkMode ? 'hover:border-indigo-500' : 'hover:border-indigo-300'}`}>
+                  <div key={chat.chatId} onClick={() => { setShowInbox(false); setActiveChat(chat); }} className={`p-4 rounded-2xl shadow-sm mb-3 cursor-pointer border transition-all ${bgCard} ${isDarkMode ? 'hover:border-indigo-500' : 'hover:border-indigo-300'}`}>
                     <div className="flex items-center gap-3">
                        {chat.otherPersonId === 'admin' ? (
-                         <div className="w-10 h-10 bg-rose-100 text-rose-600 rounded-full flex items-center justify-center font-bold"><Crown size={18}/></div>
+                         <div className="w-10 h-10 bg-rose-100 text-rose-600 rounded-full flex items-center justify-center font-bold"><Crown size={20}/></div>
                        ) : chat.otherPersonPhoto ? (
                          <img src={chat.otherPersonPhoto} className="w-10 h-10 rounded-full object-cover border border-slate-200" alt="avatar" />
                        ) : (
@@ -1199,7 +1207,7 @@ export default function App() {
                        )}
                        <div>
                         <h4 className={`font-bold text-sm ${isDarkMode ? 'text-white' : 'text-slate-900'}`}>{chat.otherPersonName || 'مستخدم'}</h4>
-                        <p className={`text-xs line-clamp-1 mt-0.5 ${isDarkMode ? 'text-slate-400' : 'text-slate-500'}`}>{chat.lastMessage}</p>
+                        <p className={`text-xs line-clamp-1 mt-1 ${isDarkMode ? 'text-slate-400' : 'text-slate-500'}`}>{chat.lastMessage}</p>
                        </div>
                     </div>
                   </div>
@@ -1212,22 +1220,22 @@ export default function App() {
 
       {activeChat && !isGuest && (
         <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-sm z-[60] flex justify-center items-end sm:items-center p-0 sm:p-4">
-          <div className={`${bgModal} w-full h-[85vh] sm:h-[600px] sm:max-w-md rounded-t-[1.5rem] sm:rounded-2xl shadow-2xl flex flex-col overflow-hidden`}>
+          <div className={`${bgModal} w-full h-[85vh] sm:h-[600px] sm:max-w-md rounded-t-[2rem] sm:rounded-3xl shadow-2xl flex flex-col overflow-hidden`}>
             <div className={`text-white p-3 flex items-center gap-2 ${activeChat.otherPersonId === 'admin' ? 'bg-rose-600' : 'bg-indigo-600'}`}>
-              <button onClick={() => setActiveChat(null)} className={`p-1.5 rounded-full transition-colors ${activeChat.otherPersonId === 'admin' ? 'hover:bg-rose-700' : 'hover:bg-indigo-700'}`}><ChevronLeft size={20} /></button>
+              <button onClick={() => setActiveChat(null)} className={`p-1.5 rounded-full transition-colors ${activeChat.otherPersonId === 'admin' ? 'hover:bg-rose-700' : 'hover:bg-indigo-700'}`}><ChevronLeft size={24} /></button>
               {activeChat.otherPersonId === 'admin' ? (
-                <div className="w-8 h-8 bg-white/20 rounded-full flex items-center justify-center"><Crown size={16}/></div>
+                <div className="w-10 h-10 bg-white/20 rounded-full flex items-center justify-center"><Crown size={20}/></div>
               ) : activeChat.otherPersonPhoto ? (
-                <img src={activeChat.otherPersonPhoto} className="w-8 h-8 rounded-full object-cover border-2 border-white/20" alt="avatar" />
+                <img src={activeChat.otherPersonPhoto} className="w-10 h-10 rounded-full object-cover border-2 border-white/20" alt="avatar" />
               ) : (
-                <div className="w-8 h-8 bg-white/20 rounded-full flex items-center justify-center"><User size={16}/></div>
+                <div className="w-10 h-10 bg-white/20 rounded-full flex items-center justify-center"><User size={20}/></div>
               )}
               <div className="flex-1">
                 <h3 className="font-bold text-sm leading-tight">{activeChat.otherPersonName || 'مستخدم'}</h3>
-                {activeChat.tripInfo && activeChat.tripInfo !== 'system' && <span className="text-[9px] text-indigo-200 leading-tight block">{activeChat.tripInfo}</span>}
+                {activeChat.tripInfo && activeChat.tripInfo !== 'system' && <span className="text-[10px] text-indigo-200 leading-tight block">{activeChat.tripInfo}</span>}
               </div>
             </div>
-            <div className={`flex-1 overflow-y-auto p-3 space-y-3 ${isDarkMode ? 'bg-slate-900/80' : 'bg-slate-100'} bg-[url('data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHdpZHRoPSI0MCIgaGVpZ2h0PSI0MCI+PGRlZnM+PHBhdHRlcm4gaWQ9InBhdHRlcm4iIHdpZHRoPSI0MCIgaGVpZ2h0PSI0MCIgcGF0dGVyblVuaXRzPSJ1c2VyU3BhY2VPblVzZSI+PHBhdGggZD0iTTAgMGg0MHY0MEgweiIgZmlsbD0ibm9uZSIvPjxjaXJjbGUgY3g9IjIwIiBjeT0iMjAiIHI9IjEiIGZpbGw9InJnYmEoMTU2LCAxNjMsIDE3NSwgMC4yKSIvPjwvcGF0dGVybj48L2RlZnM+PHJlY3Qgd2lkdGg9IjEwMCUiIGhlaWdodD0iMTAwJSIgZmlsbD0idXJsKCNwYXR0ZXJuKSIvPjwvc3ZnPg==')]`}>
+            <div className={`flex-1 overflow-y-auto p-4 space-y-4 ${isDarkMode ? 'bg-slate-900/80' : 'bg-slate-100'} bg-[url('data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHdpZHRoPSI0MCIgaGVpZ2h0PSI0MCI+PGRlZnM+PHBhdHRlcm4gaWQ9InBhdHRlcm4iIHdpZHRoPSI0MCIgaGVpZ2h0PSI0MCIgcGF0dGVyblVuaXRzPSJ1c2VyU3BhY2VPblVzZSI+PHBhdGggZD0iTTAgMGg0MHY0MEgweiIgZmlsbD0ibm9uZSIvPjxjaXJjbGUgY3g9IjIwIiBjeT0iMjAiIHI9IjEiIGZpbGw9InJnYmEoMTU2LCAxNjMsIDE3NSwgMC4xKSIvPjwvcGF0dGVybj48L2RlZnM+PHJlY3Qgd2lkdGg9IjEwMCUiIGhlaWdodD0iMTAwJSIgZmlsbD0idXJsKCNwYXR0ZXJuKSIvPjwvc3ZnPg==')]`}>
               {messages.map(msg => {
                 const isMe = msg.senderId === user.uid;
                 const isAdminMsg = msg.senderId === 'admin';
@@ -1246,8 +1254,8 @@ export default function App() {
                 <div className="text-center text-[10px] font-bold text-slate-400">هذه رسالة إدارية رسمية للمعلومية فقط.</div>
               ) : (
                 <form onSubmit={handleSendMessage} className="flex gap-2 items-center">
-                  <input type="text" value={newMessage} onChange={(e) => setNewMessage(e.target.value)} placeholder="اكتب رسالة..." className={`flex-1 rounded-xl px-3 py-2.5 text-[16px] outline-none focus:ring-2 focus:ring-indigo-500 transition-colors ${bgInput}`} />
-                  <button type="submit" disabled={!newMessage.trim()} className="bg-indigo-600 text-white w-10 h-10 flex items-center justify-center rounded-xl hover:bg-indigo-700 disabled:opacity-50 disabled:bg-slate-400 transition-all shadow-md"><Send size={16} className="rtl:rotate-180" /></button>
+                  <input type="text" value={newMessage} onChange={(e) => setNewMessage(e.target.value)} placeholder="اكتب رسالة..." className={`flex-1 rounded-xl px-4 py-3 text-[16px] outline-none focus:ring-2 focus:ring-indigo-500 transition-colors ${bgInput}`} />
+                  <button type="submit" disabled={!newMessage.trim()} className="bg-indigo-600 text-white w-12 h-12 flex items-center justify-center rounded-xl hover:bg-indigo-700 disabled:opacity-50 disabled:bg-slate-400 transition-all shadow-md"><Send size={20} className="rtl:rotate-180" /></button>
                 </form>
               )}
             </div>
