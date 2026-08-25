@@ -604,7 +604,6 @@ export default function App() {
           <h1 className="text-2xl font-extrabold mb-1 text-center bg-gradient-to-l from-indigo-600 to-blue-500 bg-clip-text text-transparent">خدني معاك</h1>
           <p className={`${isDarkMode ? 'text-slate-400' : 'text-slate-500'} mb-6 text-center text-xs font-medium`}>{isLoginMode ? 'مرحباً بعودتك! سجل دخولك للمتابعة' : 'انضم إلينا وابدأ رحلتك التوفيرية'}</p>
           
-          {/* تبويبات طريقة التسجيل */}
           <div className={`flex gap-2 p-1 mb-5 rounded-xl shadow-inner ${isDarkMode ? 'bg-slate-700' : 'bg-slate-100'}`}>
             <button 
               onClick={() => setAuthMethod('phone')} 
@@ -996,8 +995,8 @@ export default function App() {
 
       <main className="flex-1 max-w-7xl mx-auto px-4 py-4 w-full pb-24 md:pb-4 overflow-hidden">
         
-        {/* البانر المدمج المضغوط (طوله مكبر شوية حسب طلبك) */}
-        <div className="relative bg-gradient-to-br from-indigo-700 via-blue-800 to-indigo-950 rounded-[1.5rem] p-6 sm:p-8 mb-5 text-white shadow-lg overflow-hidden max-w-2xl mx-auto border border-white/10 flex flex-col justify-center items-start min-h-[240px] text-right">
+        {/* البانر المدمج (طوله مكبر، والزرار مضغوط لليمين وتحت) */}
+        <div className="relative bg-gradient-to-br from-indigo-700 via-blue-800 to-indigo-950 rounded-[1.5rem] p-6 sm:p-8 mb-6 text-white shadow-lg overflow-hidden max-w-2xl mx-auto border border-white/10 flex flex-col justify-between items-start min-h-[240px] text-right">
           {bannerImages.length > 0 ? (
             bannerImages.map((img, idx) => (
               <img key={idx} src={img} alt="Banner" className={`absolute inset-0 w-full h-full object-cover transition-opacity duration-1000 ${idx === currentBannerIndex ? 'opacity-100 z-0' : 'opacity-0 -z-10'}`} />
@@ -1011,31 +1010,33 @@ export default function App() {
           
           {bannerImages.length > 0 && <div className="absolute inset-0 bg-black/40 z-0"></div>}
           
-          <div className="relative z-10 w-full">
+          <div className="relative z-10 w-full mb-4">
             <h2 className="text-2xl sm:text-3xl font-black mb-2 tracking-tight drop-shadow-md">إلى أين تتجه اليوم؟</h2>
-            <p className="text-indigo-100 text-xs sm:text-sm mb-6 font-medium drop-shadow-sm">ابحث، تواصل، وسافر بأمان وتكلفة أقل.</p>
+            <p className="text-indigo-100 text-xs sm:text-sm font-medium drop-shadow-sm">ابحث، تواصل، وسافر بأمان وتكلفة أقل.</p>
+          </div>
 
+          <div className="relative z-10 w-full mt-auto text-right">
             <button 
               onClick={() => requireAuth(() => setShowAddModal(true))} 
               className="inline-flex bg-white text-indigo-700 font-extrabold px-5 py-2.5 rounded-xl shadow-md hover:bg-indigo-50 transition-all justify-center items-center gap-2 transform active:scale-95 text-xs sm:text-sm w-auto">
-              <Car size={16}/> انشر رحلتك أو اطلب دليفري <ArrowRight size={14} className="rtl:rotate-180"/>
+               انشر رحلتك أو اطلب دليفري <Car size={16}/>
             </button>
           </div>
         </div>
 
-        {/* خانات البحث المنفصلة (مقاس 16px للموبايل لمنع الزوم) */}
-        <div className="flex gap-2 mb-5 max-w-2xl mx-auto">
-          <div className={`flex-1 flex items-center px-3 py-2 rounded-xl shadow-sm border transition-colors ${isDarkMode ? 'bg-slate-800 border-slate-700' : 'bg-white border-slate-200'}`}>
+        {/* خانات البحث المنفصلة (مقاس 16px للموبايل لمنع الزوم - Padding مصغر) */}
+        <div className="flex gap-2 mb-6 max-w-2xl mx-auto">
+          <div className={`flex-1 flex items-center px-2 py-2 rounded-xl shadow-sm border transition-colors ${isDarkMode ? 'bg-slate-800 border-slate-700' : 'bg-white border-slate-200'}`}>
             <MapPin className="text-indigo-500 ml-1.5 shrink-0" size={16} />
             <input type="text" placeholder="من (القاهرة)" value={searchFrom} onChange={(e) => setSearchFrom(e.target.value)} className={`bg-transparent border-none w-full outline-none text-[16px] font-bold transition-colors ${isDarkMode ? 'text-white placeholder-slate-500' : 'text-slate-800 placeholder-slate-400'}`} />
           </div>
-          <div className={`flex-1 flex items-center px-3 py-2 rounded-xl shadow-sm border transition-colors ${isDarkMode ? 'bg-slate-800 border-slate-700' : 'bg-white border-slate-200'}`}>
+          <div className={`flex-1 flex items-center px-2 py-2 rounded-xl shadow-sm border transition-colors ${isDarkMode ? 'bg-slate-800 border-slate-700' : 'bg-white border-slate-200'}`}>
             <Navigation className="text-rose-500 ml-1.5 shrink-0" size={16} />
             <input type="text" placeholder="إلى (المنصورة)" value={searchTo} onChange={(e) => setSearchTo(e.target.value)} className={`bg-transparent border-none w-full outline-none text-[16px] font-bold transition-colors ${isDarkMode ? 'text-white placeholder-slate-500' : 'text-slate-800 placeholder-slate-400'}`} />
           </div>
         </div>
 
-        <div className={`flex flex-wrap sm:flex-nowrap gap-2 p-1.5 mb-6 max-w-2xl mx-auto rounded-2xl shadow-inner ${isDarkMode ? 'bg-slate-800' : 'bg-slate-100'}`}>
+        <div className={`flex flex-wrap sm:flex-nowrap gap-2 p-1.5 mb-6 max-w-xl mx-auto rounded-2xl shadow-inner ${isDarkMode ? 'bg-slate-800' : 'bg-slate-100'}`}>
           <button 
             onClick={() => setFilterType('all')} 
             className={`flex-1 py-2.5 text-xs sm:text-sm font-bold rounded-xl transition-all shadow-sm ${filterType === 'all' ? (isDarkMode ? 'bg-slate-200 text-slate-900' : 'bg-slate-800 text-white') : (isDarkMode ? 'bg-slate-800 text-slate-400' : 'bg-white text-slate-500 hover:bg-slate-50')}`}>
@@ -1297,8 +1298,8 @@ export default function App() {
         <div className="fixed inset-0 bg-slate-900/70 backdrop-blur-sm z-50 flex justify-center items-center p-4">
           <div className={`${bgModal} rounded-[1.5rem] w-full max-w-lg shadow-2xl border overflow-hidden ${isDarkMode ? 'border-slate-700' : 'border-slate-100'}`}>
             <div className={`flex justify-between items-center p-5 border-b ${isDarkMode ? 'bg-slate-800/80 border-slate-700' : 'bg-slate-50/80 border-slate-100 backdrop-blur-md'}`}>
-              <h2 className="text-lg font-extrabold flex items-center gap-2"><Navigation className="text-indigo-500" size={18}/> إضافة رحلة أو طلب</h2>
-              <button onClick={() => setShowAddModal(false)} className="p-1.5 hover:bg-rose-50 hover:text-rose-500 text-slate-400 rounded-full transition-colors"><X size={18} /></button>
+              <h2 className="text-lg font-extrabold flex items-center gap-2"><Navigation className="text-indigo-500" size={20}/> إضافة رحلة أو طلب</h2>
+              <button onClick={() => setShowAddModal(false)} className="p-2 hover:bg-rose-50 hover:text-rose-500 text-slate-400 rounded-full transition-colors"><X size={20} /></button>
             </div>
             <div className="p-5 max-h-[75vh] overflow-y-auto custom-scrollbar">
               <form onSubmit={handleAddTrip} className="space-y-5">
@@ -1314,8 +1315,8 @@ export default function App() {
                           : (isDarkMode ? 'border-slate-700 bg-slate-800 hover:bg-slate-700' : 'border-slate-200 bg-white hover:bg-slate-50')
                       }`}
                     >
-                      <User size={20} className={newTrip.type === 'request' ? (isDarkMode ? 'text-indigo-400' : 'text-indigo-600') : (isDarkMode ? 'text-slate-400' : 'text-slate-400')}/>
-                      <span className={`font-extrabold text-[10px] ${newTrip.type === 'request' ? (isDarkMode ? 'text-indigo-400' : 'text-indigo-700') : (isDarkMode ? 'text-slate-400' : 'text-slate-500')}`}>أنا راكب</span>
+                      <User size={24} className={newTrip.type === 'request' ? (isDarkMode ? 'text-indigo-400' : 'text-indigo-600') : (isDarkMode ? 'text-slate-400' : 'text-slate-400')}/>
+                      <span className={`font-extrabold text-[10px] sm:text-xs ${newTrip.type === 'request' ? (isDarkMode ? 'text-indigo-400' : 'text-indigo-700') : (isDarkMode ? 'text-slate-400' : 'text-slate-500')}`}>أنا راكب</span>
                     </div>
                     
                     <div 
@@ -1326,8 +1327,8 @@ export default function App() {
                           : (isDarkMode ? 'border-slate-700 bg-slate-800 hover:bg-slate-700' : 'border-slate-200 bg-white hover:bg-slate-50')
                       }`}
                     >
-                      <Car size={20} className={newTrip.type === 'offer' ? (isDarkMode ? 'text-emerald-400' : 'text-emerald-500') : (isDarkMode ? 'text-slate-400' : 'text-slate-400')}/>
-                      <span className={`font-extrabold text-[10px] ${newTrip.type === 'offer' ? (isDarkMode ? 'text-emerald-400' : 'text-emerald-700') : (isDarkMode ? 'text-slate-400' : 'text-slate-500')}`}>معي سيارة</span>
+                      <Car size={24} className={newTrip.type === 'offer' ? (isDarkMode ? 'text-emerald-400' : 'text-emerald-500') : (isDarkMode ? 'text-slate-400' : 'text-slate-400')}/>
+                      <span className={`font-extrabold text-[10px] sm:text-xs ${newTrip.type === 'offer' ? (isDarkMode ? 'text-emerald-400' : 'text-emerald-700') : (isDarkMode ? 'text-slate-400' : 'text-slate-500')}`}>معي سيارة</span>
                     </div>
 
                     <div 
@@ -1338,45 +1339,45 @@ export default function App() {
                           : (isDarkMode ? 'border-slate-700 bg-slate-800 hover:bg-slate-700' : 'border-slate-200 bg-white hover:bg-slate-50')
                       }`}
                     >
-                      <Package size={20} className={newTrip.type === 'delivery' ? (isDarkMode ? 'text-purple-400' : 'text-purple-600') : (isDarkMode ? 'text-slate-400' : 'text-slate-400')}/>
-                      <span className={`font-extrabold text-[10px] ${newTrip.type === 'delivery' ? (isDarkMode ? 'text-purple-400' : 'text-purple-700') : (isDarkMode ? 'text-slate-400' : 'text-slate-500')}`}>دليفري وطرود</span>
+                      <Package size={24} className={newTrip.type === 'delivery' ? (isDarkMode ? 'text-purple-400' : 'text-purple-600') : (isDarkMode ? 'text-slate-400' : 'text-slate-400')}/>
+                      <span className={`font-extrabold text-[10px] sm:text-xs ${newTrip.type === 'delivery' ? (isDarkMode ? 'text-purple-400' : 'text-purple-700') : (isDarkMode ? 'text-slate-400' : 'text-slate-500')}`}>دليفري وطرود</span>
                     </div>
                   </div>
                 </div>
 
-                <div className="space-y-3">
-                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                <div className="space-y-4">
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                     <div className="relative">
-                      <MapPin size={16} className="absolute right-3 top-3 text-slate-400" />
-                      <input type="text" required value={newTrip.from} onChange={(e) => setNewTrip({...newTrip, from: e.target.value})} placeholder={newTrip.type === 'delivery' ? "مكان استلام الطرد" : "نقطة التحرك"} className={`w-full border py-2.5 pr-9 pl-3 rounded-xl font-bold text-[16px] outline-none focus:ring-2 focus:ring-indigo-500 transition-colors ${bgInput}`} />
+                      <MapPin size={18} className="absolute right-4 top-4 text-slate-400" />
+                      <input type="text" required value={newTrip.from} onChange={(e) => setNewTrip({...newTrip, from: e.target.value})} placeholder={newTrip.type === 'delivery' ? "مكان استلام الطرد" : "نقطة التحرك"} className={`w-full border py-3.5 pr-11 pl-4 rounded-2xl font-bold text-[16px] outline-none focus:ring-2 focus:ring-indigo-500 transition-colors ${bgInput}`} />
                     </div>
                     <div className="relative">
-                      <Navigation size={16} className="absolute right-3 top-3 text-slate-400" />
-                      <input type="text" required value={newTrip.to} onChange={(e) => setNewTrip({...newTrip, to: e.target.value})} placeholder={newTrip.type === 'delivery' ? "مكان تسليم الطرد" : "نقطة الوصول"} className={`w-full border py-2.5 pr-9 pl-3 rounded-xl font-bold text-[16px] outline-none focus:ring-2 focus:ring-indigo-500 transition-colors ${bgInput}`} />
+                      <Navigation size={18} className="absolute right-4 top-4 text-slate-400" />
+                      <input type="text" required value={newTrip.to} onChange={(e) => setNewTrip({...newTrip, to: e.target.value})} placeholder={newTrip.type === 'delivery' ? "مكان تسليم الطرد" : "نقطة الوصول"} className={`w-full border py-3.5 pr-11 pl-4 rounded-2xl font-bold text-[16px] outline-none focus:ring-2 focus:ring-indigo-500 transition-colors ${bgInput}`} />
                     </div>
                   </div>
 
-                  <div className="grid grid-cols-2 gap-3">
-                    <input type="date" required value={newTrip.date} onChange={(e) => setNewTrip({...newTrip, date: e.target.value})} className={`w-full border p-2.5 rounded-xl font-bold text-[16px] outline-none focus:ring-2 focus:ring-indigo-500 transition-colors ${bgInput}`} />
-                    <input type="time" required value={newTrip.time} onChange={(e) => setNewTrip({...newTrip, time: e.target.value})} className={`w-full border p-2.5 rounded-xl font-bold text-[16px] outline-none focus:ring-2 focus:ring-indigo-500 transition-colors ${bgInput}`} />
+                  <div className="grid grid-cols-2 gap-4">
+                    <input type="date" required value={newTrip.date} onChange={(e) => setNewTrip({...newTrip, date: e.target.value})} className={`w-full border p-3.5 rounded-2xl font-bold text-[16px] outline-none focus:ring-2 focus:ring-indigo-500 transition-colors ${bgInput}`} />
+                    <input type="time" required value={newTrip.time} onChange={(e) => setNewTrip({...newTrip, time: e.target.value})} className={`w-full border p-3.5 rounded-2xl font-bold text-[16px] outline-none focus:ring-2 focus:ring-indigo-500 transition-colors ${bgInput}`} />
                   </div>
 
-                  <div className="grid grid-cols-2 gap-3">
+                  <div className="grid grid-cols-2 gap-4">
                     <div className="relative">
-                      <User size={16} className="absolute right-3 top-3 text-slate-400" />
-                      <input type="number" min="1" required placeholder={newTrip.type === 'delivery' ? 'عدد الطرود' : newTrip.type === 'offer' ? 'المقاعد المتاحة' : 'عدد الركاب'} value={newTrip.seats} onChange={(e) => setNewTrip({...newTrip, seats: parseInt(e.target.value)})} className={`w-full border py-2.5 pr-9 pl-3 rounded-xl font-bold text-[16px] outline-none focus:ring-2 focus:ring-indigo-500 transition-colors ${bgInput}`} />
+                      <User size={18} className="absolute right-4 top-4 text-slate-400" />
+                      <input type="number" min="1" required placeholder={newTrip.type === 'delivery' ? 'عدد الطرود' : newTrip.type === 'offer' ? 'المقاعد المتاحة' : 'عدد الركاب'} value={newTrip.seats} onChange={(e) => setNewTrip({...newTrip, seats: parseInt(e.target.value)})} className={`w-full border py-3.5 pr-11 pl-4 rounded-2xl font-bold text-[16px] outline-none focus:ring-2 focus:ring-indigo-500 transition-colors ${bgInput}`} />
                     </div>
                     <div className="relative">
-                      <Wallet size={16} className="absolute right-3 top-3 text-slate-400" />
-                      <input type="number" min="0" placeholder={newTrip.type === 'delivery' ? "أجرة التوصيل (ج)" : "المساهمة (ج)"} value={newTrip.cost} onChange={(e) => setNewTrip({...newTrip, cost: e.target.value})} className={`w-full border py-2.5 pr-9 pl-3 rounded-xl font-bold text-[16px] outline-none focus:ring-2 focus:ring-indigo-500 transition-colors ${bgInput}`} />
+                      <Wallet size={18} className="absolute right-4 top-4 text-slate-400" />
+                      <input type="number" min="0" placeholder={newTrip.type === 'delivery' ? "أجرة التوصيل (ج)" : "المساهمة (ج)"} value={newTrip.cost} onChange={(e) => setNewTrip({...newTrip, cost: e.target.value})} className={`w-full border py-3.5 pr-11 pl-4 rounded-2xl font-bold text-[16px] outline-none focus:ring-2 focus:ring-indigo-500 transition-colors ${bgInput}`} />
                     </div>
                   </div>
                   
-                  <textarea rows="3" value={newTrip.notes} onChange={(e) => setNewTrip({...newTrip, notes: e.target.value})} placeholder={newTrip.type === 'delivery' ? "تفاصيل الطرد (وزنه، نوعه، قابل للكسر...)" : "تفاصيل إضافية (أماكن الوقوف بالتحديد، حجم الحقائب...)"} className={`w-full border p-3 rounded-xl resize-none font-bold text-[16px] outline-none focus:ring-2 focus:ring-indigo-500 transition-colors leading-relaxed ${bgInput}`}></textarea>
+                  <textarea rows="3" value={newTrip.notes} onChange={(e) => setNewTrip({...newTrip, notes: e.target.value})} placeholder={newTrip.type === 'delivery' ? "تفاصيل الطرد (وزنه، نوعه، قابل للكسر...)" : "تفاصيل إضافية (أماكن الوقوف بالتحديد، حجم الحقائب...)"} className={`w-full border p-4 rounded-2xl resize-none font-bold text-[16px] outline-none focus:ring-2 focus:ring-indigo-500 transition-colors leading-relaxed ${bgInput}`}></textarea>
                 </div>
                 
-                <button type="submit" disabled={isSubmitting} className="w-full bg-indigo-600 text-white py-3 rounded-xl font-extrabold text-sm hover:bg-indigo-700 shadow-md shadow-indigo-500/30 flex justify-center items-center gap-2 transition-all transform active:scale-[0.98]">
-                  {isSubmitting ? <><Loader2 className="animate-spin" size={16}/> جاري النشر...</> : 'نشر الإعلان الآن'}
+                <button type="submit" disabled={isSubmitting} className="w-full bg-indigo-600 text-white py-4 rounded-2xl font-extrabold text-lg hover:bg-indigo-700 shadow-md shadow-indigo-500/30 flex justify-center items-center gap-2 transition-all transform active:scale-[0.98]">
+                  {isSubmitting ? <><Loader2 className="animate-spin" size={20}/> جاري النشر...</> : 'نشر الإعلان الآن'}
                 </button>
               </form>
             </div>
