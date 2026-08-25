@@ -3,7 +3,7 @@ import { initializeApp } from 'firebase/app';
 import { getAuth, createUserWithEmailAndPassword, signInWithEmailAndPassword, signInAnonymously, onAuthStateChanged, updateProfile, signOut } from 'firebase/auth';
 import { getFirestore, collection, onSnapshot, addDoc, deleteDoc, updateDoc, doc, setDoc, getDoc, serverTimestamp } from 'firebase/firestore';
 import { getStorage, ref, uploadBytes, getDownloadURL } from 'firebase/storage';
-import { MapPin, Navigation, Car, User, MessageCircle, ShieldCheck, X, CheckCircle2, Loader2, Trash2, Send, LogOut, Bell, Phone, Mail, Lock, LogIn, AlertCircle, Settings, Moon, Sun, Info, History, Star, Play, CheckSquare, Megaphone, Calendar, Clock, ChevronLeft, Wallet, Sparkles, ArrowRight, Crown, Image as ImageIcon, Camera, Package } from 'lucide-react';
+import { MapPin, Navigation, Car, User, MessageCircle, ShieldCheck, X, CheckCircle2, Loader2, Trash2, Send, LogOut, Bell, Phone, Mail, Lock, LogIn, AlertCircle, Settings, Moon, Sun, Info, History, Star, Play, CheckSquare, Megaphone, Calendar, Clock, ChevronLeft, Wallet, Sparkles, ArrowRight, Shield, Crown, Image as ImageIcon, Camera, Package } from 'lucide-react';
 
 const firebaseConfig = {
   apiKey: "AIzaSyC3JM11miWda_leIk0LPViRNVdSZRCQ8N8",
@@ -22,6 +22,13 @@ const APP_COLLECTION_NAME = 'khodni_maak_trips';
 const USERS_COLLECTION = 'khodni_maak_users';
 const ADMIN_EMAIL = "bassamwaleed2000@gmail.com".toLowerCase();
 
+// مسح الملاحظات وتصفير التقييمات للرحلات الوهمية القديمة
+const DUMMY_TRIPS = [
+  { id: 'dummy_1', type: 'offer', from: 'القاهرة (رمسيس)', to: 'الإسكندرية (محطة مصر)', date: '2026-08-25', time: '08:00 ص', seats: 3, cost: '150', notes: '', userId: 'd1', userName: 'أحمد محمود', userPhone: '', verified: true, isDummy: true, status: 'completed', rating: 0, totalRatings: 0, createdAt: { toMillis: () => Date.now() - 1000000 } },
+  { id: 'dummy_2', type: 'request', from: 'المنصورة', to: 'القاهرة (مدينة نصر)', date: '2026-08-26', time: '10:30 ص', seats: 1, cost: '', notes: '', userId: 'd2', userName: 'سارة خالد', userPhone: '', verified: false, isDummy: true, status: 'completed', rating: 0, totalRatings: 0, createdAt: { toMillis: () => Date.now() - 2000000 } },
+  { id: 'dummy_3', type: 'delivery', from: 'الزقازيق', to: 'العاشر من رمضان', date: '2026-08-24', time: '02:00 م', seats: 1, cost: '50', notes: '', userId: 'd3', userName: 'محمود حسن', userPhone: '', verified: true, isDummy: true, status: 'in_progress', rating: 0, totalRatings: 0, createdAt: { toMillis: () => Date.now() - 3000000 } }
+];
+
 export default function App() {
   const [user, setUser] = useState(null);
   const [userData, setUserData] = useState(null);
@@ -30,7 +37,8 @@ export default function App() {
   const [loading, setLoading] = useState(true);
   
   const [isLoginMode, setIsLoginMode] = useState(true);
-  const [authForm, setAuthForm] = useState({ name: '', email: '', password: '', phone: '' });
+  const [authMethod, setAuthMethod] = useState('phone'); 
+  const [authForm, setAuthForm] = useState({ name: '', phone: '', email: '', password: '' });
   const [authLoading, setAuthLoading] = useState(false);
   const [showAuthPrompt, setShowAuthPrompt] = useState(false);
   
@@ -45,24 +53,27 @@ export default function App() {
   const [showMyTrips, setShowMyTrips] = useState(false); 
   const [showAdminPanel, setShowAdminPanel] = useState(false); 
   
-  // Custom Modals instead of native alerts
   const [showToast, setShowToast] = useState(false);
   const [toastMessage, setToastMessage] = useState('');
   const [alertMsg, setAlertMsg] = useState('');
   const [deleteConfirmId, setDeleteConfirmId] = useState(null);
-  
+
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [isUploading, setIsUploading] = useState(false);
   
-  const [isDarkMode, setIsDarkMode] = useState(false);
+  // الوضع الليلي كافتراضي
+  const [isDarkMode, setIsDarkMode] = useState(() => {
+    const savedTheme = localStorage.getItem('khodnimaak_theme');
+    return savedTheme !== 'light'; 
+  });
   
   const [announcements, setAnnouncements] = useState(["🚀 جاري تحديث وتطوير البرنامج باستمرار لخدمتكم"]);
   const [currentAdIndex, setCurrentAdIndex] = useState(0);
   const [newAdText, setNewAdText] = useState(''); 
-  const [broadcastMsg, setBroadcastMsg] = useState(''); 
 
   const [bannerImages, setBannerImages] = useState([]);
   const [currentBannerIndex, setCurrentBannerIndex] = useState(0);
+  const [broadcastMsg, setBroadcastMsg] = useState(''); 
 
   const [allUsers, setAllUsers] = useState([]);
 
@@ -76,7 +87,6 @@ export default function App() {
     type: 'request', from: '', to: '', date: '', time: '', seats: 1, cost: '', notes: ''
   });
 
-  // Bot Logic
   useEffect(() => {
     if (!isAdmin || realTrips.length === 0) return;
     const botInterval = setInterval(() => {
@@ -96,7 +106,6 @@ export default function App() {
     return () => clearInterval(botInterval);
   }, [isAdmin, realTrips]);
 
-  // App Settings
   useEffect(() => {
     const settingsDocRef = doc(db, 'app_settings', 'announcements');
     const unsubscribe = onSnapshot(settingsDocRef, (docSnap) => {
@@ -111,20 +120,19 @@ export default function App() {
 
   useEffect(() => {
     if (announcements.length <= 1) return;
-    const interval = setInterval(() => setCurrentAdIndex((prev) => (prev + 1) % announcements.length), 4000); 
+    const interval = setInterval(() => {
+      setCurrentAdIndex((prev) => (prev + 1) % announcements.length);
+    }, 4000); 
     return () => clearInterval(interval);
   }, [announcements.length]);
 
   useEffect(() => {
     if (bannerImages.length <= 1) return;
-    const interval = setInterval(() => setCurrentBannerIndex((prev) => (prev + 1) % bannerImages.length), 5000); 
+    const interval = setInterval(() => {
+      setCurrentBannerIndex((prev) => (prev + 1) % bannerImages.length);
+    }, 5000); 
     return () => clearInterval(interval);
   }, [bannerImages.length]);
-
-  useEffect(() => {
-    const savedTheme = localStorage.getItem('khodnimaak_theme');
-    if (savedTheme === 'dark') setIsDarkMode(true);
-  }, []);
 
   const toggleTheme = () => {
     const newTheme = !isDarkMode;
@@ -132,7 +140,6 @@ export default function App() {
     localStorage.setItem('khodnimaak_theme', newTheme ? 'dark' : 'light');
   };
 
-  // Auth & User Profile
   useEffect(() => {
     const unsubscribe = onAuthStateChanged(auth, async (currentUser) => {
       if (currentUser) {
@@ -145,12 +152,21 @@ export default function App() {
           setIsGuest(false);
           const isUserAdmin = currentUser.email && currentUser.email.toLowerCase() === ADMIN_EMAIL;
           setIsAdmin(isUserAdmin);
+
           try {
             const userDoc = await getDoc(doc(db, USERS_COLLECTION, currentUser.uid));
             if (userDoc.exists()) {
               setUserData(userDoc.data());
             } else {
-              const initialData = { name: currentUser.displayName || 'مستخدم', photoURL: currentUser.photoURL || null, isVerified: false, rating: 0, totalRatings: 0, email: currentUser.email };
+              const initialData = { 
+                name: currentUser.displayName || 'مستخدم', 
+                photoURL: currentUser.photoURL || null, 
+                isVerified: false, 
+                rating: 0, 
+                totalRatings: 0, 
+                email: currentUser.email,
+                phone: currentUser.email.includes('@khodnimaak.com') ? currentUser.email.split('@')[0] : ''
+              };
               await setDoc(doc(db, USERS_COLLECTION, currentUser.uid), initialData, { merge: true });
               setUserData(initialData);
             }
@@ -169,44 +185,57 @@ export default function App() {
     return () => unsubscribe();
   }, []);
 
-  // Fetch Trips
   useEffect(() => {
     if (!user) return;
     const tripsPath = collection(db, APP_COLLECTION_NAME);
     const unsubscribe = onSnapshot(tripsPath, (snapshot) => {
       const tripsData = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+      
+      if (isAdmin) {
+        tripsData.forEach(trip => {
+          if (trip.isBot && trip.createdAt) {
+            const createdTime = (trip.createdAt && typeof trip.createdAt.toMillis === 'function') 
+                                ? trip.createdAt.toMillis() 
+                                : Date.now();
+            const elapsedMinutes = (Date.now() - createdTime) / (1000 * 60);
+            
+            if (trip.status === 'open' && elapsedMinutes >= 5 && elapsedMinutes < 30) {
+              updateDoc(doc(db, APP_COLLECTION_NAME, trip.id), { status: 'in_progress' }).catch(() => {});
+            } else if (trip.status === 'in_progress' && elapsedMinutes >= 30) {
+              updateDoc(doc(db, APP_COLLECTION_NAME, trip.id), { status: 'completed' }).catch(() => {});
+            }
+          }
+        });
+      }
       setRealTrips(tripsData);
     });
     return () => unsubscribe();
-  }, [user]);
+  }, [user, isAdmin]);
 
-  // Fetch Inbox
   useEffect(() => {
     if (!user || isGuest) return;
     const myInboxPath = collection(db, `inbox_${user.uid}`);
     const unsubscribe = onSnapshot(myInboxPath, (snapshot) => {
       const inboxData = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
-      inboxData.sort((a, b) => (b.createdAt?.toMillis() || 0) - (a.createdAt?.toMillis() || 0));
+      inboxData.sort((a, b) => (b.createdAt?.toMillis ? b.createdAt.toMillis() : 0) - (a.createdAt?.toMillis ? a.createdAt.toMillis() : 0));
       setMyInbox(inboxData);
     });
     return () => unsubscribe();
   }, [user, isGuest]);
 
-  // Fetch Chat
   useEffect(() => {
     if (!user || !activeChat || isGuest) return;
     const chatId = activeChat.chatId;
     const msgsPath = collection(db, `chats_${chatId}`);
     const unsubscribe = onSnapshot(msgsPath, (snapshot) => {
       const msgsData = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
-      msgsData.sort((a, b) => (a.createdAt?.toMillis() || 0) - (b.createdAt?.toMillis() || 0));
+      msgsData.sort((a, b) => (a.createdAt?.toMillis ? a.createdAt.toMillis() : 0) - (b.createdAt?.toMillis ? b.createdAt.toMillis() : 0));
       setMessages(msgsData);
       setTimeout(() => messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' }), 100);
     });
     return () => unsubscribe();
   }, [user, activeChat, isGuest]);
 
-  // Admin: Fetch all users
   useEffect(() => {
     if (!user || !isAdmin || !showAdminPanel) return;
     const usersPath = collection(db, USERS_COLLECTION);
@@ -224,19 +253,30 @@ export default function App() {
     
     const randomFrom = cities[Math.floor(Math.random() * cities.length)];
     let randomTo = cities[Math.floor(Math.random() * cities.length)];
-    while (randomFrom === randomTo) randomTo = cities[Math.floor(Math.random() * cities.length)];
-    
+    while (randomFrom === randomTo) {
+      randomTo = cities[Math.floor(Math.random() * cities.length)];
+    }
     const randomName = names[Math.floor(Math.random() * names.length)];
     const randomType = types[Math.floor(Math.random() * types.length)];
 
     try {
       await addDoc(collection(db, APP_COLLECTION_NAME), {
-        type: randomType, from: randomFrom, to: randomTo,
+        type: randomType,
+        from: randomFrom,
+        to: randomTo,
         date: new Date().toISOString().split('T')[0],
         time: new Date().toLocaleTimeString('ar-EG', {hour: '2-digit', minute:'2-digit'}),
         seats: Math.floor(Math.random() * 3) + 1,
-        cost: "", notes: "", userId: "bot_user_" + Date.now(), userName: randomName, userPhone: "",
-        verified: true, rating: Number((Math.random() * 2 + 3).toFixed(1)), totalRatings: 5, status: "open", isBot: true, 
+        cost: "", 
+        notes: "", 
+        userId: "bot_user_" + Date.now(),
+        userName: randomName,
+        userPhone: "",
+        verified: true,
+        rating: 0,
+        totalRatings: 0,
+        status: "open",
+        isBot: true, 
         createdAt: serverTimestamp()
       });
       triggerToast("تم توليد رحلة عشوائية بنجاح! 🤖");
@@ -334,22 +374,49 @@ export default function App() {
   const handleAuth = async (e) => {
     e.preventDefault();
     setAuthLoading(true);
+    
+    let emailForFirebase = '';
+    let phoneToSave = '';
+
+    if (authMethod === 'phone') {
+      emailForFirebase = `${authForm.phone.trim()}@khodnimaak.com`;
+      phoneToSave = authForm.phone.trim();
+    } else {
+      emailForFirebase = authForm.email.trim();
+      phoneToSave = '';
+    }
+
     try {
       if (isLoginMode) {
-        await signInWithEmailAndPassword(auth, authForm.email, authForm.password);
+        await signInWithEmailAndPassword(auth, emailForFirebase, authForm.password);
       } else {
-        if (!authForm.name || !authForm.phone) {
+        if (!authForm.name) {
           setAuthLoading(false);
-          return setAlertMsg("برجاء إدخال الاسم ورقم الموبايل");
+          return setAlertMsg("برجاء إدخال الاسم");
         }
-        const userCred = await createUserWithEmailAndPassword(auth, authForm.email, authForm.password);
+        if (authMethod === 'phone' && !authForm.phone) {
+          setAuthLoading(false);
+          return setAlertMsg("برجاء إدخال رقم الموبايل");
+        }
+        if (authMethod === 'email' && !authForm.email) {
+          setAuthLoading(false);
+          return setAlertMsg("برجاء إدخال البريد الإلكتروني");
+        }
+
+        const userCred = await createUserWithEmailAndPassword(auth, emailForFirebase, authForm.password);
         await updateProfile(userCred.user, { displayName: authForm.name });
+        
         await setDoc(doc(db, USERS_COLLECTION, userCred.user.uid), {
-          phone: authForm.phone, name: authForm.name, email: authForm.email, isVerified: false, rating: 0, totalRatings: 0 
+          phone: phoneToSave, 
+          name: authForm.name, 
+          email: emailForFirebase, 
+          isVerified: false, 
+          rating: 0, 
+          totalRatings: 0 
         });
       }
     } catch (error) {
-      setAlertMsg('تأكد من صحة البيانات.');
+      setAlertMsg('تأكد من صحة البيانات (الرقم السري 6 أحرف أو أرقام على الأقل).');
     } finally {
       setAuthLoading(false);
     }
@@ -371,6 +438,7 @@ export default function App() {
     setShowSettings(false);
     setShowMyTrips(false);
     setShowAdminPanel(false);
+    setAuthForm({ name: '', phone: '', email: '', password: '' });
   };
 
   const requireAuth = (actionCallback) => {
@@ -432,7 +500,9 @@ export default function App() {
   };
 
   const handleRateTrip = (tripId, ratingValue) => {
-    requireAuth(() => triggerToast(`شكراً! تم تقييم الرحلة بـ ${ratingValue} نجوم ⭐`));
+    requireAuth(() => {
+      triggerToast(`شكراً! تم تقييم الرحلة بـ ${ratingValue} نجوم ⭐`);
+    });
   };
 
   const handleSendMessage = async (e) => {
@@ -471,9 +541,10 @@ export default function App() {
     });
   };
 
-  const filteredTrips = realTrips.filter(t => (filterType === 'all' || t.type === filterType) && (t.from?.includes(searchFrom) && t.to?.includes(searchTo)));
-  filteredTrips.sort((a, b) => (b.createdAt?.toMillis() || 0) - (a.createdAt?.toMillis() || 0));
-  
+  const allTrips = [...realTrips, ...DUMMY_TRIPS];
+  allTrips.sort((a, b) => (b.createdAt?.toMillis() || 0) - (a.createdAt?.toMillis() || 0));
+
+  const filteredTrips = allTrips.filter(t => (filterType === 'all' || t.type === filterType) && (t.from?.includes(searchFrom) && t.to?.includes(searchTo)));
   const myOwnTrips = realTrips.filter(t => t.userId === user?.uid);
 
   const renderStars = (rating = 0, total = 0) => {
@@ -503,51 +574,71 @@ export default function App() {
   if (!user) {
     return (
       <div dir="rtl" className={`min-h-screen flex items-center justify-center p-4 transition-colors ${bgMain} bg-[url('data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHdpZHRoPSI0MCIgaGVpZ2h0PSI0MCI+PGRlZnM+PHBhdHRlcm4gaWQ9InBhdHRlcm4iIHdpZHRoPSI0MCIgaGVpZ2h0PSI0MCIgcGF0dGVyblVuaXRzPSJ1c2VyU3BhY2VPblVzZSI+PHBhdGggZD0iTTAgMGg0MHY0MEgweiIgZmlsbD0ibm9uZSIvPjxjaXJjbGUgY3g9IjIwIiBjeT0iMjAiIHI9IjEiIGZpbGw9InJnYmEoMTU2LCAxNjMsIDE3NSwgMC4yKSIvPjwvcGF0dGVybj48L2RlZnM+PHJlY3Qgd2lkdGg9IjEwMCUiIGhlaWdodD0iMTAwJSIgZmlsbD0idXJsKCNwYXR0ZXJuKSIvPjwvc3ZnPg==')]`}>
-        <div className={`${bgCard} p-8 sm:p-10 rounded-3xl shadow-2xl max-w-md w-full border-t-8 border-indigo-600 relative overflow-hidden`}>
+        <div className={`${bgCard} p-6 sm:p-10 rounded-3xl shadow-2xl max-w-md w-full border-t-8 border-indigo-600 relative overflow-hidden`}>
           {alertMsg && (
-            <div className="mb-4 bg-rose-100 text-rose-600 p-3 rounded-lg text-sm text-center font-bold">{alertMsg} <button className="float-left" onClick={()=>setAlertMsg('')}><X size={16}/></button></div>
+            <div className="mb-4 bg-rose-100 text-rose-600 p-3 rounded-lg text-sm text-center font-bold flex justify-between items-center">
+              <span>{alertMsg}</span>
+              <button onClick={()=>setAlertMsg('')}><X size={16}/></button>
+            </div>
           )}
           <div className="absolute top-0 right-0 w-32 h-32 bg-indigo-500 rounded-full blur-3xl opacity-10 transform translate-x-1/2 -translate-y-1/2"></div>
-          <div className="bg-indigo-100 text-indigo-600 w-20 h-20 rounded-2xl flex items-center justify-center mx-auto mb-6 shadow-inner transform -rotate-6">
-            <Car size={40} className="transform rotate-6" />
+          <div className="bg-indigo-100 text-indigo-600 w-16 h-16 rounded-2xl flex items-center justify-center mx-auto mb-4 shadow-inner transform -rotate-6">
+            <Car size={32} className="transform rotate-6" />
           </div>
-          <h1 className="text-3xl font-extrabold mb-2 text-center bg-gradient-to-l from-indigo-600 to-blue-500 bg-clip-text text-transparent">خدني معاك</h1>
-          <p className={`${isDarkMode ? 'text-slate-400' : 'text-slate-500'} mb-8 text-center text-sm font-medium`}>{isLoginMode ? 'مرحباً بعودتك! سجل دخولك للمتابعة' : 'انضم إلينا وابدأ رحلتك التوفيرية'}</p>
+          <h1 className="text-2xl font-extrabold mb-1 text-center bg-gradient-to-l from-indigo-600 to-blue-500 bg-clip-text text-transparent">خدني معاك</h1>
+          <p className={`${isDarkMode ? 'text-slate-400' : 'text-slate-500'} mb-6 text-center text-xs font-medium`}>{isLoginMode ? 'مرحباً بعودتك! سجل دخولك للمتابعة' : 'انضم إلينا وابدأ رحلتك التوفيرية'}</p>
           
+          <div className={`flex gap-2 p-1.5 mb-6 rounded-xl shadow-inner ${isDarkMode ? 'bg-slate-700' : 'bg-slate-100'}`}>
+            <button 
+              onClick={() => setAuthMethod('phone')} 
+              className={`flex-1 py-2 text-xs font-bold rounded-lg transition-all ${authMethod === 'phone' ? (isDarkMode ? 'bg-indigo-600 text-white shadow' : 'bg-white text-indigo-700 shadow') : (isDarkMode ? 'text-slate-400' : 'text-slate-500')}`}>
+              رقم الموبايل 📱
+            </button>
+            <button 
+              onClick={() => setAuthMethod('email')} 
+              className={`flex-1 py-2 text-xs font-bold rounded-lg transition-all ${authMethod === 'email' ? (isDarkMode ? 'bg-indigo-600 text-white shadow' : 'bg-white text-indigo-700 shadow') : (isDarkMode ? 'text-slate-400' : 'text-slate-500')}`}>
+              البريد الإلكتروني ✉️
+            </button>
+          </div>
+
           <form onSubmit={handleAuth} className="space-y-4">
             {!isLoginMode && (
-              <>
-                <div className="relative group">
-                  <User size={20} className={`absolute right-4 top-4 transition-colors ${isDarkMode ? 'text-slate-500 group-focus-within:text-indigo-400' : 'text-slate-400 group-focus-within:text-indigo-600'}`} />
-                  <input type="text" required placeholder="الاسم الكامل" value={authForm.name} onChange={e => setAuthForm({...authForm, name: e.target.value})} className={`w-full border rounded-2xl py-3.5 px-12 outline-none focus:ring-2 focus:ring-indigo-500 font-medium transition-all ${bgInput}`} />
-                </div>
-                <div className="relative group">
-                  <Phone size={20} className={`absolute right-4 top-4 transition-colors ${isDarkMode ? 'text-slate-500 group-focus-within:text-indigo-400' : 'text-slate-400 group-focus-within:text-indigo-600'}`} />
-                  <input type="tel" required placeholder="رقم الموبايل" value={authForm.phone} onChange={e => setAuthForm({...authForm, phone: e.target.value})} className={`w-full border rounded-2xl py-3.5 px-12 outline-none focus:ring-2 focus:ring-indigo-500 font-medium text-left transition-all ${bgInput}`} dir="ltr" />
-                </div>
-              </>
+              <div className="relative group">
+                <User size={18} className={`absolute right-4 top-3.5 transition-colors ${isDarkMode ? 'text-slate-500 group-focus-within:text-indigo-400' : 'text-slate-400 group-focus-within:text-indigo-600'}`} />
+                <input type="text" required placeholder="الاسم الكامل" value={authForm.name} onChange={e => setAuthForm({...authForm, name: e.target.value})} className={`w-full border rounded-xl py-3 px-11 outline-none focus:ring-2 focus:ring-indigo-500 font-medium text-sm transition-all ${bgInput}`} />
+              </div>
             )}
+            
+            {authMethod === 'phone' ? (
+              <div className="relative group">
+                <Phone size={18} className={`absolute right-4 top-3.5 transition-colors ${isDarkMode ? 'text-slate-500 group-focus-within:text-indigo-400' : 'text-slate-400 group-focus-within:text-indigo-600'}`} />
+                <input type="tel" required placeholder="رقم الموبايل" value={authForm.phone} onChange={e => setAuthForm({...authForm, phone: e.target.value})} className={`w-full border rounded-xl py-3 px-11 outline-none focus:ring-2 focus:ring-indigo-500 font-medium text-sm text-left transition-all ${bgInput}`} dir="ltr" />
+              </div>
+            ) : (
+              <div className="relative group">
+                <Mail size={18} className={`absolute right-4 top-3.5 transition-colors ${isDarkMode ? 'text-slate-500 group-focus-within:text-indigo-400' : 'text-slate-400 group-focus-within:text-indigo-600'}`} />
+                <input type="email" required placeholder="البريد الإلكتروني" value={authForm.email} onChange={e => setAuthForm({...authForm, email: e.target.value})} className={`w-full border rounded-xl py-3 px-11 outline-none focus:ring-2 focus:ring-indigo-500 font-medium text-sm text-left transition-all ${bgInput}`} dir="ltr" />
+              </div>
+            )}
+
             <div className="relative group">
-              <Mail size={20} className={`absolute right-4 top-4 transition-colors ${isDarkMode ? 'text-slate-500 group-focus-within:text-indigo-400' : 'text-slate-400 group-focus-within:text-indigo-600'}`} />
-              <input type="email" required placeholder="البريد الإلكتروني" value={authForm.email} onChange={e => setAuthForm({...authForm, email: e.target.value})} className={`w-full border rounded-2xl py-3.5 px-12 outline-none focus:ring-2 focus:ring-indigo-500 font-medium text-left transition-all ${bgInput}`} dir="ltr" />
+              <Lock size={18} className={`absolute right-4 top-3.5 transition-colors ${isDarkMode ? 'text-slate-500 group-focus-within:text-indigo-400' : 'text-slate-400 group-focus-within:text-indigo-600'}`} />
+              <input type="password" required placeholder="كلمة المرور" value={authForm.password} onChange={e => setAuthForm({...authForm, password: e.target.value})} className={`w-full border rounded-xl py-3 px-11 outline-none focus:ring-2 focus:ring-indigo-500 font-medium text-sm text-left transition-all ${bgInput}`} dir="ltr" />
             </div>
-            <div className="relative group">
-              <Lock size={20} className={`absolute right-4 top-4 transition-colors ${isDarkMode ? 'text-slate-500 group-focus-within:text-indigo-400' : 'text-slate-400 group-focus-within:text-indigo-600'}`} />
-              <input type="password" required placeholder="كلمة المرور" value={authForm.password} onChange={e => setAuthForm({...authForm, password: e.target.value})} className={`w-full border rounded-2xl py-3.5 px-12 outline-none focus:ring-2 focus:ring-indigo-500 font-medium text-left transition-all ${bgInput}`} dir="ltr" />
-            </div>
-            <button type="submit" disabled={authLoading} className="w-full bg-gradient-to-r from-indigo-600 to-blue-600 text-white py-4 rounded-2xl font-bold text-lg hover:from-indigo-700 hover:to-blue-700 shadow-lg shadow-indigo-500/30 flex justify-center items-center gap-2 transition-all transform active:scale-[0.98]">
-              {authLoading ? <Loader2 className="animate-spin" /> : (isLoginMode ? 'تسجيل الدخول' : 'إنشاء حساب جديد')}
+
+            <button type="submit" disabled={authLoading} className="w-full bg-gradient-to-r from-indigo-600 to-blue-600 text-white py-3.5 rounded-xl font-bold hover:from-indigo-700 hover:to-blue-700 shadow-lg shadow-indigo-500/30 flex justify-center items-center gap-2 transition-all transform active:scale-[0.98]">
+              {authLoading ? <Loader2 className="animate-spin" size={20}/> : (isLoginMode ? 'تسجيل الدخول' : 'إنشاء حساب جديد')}
             </button>
           </form>
           
           <div className="mt-6 text-center space-y-5">
-            <button onClick={() => setIsLoginMode(!isLoginMode)} className={`font-bold text-sm hover:underline block w-full transition-all ${isDarkMode ? 'text-indigo-400' : 'text-indigo-600'}`}>
+            <button onClick={() => setIsLoginMode(!isLoginMode)} className={`font-bold text-xs hover:underline block w-full transition-all ${isDarkMode ? 'text-indigo-400' : 'text-indigo-600'}`}>
               {isLoginMode ? 'ليس لديك حساب؟ أنشئ حساباً الآن' : 'لديك حساب بالفعل؟ سجل دخولك'}
             </button>
             <div className={`flex items-center justify-center gap-3 text-sm ${isDarkMode ? 'text-slate-400' : 'text-slate-500'}`}>
-              <span className={`w-12 h-px ${isDarkMode ? 'bg-slate-700' : 'bg-slate-200'}`}></span> أو <span className={`w-12 h-px ${isDarkMode ? 'bg-slate-700' : 'bg-slate-200'}`}></span>
+              <span className={`w-10 h-px ${isDarkMode ? 'bg-slate-700' : 'bg-slate-200'}`}></span> أو <span className={`w-10 h-px ${isDarkMode ? 'bg-slate-700' : 'bg-slate-200'}`}></span>
             </div>
-            <button onClick={handleGuestLogin} disabled={authLoading} className={`w-full py-3.5 rounded-2xl font-bold transition-all border ${isDarkMode ? 'bg-slate-800 border-slate-700 hover:bg-slate-700 text-slate-200' : 'bg-white border-slate-200 hover:bg-slate-50 text-slate-700'}`}>
+            <button onClick={handleGuestLogin} disabled={authLoading} className={`w-full py-3 rounded-xl text-sm font-bold transition-all border ${isDarkMode ? 'bg-slate-800 border-slate-700 hover:bg-slate-700 text-slate-200' : 'bg-white border-slate-200 hover:bg-slate-50 text-slate-700'}`}>
               تصفح التطبيق كزائر 👀
             </button>
           </div>
@@ -584,6 +675,7 @@ export default function App() {
         </div>
       )}
 
+      {/* لوحة تحكم الإدارة الشاملة */}
       {showAdminPanel && isAdmin && (
         <div className="fixed inset-0 bg-slate-900/80 backdrop-blur-md z-[80] flex justify-center items-center p-4">
           <div className={`${bgModal} rounded-3xl w-full max-w-2xl h-[85vh] shadow-2xl border flex flex-col ${isDarkMode ? 'border-amber-500/30' : 'border-amber-400'}`}>
@@ -660,10 +752,10 @@ export default function App() {
                     allUsers.map(u => (
                       <div key={u.id} className={`flex justify-between items-center p-3 rounded-xl border ${isDarkMode ? 'bg-slate-700 border-slate-600' : 'bg-slate-100 border-slate-200'}`}>
                         <div className="flex items-center gap-3">
-                          {u.photoURL ? <img src={u.photoURL} className="w-10 h-10 rounded-full object-cover border" alt="avatar"/> : <div className="w-10 h-10 rounded-full bg-indigo-100 flex items-center justify-center text-indigo-600 font-bold">{u.name?.charAt(0)}</div>}
+                          {u.photoURL ? <img src={u.photoURL} className="w-10 h-10 rounded-full object-cover border" alt="avatar"/> : <div className="w-10 h-10 rounded-full bg-indigo-100 flex items-center justify-center text-indigo-600 font-bold">{(u.name || 'م').charAt(0)}</div>}
                           <div>
-                            <p className="font-bold text-sm flex items-center gap-1">{u.name} {u.isVerified && <ShieldCheck size={14} className="text-blue-500"/>}</p>
-                            <p className="text-xs text-slate-500">{u.phone}</p>
+                            <p className="font-bold text-sm flex items-center gap-1">{u.name || 'مستخدم'} {u.isVerified && <ShieldCheck size={14} className="text-blue-500"/>}</p>
+                            <p className="text-xs text-slate-500">{u.phone || 'بدون رقم'}</p>
                           </div>
                         </div>
                         <button onClick={() => adminToggleVerification(u.id, u.isVerified)} className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-colors ${u.isVerified ? 'bg-rose-100 text-rose-600 hover:bg-rose-200' : 'bg-emerald-100 text-emerald-700 hover:bg-emerald-200'}`}>
@@ -700,6 +792,7 @@ export default function App() {
         </div>
       )}
 
+      {/* الإعدادات والصورة الشخصية */}
       {showSettings && (
         <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-sm z-[70] flex justify-end">
           <div className={`${bgModal} w-full sm:w-[400px] h-full shadow-2xl flex flex-col animate-fade-in-right`}>
@@ -716,7 +809,7 @@ export default function App() {
                       <img src={userData.photoURL} alt="Profile" className="w-24 h-24 rounded-full object-cover border-4 border-indigo-100 shadow-md" />
                     ) : (
                       <div className="w-24 h-24 rounded-full bg-indigo-100 flex items-center justify-center text-indigo-600 text-3xl font-bold border-4 border-white shadow-md">
-                        {userData?.name?.charAt(0) || <User size={40}/>}
+                        {(userData?.name || 'م').charAt(0)}
                       </div>
                     )}
                     <label className="absolute bottom-0 right-0 p-2 bg-indigo-600 text-white rounded-full cursor-pointer shadow-lg hover:bg-indigo-700 transition">
@@ -725,7 +818,7 @@ export default function App() {
                     </label>
                   </div>
                   <h3 className="font-bold text-lg">{userData?.name}</h3>
-                  <p className="text-sm text-slate-500 mb-2">{userData?.phone}</p>
+                  <p className="text-sm text-slate-500 mb-2">{userData?.phone || userData?.email}</p>
                 </div>
               )}
 
@@ -757,9 +850,25 @@ export default function App() {
                 <button onClick={() => { requireAuth(() => { setAlertMsg("تم إرسال طلبك للإدارة!"); setShowSettings(false); })}} className={`w-full py-3 font-bold rounded-xl text-sm transition-colors ${isDarkMode ? 'bg-slate-800 text-blue-400 hover:bg-slate-900 border border-slate-600' : 'bg-white text-blue-700 hover:bg-blue-50 border border-slate-200 shadow-sm'}`}>طلب توثيق الحساب</button>
               </div>
 
+              <div className={`p-5 rounded-2xl border ${isDarkMode ? 'bg-slate-700/50 border-slate-600' : 'bg-slate-50 border-slate-200'}`}>
+                <div className="flex items-center gap-3 mb-3">
+                  <div className={`p-2 rounded-xl ${isDarkMode ? 'bg-slate-800' : 'bg-slate-200'}`}><Info className={isDarkMode ? 'text-slate-400' : 'text-slate-600'} size={20}/></div>
+                  <span className="font-bold text-sm">سياسة التطبيق</span>
+                </div>
+                <p className={`text-xs leading-relaxed ${isDarkMode ? 'text-slate-400' : 'text-slate-500'}`}>
+                  نعمل على توفير بيئة آمنة. يرجى الالتزام بالآداب العامة أثناء الرحلات. الإدارة غير مسؤولة عن أي تعاملات مادية خارج التطبيق.
+                </p>
+              </div>
             </div>
             
             <div className={`p-6 border-t ${isDarkMode ? 'border-slate-700' : 'border-slate-100'}`}>
+              <div className="flex items-center gap-3 mb-4 px-2">
+                <div className="w-10 h-10 rounded-full bg-indigo-100 flex items-center justify-center text-indigo-600 font-bold">{(userData?.name || 'م').charAt(0)}</div>
+                <div>
+                  <p className="font-bold text-sm">{userData?.name || 'زائر'}</p>
+                  <p className="text-xs text-slate-500">{userData?.phone || 'لا يوجد رقم'}</p>
+                </div>
+              </div>
               <button onClick={handleLogout} className={`w-full py-3.5 rounded-xl font-bold flex justify-center items-center gap-2 transition-colors ${isDarkMode ? 'bg-rose-500/10 text-rose-400 hover:bg-rose-500/20' : 'bg-rose-50 text-rose-600 hover:bg-rose-100'}`}>
                 {isGuest ? <LogIn size={18}/> : <LogOut size={18}/>} {isGuest ? 'تسجيل الدخول' : 'تسجيل الخروج'}
               </button>
@@ -943,6 +1052,7 @@ export default function App() {
               const isCompleted = trip.status === 'completed';
               const isInProgress = trip.status === 'in_progress';
               const isClosedForPublic = (isInProgress || isCompleted) && !isOwner;
+              // يتم التأكد هنا أن المستخدم لديه محادثة لهذه الرحلة ليتم اعتباره شريكاً فيها
               const isPassenger = myInbox.some(chat => chat.tripId === trip.id);
               const canDelete = isOwner || isAdmin;
               
@@ -1059,7 +1169,7 @@ export default function App() {
                       
                       <button onClick={() => requireAuth(() => {
                         if (trip.isDummy || trip.isBot) {
-                          triggerToast('هذه رحلة تجريبية للعرض فقط 😅');
+                          setAlertMsg('هذه رحلة تجريبية للعرض فقط 😅');
                         } else if (!trip.userPhone) {
                           setAlertMsg('عذراً، رقم الهاتف غير مسجل لهذا المستخدم 📞');
                         } else {
@@ -1105,7 +1215,7 @@ export default function App() {
                        ) : chat.otherPersonPhoto ? (
                          <img src={chat.otherPersonPhoto} className="w-10 h-10 rounded-full object-cover border border-slate-200" alt="avatar" />
                        ) : (
-                         <div className="w-10 h-10 bg-indigo-100 text-indigo-600 rounded-full flex items-center justify-center font-bold">{chat.otherPersonName?.charAt(0) || 'م'}</div>
+                         <div className="w-10 h-10 bg-indigo-100 text-indigo-600 rounded-full flex items-center justify-center font-bold">{(chat.otherPersonName || 'م').charAt(0)}</div>
                        )}
                        <div>
                         <h4 className={`font-bold text-sm ${isDarkMode ? 'text-white' : 'text-slate-900'}`}>{chat.otherPersonName || 'مستخدم'}</h4>
@@ -1137,7 +1247,7 @@ export default function App() {
                 {activeChat.tripInfo && activeChat.tripInfo !== 'system' && <span className="text-[9px] text-indigo-200 leading-tight block">{activeChat.tripInfo}</span>}
               </div>
             </div>
-            <div className={`flex-1 overflow-y-auto p-3 space-y-3 ${isDarkMode ? 'bg-slate-900/80' : 'bg-slate-100'} bg-[url('data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHdpZHRoPSI0MCIgaGVpZ2h0PSI0MCI+PGRlZnM+PHBhdHRlcm4gaWQ9InBhdHRlcm4iIHdpZHRoPSI0MCIgaGVpZ2h0PSI0MCIgcGF0dGVyblVuaXRzPSJ1c2VyU3BhY2VPblVzZSI+PHBhdGggZD0iTTAgMGg0MHY0MEgweiIgZmlsbD0ibm9uZSIvPjxjaXJjbGUgY3g9IjIwIiBjeT0iMjAiIHI9IjEiIGZpbGw9InJnYmEoMTU2LCAxNjMsIDE3NSwgMC4xKSIvPjwvcGF0dGVybj48L2RlZnM+PHJlY3Qgd2lkdGg9IjEwMCUiIGhlaWdodD0iMTAwJSIgZmlsbD0idXJsKCNwYXR0ZXJuKSIvPjwvc3ZnPg==')]`}>
+            <div className={`flex-1 overflow-y-auto p-3 space-y-3 ${isDarkMode ? 'bg-slate-900/80' : 'bg-slate-100'} bg-[url('data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHdpZHRoPSI0MCIgaGVpZ2h0PSI0MCI+PGRlZnM+PHBhdHRlcm4gaWQ9InBhdHRlcm4iIHdpZHRoPSI0MCIgaGVpZ2h0PSI0MCIgcGF0dGVyblVuaXRzPSJ1c2VyU3BhY2VPblVzZSI+PHBhdGggZD0iTTAgMGg0MHY0MEgweiIgZmlsbD0ibm9uZSIvPjxjaXJjbGUgY3g9IjIwIiBjeT0iMjAiIHI9IjEiIGZpbGw9InJnYmEoMTU2LCAxNjMsIDE3NSwgMC4yKSIvPjwvcGF0dGVybj48L2RlZnM+PHJlY3Qgd2lkdGg9IjEwMCUiIGhlaWdodD0iMTAwJSIgZmlsbD0idXJsKCNwYXR0ZXJuKSIvPjwvc3ZnPg==')]`}>
               {messages.map(msg => {
                 const isMe = msg.senderId === user.uid;
                 const isAdminMsg = msg.senderId === 'admin';
