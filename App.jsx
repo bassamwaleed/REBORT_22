@@ -1263,6 +1263,7 @@ export default function App() {
                     </div>
                   </div>
                   
+                  
                   <textarea rows="3" value={newTrip.notes} onChange={(e) => setNewTrip({...newTrip, notes: e.target.value})} placeholder={newTrip.type === 'delivery' ? "تفاصيل الطرد (وزنه، نوعه، قابل للكسر...)" : "تفاصيل إضافية (أماكن الوقوف بالتحديد، حجم الحقائب...)"} className={`w-full border p-3 rounded-xl resize-none text-xs font-medium outline-none focus:ring-2 focus:ring-indigo-500 transition-colors leading-relaxed ${bgInput}`}></textarea>
                 </div>
                 
