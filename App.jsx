@@ -3,7 +3,8 @@ import { initializeApp } from 'firebase/app';
 import { getAuth, createUserWithEmailAndPassword, signInWithEmailAndPassword, signInAnonymously, onAuthStateChanged, updateProfile, signOut, sendPasswordResetEmail } from 'firebase/auth';
 import { getFirestore, collection, onSnapshot, addDoc, deleteDoc, updateDoc, doc, setDoc, getDoc, serverTimestamp } from 'firebase/firestore';
 import { getStorage, ref, uploadBytes, getDownloadURL } from 'firebase/storage';
-import { MapPin, Navigation, Car, User, MessageCircle, ShieldCheck, X, CheckCircle2, Loader2, Trash2, Send, LogOut, Bell, Phone, Mail, Lock, LogIn, AlertCircle, Settings, Moon, Sun, Info, History, Star, Play, CheckSquare, Megaphone, Clock, ChevronLeft, Wallet, Sparkles, ArrowRight, Crown, Shield, Image as ImageIcon, Camera, Package, Store, ShoppingBag, Plus, Tag } from 'lucide-react';
+// تم التأكد من استيراد كل الأيقونات المطلوبة بما فيها Image
+import { MapPin, Navigation, Car, User, MessageCircle, ShieldCheck, X, CheckCircle2, Loader2, Trash2, Send, LogOut, Bell, Phone, Mail, Lock, LogIn, AlertCircle, Settings, Moon, Sun, Info, History, Star, Play, CheckSquare, Megaphone, Clock, ChevronLeft, Wallet, Sparkles, ArrowRight, Crown, Shield, Image, Camera, Package, Store, ShoppingBag, Plus, Tag } from 'lucide-react';
 
 const firebaseConfig = {
   apiKey: "AIzaSyC3JM11miWda_leIk0LPViRNVdSZRCQ8N8",
@@ -77,8 +78,7 @@ export default function App() {
   
   const [isLoginMode, setIsLoginMode] = useState(true);
   const [authMethod, setAuthMethod] = useState('phone'); 
-  // تم تهيئة الخانات بشكل صحيح لضمان عدم وجود بيانات سابقة
-  const [authForm, setAuthForm] = useState({ name: '', identifier: '', password: '' });
+  const [authForm, setAuthForm] = useState({ name: '', phone: '', email: '', password: '' });
   const [authLoading, setAuthLoading] = useState(false);
   const [showAuthPrompt, setShowAuthPrompt] = useState(false);
   
@@ -557,7 +557,10 @@ export default function App() {
   const handleLogout = async () => {
     await signOut(auth);
     setActiveTab('trips');
-    setAuthForm({ name: '', identifier: '', password: '' });
+    setShowSettings(false);
+    setShowMyTrips(false);
+    setShowAdminPanel(false);
+    setAuthForm({ name: '', phone: '', email: '', password: '' });
   };
 
   const requireAuth = (actionCallback) => {
@@ -690,6 +693,7 @@ export default function App() {
       setActiveChat({
         chatId: chatId, tripId: trip.id, otherPersonId: trip.userId, otherPersonName: trip.userName || 'مستخدم', otherPersonPhoto: trip.userPhoto || null, otherPersonVerified: trip.verified || false, tripInfo: `${trip.from} ➔ ${trip.to}`
       });
+      setActiveTab('inbox');
     });
   };
 
@@ -700,6 +704,7 @@ export default function App() {
       setActiveChat({
         chatId: chatId, tripId: product.id, otherPersonId: product.userId, otherPersonName: product.userName || 'مستخدم', otherPersonPhoto: product.userPhoto || null, otherPersonVerified: product.verified || false, tripInfo: `مهتم بشراء: ${product.title}`
       });
+      setActiveTab('inbox');
     });
   };
 
@@ -709,12 +714,12 @@ export default function App() {
   const myOwnTrips = realTrips.filter(t => t.userId === user?.uid);
 
   const renderStars = (rating = 0, total = 0) => {
-    if (!total || total === 0) return <span className="text-[9px] text-slate-400 font-bold">جديد ✨</span>;
+    if (!total || total === 0) return <span className="text-[10px] text-slate-400 font-bold">جديد ✨</span>;
     const numRating = Number(rating) || 0;
     const fullStars = Math.floor(numRating);
     const hasHalfStar = numRating % 1 !== 0;
     return (
-      <div className="flex items-center gap-0.5 mt-1 justify-end">
+      <div className="flex items-center gap-0.5 mt-1">
         <div className="flex text-amber-400">
           {[...Array(5)].map((_, i) => (
             <Star key={i} size={10} fill={i < fullStars ? "currentColor" : (i === fullStars && hasHalfStar ? "currentColor" : "none")} className={i < fullStars || (i === fullStars && hasHalfStar) ? "text-amber-400" : "text-slate-300 dark:text-slate-600"} />
@@ -733,26 +738,13 @@ export default function App() {
   const textPrimary = isDarkMode ? 'text-white' : 'text-slate-800';
   const textSecondary = isDarkMode ? 'text-slate-400' : 'text-slate-500';
 
-  // الألوان الصلبة الثابتة للبادجات عشان متختفيش مع الدارك مود
-  const getBadgeClass = (type) => {
-    if (type === 'offer') return 'bg-emerald-600 text-white border-emerald-700';
-    if (type === 'delivery') return 'bg-purple-600 text-white border-purple-700';
-    return 'bg-orange-500 text-white border-orange-600';
-  };
-
-  const getStatusClass = (status) => {
-    if (status === 'completed') return 'bg-slate-600 text-white border-slate-700';
-    if (status === 'in_progress') return 'bg-amber-500 text-white border-amber-600';
-    return 'bg-indigo-600 text-white border-indigo-700';
-  };
-
   if (loading) return <div className={`min-h-screen flex justify-center items-center ${bgMain}`}><Loader2 size={50} className="animate-spin text-indigo-600" /></div>;
 
   if (!user) {
     return (
       <div dir="rtl" className={`min-h-screen flex items-center justify-center p-4 transition-colors ${bgMain} overflow-x-hidden w-full bg-[url('data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHdpZHRoPSI0MCIgaGVpZ2h0PSI0MCI+PGRlZnM+PHBhdHRlcm4gaWQ9InBhdHRlcm4iIHdpZHRoPSI0MCIgaGVpZ2h0PSI0MCIgcGF0dGVyblVuaXRzPSJ1c2VyU3BhY2VPblVzZSI+PHBhdGggZD0iTTAgMGg0MHY0MEgweiIgZmlsbD0ibm9uZSIvPjxjaXJjbGUgY3g9IjIwIiBjeT0iMjAiIHI9IjEiIGZpbGw9InJnYmEoMTU2LCAxNjMsIDE3NSwgMC4yKSIvPjwvcGF0dGVybj48L2RlZnM+PHJlY3Qgd2lkdGg9IjEwMCUiIGhlaWdodD0iMTAwJSIgZmlsbD0idXJsKCNwYXR0ZXJuKSIvPjwvc3ZnPg==')]`}>
         {alertMsg && (
-          <div className="fixed inset-0 bg-slate-900/70 backdrop-blur-sm z-[250] flex justify-center items-center p-4">
+          <div className="fixed inset-0 bg-slate-900/70 backdrop-blur-sm z-[100] flex justify-center items-center p-4">
             <div className={`${bgModal} rounded-3xl p-6 max-w-sm w-full text-center shadow-2xl`}>
               <div className="bg-rose-100 w-16 h-16 rounded-full flex items-center justify-center mx-auto mb-4"><AlertCircle size={30} className="text-rose-600" /></div>
               <p className="font-bold text-lg mb-6">{alertMsg}</p>
@@ -762,16 +754,15 @@ export default function App() {
         )}
 
         {showForgotPass && (
-          <div className="fixed inset-0 bg-slate-900/80 backdrop-blur-md z-[200] flex justify-center items-center p-4">
+          <div className="fixed inset-0 bg-slate-900/80 backdrop-blur-md z-[90] flex justify-center items-center p-4">
             <div className={`${bgModal} rounded-3xl p-8 max-w-sm w-full shadow-2xl border ${isDarkMode ? 'border-slate-700' : 'border-transparent'}`}>
               <div className="flex justify-between items-center mb-6">
                 <h2 className="text-xl font-extrabold flex items-center gap-2"><Lock className="text-indigo-500" /> استعادة المرور</h2>
                 <button onClick={() => setShowForgotPass(false)} className="p-1 hover:bg-slate-100 dark:hover:bg-slate-700 rounded-full transition-colors"><X size={20} /></button>
               </div>
               <p className={`text-sm mb-4 leading-relaxed ${textSecondary}`}>أدخل البريد الإلكتروني الخاص بك لاستعادة الحساب.</p>
-              {/* إيقاف الملء التلقائي */}
-              <form onSubmit={handleForgotPassword} autoComplete="off">
-                <input type="text" required placeholder="الإيميل المسجل" value={forgotPassInput} onChange={e => setForgotPassInput(e.target.value)} autoComplete="off" className={`w-full border rounded-full py-3 px-5 outline-none focus:ring-2 focus:ring-indigo-500 font-bold text-[16px] text-left transition-all mb-4 ${bgInput}`} dir="ltr" />
+              <form onSubmit={handleForgotPassword}>
+                <input type="text" required placeholder="الإيميل المسجل" value={forgotPassInput} onChange={e => setForgotPassInput(e.target.value)} className={`w-full border rounded-full py-3 px-5 outline-none focus:ring-2 focus:ring-indigo-500 font-bold text-[16px] text-left transition-all mb-4 ${bgInput}`} dir="ltr" />
                 <button type="submit" disabled={isSubmitting} className="w-full bg-indigo-600 text-white py-3.5 rounded-full font-bold hover:bg-indigo-700 flex justify-center items-center gap-2">
                   {isSubmitting ? <Loader2 className="animate-spin" size={20} /> : 'تأكيد'}
                 </button>
@@ -798,30 +789,29 @@ export default function App() {
             <button onClick={() => setAuthMethod('email')} className={`flex-1 py-2 text-[16px] sm:text-xs font-bold rounded-full transition-all ${authMethod === 'email' ? (isDarkMode ? 'bg-indigo-600 text-white shadow' : 'bg-white text-indigo-700 shadow-sm') : (isDarkMode ? 'text-slate-400' : 'text-slate-500')}`}>البريد الإلكتروني ✉️</button>
           </div>
 
-          {/* إيقاف الملء التلقائي المزعج */}
-          <form onSubmit={handleAuth} className="space-y-4" autoComplete="off">
+          <form onSubmit={handleAuth} className="space-y-4">
             {!isLoginMode && (
               <div className="relative group">
                 <User size={18} className={`absolute right-4 top-3.5 transition-colors ${isDarkMode ? 'text-slate-500 group-focus-within:text-indigo-400' : 'text-slate-400 group-focus-within:text-indigo-600'}`} />
-                <input type="text" required placeholder="الاسم الكامل" value={authForm.name} onChange={e => setAuthForm({...authForm, name: e.target.value})} autoComplete="off" className={`w-full border rounded-full py-3 px-11 outline-none focus:ring-2 focus:ring-indigo-500 font-bold text-[16px] transition-all ${bgInput}`} />
+                <input type="text" required placeholder="الاسم الكامل" value={authForm.name} onChange={e => setAuthForm({...authForm, name: e.target.value})} className={`w-full border rounded-full py-3 px-11 outline-none focus:ring-2 focus:ring-indigo-500 font-bold text-[16px] transition-all ${bgInput}`} />
               </div>
             )}
             
             {authMethod === 'phone' ? (
               <div className="relative group">
                 <Phone size={18} className={`absolute right-4 top-3.5 transition-colors ${isDarkMode ? 'text-slate-500 group-focus-within:text-indigo-400' : 'text-slate-400 group-focus-within:text-indigo-600'}`} />
-                <input type="tel" required placeholder="رقم الموبايل" value={authForm.identifier || ''} onChange={e => setAuthForm({...authForm, identifier: e.target.value})} autoComplete="off" className={`w-full border rounded-full py-3 px-11 outline-none focus:ring-2 focus:ring-indigo-500 font-bold text-[16px] text-left transition-all ${bgInput}`} dir="ltr" />
+                <input type="tel" required placeholder="رقم الموبايل" value={authForm.identifier} onChange={e => setAuthForm({...authForm, identifier: e.target.value})} className={`w-full border rounded-full py-3 px-11 outline-none focus:ring-2 focus:ring-indigo-500 font-bold text-[16px] text-left transition-all ${bgInput}`} dir="ltr" />
               </div>
             ) : (
               <div className="relative group">
                 <Mail size={18} className={`absolute right-4 top-3.5 transition-colors ${isDarkMode ? 'text-slate-500 group-focus-within:text-indigo-400' : 'text-slate-400 group-focus-within:text-indigo-600'}`} />
-                <input type="email" required placeholder="البريد الإلكتروني" value={authForm.identifier || ''} onChange={e => setAuthForm({...authForm, identifier: e.target.value})} autoComplete="off" className={`w-full border rounded-full py-3 px-11 outline-none focus:ring-2 focus:ring-indigo-500 font-bold text-[16px] text-left transition-all ${bgInput}`} dir="ltr" />
+                <input type="email" required placeholder="البريد الإلكتروني" value={authForm.identifier} onChange={e => setAuthForm({...authForm, identifier: e.target.value})} className={`w-full border rounded-full py-3 px-11 outline-none focus:ring-2 focus:ring-indigo-500 font-bold text-[16px] text-left transition-all ${bgInput}`} dir="ltr" />
               </div>
             )}
 
             <div className="relative group">
               <Lock size={18} className={`absolute right-4 top-3.5 transition-colors ${isDarkMode ? 'text-slate-500 group-focus-within:text-indigo-400' : 'text-slate-400 group-focus-within:text-indigo-600'}`} />
-              <input type="password" required placeholder="كلمة المرور" value={authForm.password} onChange={e => setAuthForm({...authForm, password: e.target.value})} autoComplete="new-password" className={`w-full border rounded-full py-3 px-11 outline-none focus:ring-2 focus:ring-indigo-500 font-bold text-[16px] text-left transition-all ${bgInput}`} dir="ltr" />
+              <input type="password" required placeholder="كلمة المرور" value={authForm.password} onChange={e => setAuthForm({...authForm, password: e.target.value})} className={`w-full border rounded-full py-3 px-11 outline-none focus:ring-2 focus:ring-indigo-500 font-bold text-[16px] text-left transition-all ${bgInput}`} dir="ltr" />
             </div>
 
             {isLoginMode && (
@@ -864,7 +854,7 @@ export default function App() {
               <Lock size={30} className="transform rotate-6"/>
             </div>
             <h2 className="text-xl font-extrabold mb-2 text-slate-800 dark:text-white">يرجى تسجيل الدخول أولاً</h2>
-            <p className={`mb-6 text-xs leading-relaxed ${textSecondary}`}>عشان تقدر تستخدم الخدمة دي وتتفاعل مع الرحلات أو السوق، لازم تسجل حساب معانا في ثواني.</p>
+            <p className={`mb-6 text-xs leading-relaxed ${textSecondary}`}>لاستخدام هذه الخدمة والتفاعل مع الرحلات أو السوق، يرجى تسجيل الدخول أو إنشاء حساب جديد.</p>
             
             <div className="space-y-2.5">
               <button onClick={() => { setShowAuthPrompt(false); setIsLoginMode(true); handleLogout(); }} className="w-full bg-indigo-600 text-white py-3.5 rounded-full font-extrabold text-sm hover:bg-indigo-700 shadow-md shadow-indigo-500/30 flex justify-center items-center gap-2">
@@ -881,9 +871,9 @@ export default function App() {
         </div>
       )}
 
-      {/* الإشعار العائم المتميز */}
+      {/* الإشعار العائم المتميز (يظهر للكل في أي صفحة) */}
       {showLiveNotification && currentNotificationTrip && (
-        <div className="fixed top-20 left-1/2 transform -translate-x-1/2 z-[100] w-11/12 max-w-sm animate-fade-in-down">
+        <div className="fixed top-20 left-1/2 transform -translate-x-1/2 z-[200] w-11/12 max-w-sm animate-fade-in-down">
           <div className={`p-3 rounded-2xl border flex flex-col gap-2.5 shadow-2xl ${isDarkMode ? 'bg-indigo-900/95 border-indigo-500/50 shadow-indigo-500/20' : 'bg-indigo-50 border-indigo-200 shadow-indigo-600/20'}`}>
             <div className="flex justify-between items-start">
               <div className="flex items-center gap-2.5 overflow-hidden">
@@ -912,7 +902,7 @@ export default function App() {
             
             <div className={`flex items-center justify-between p-2.5 rounded-xl border ${isDarkMode ? 'bg-indigo-950/50 border-indigo-800/50' : 'bg-white border-indigo-100'}`}>
               <div className="flex items-center gap-2 overflow-hidden pr-1">
-                <span className={`shrink-0 text-[9px] font-bold px-1.5 py-0.5 rounded-md ${currentNotificationTrip.type === 'offer' ? 'bg-emerald-600 text-white' : currentNotificationTrip.type === 'delivery' ? 'bg-purple-600 text-white' : 'bg-orange-500 text-white'}`}>
+                <span className={`shrink-0 text-[9px] font-bold px-1.5 py-0.5 rounded-md ${currentNotificationTrip.type === 'offer' ? (isDarkMode ? 'bg-emerald-900/60 text-emerald-400' : 'bg-emerald-100 text-emerald-800') : currentNotificationTrip.type === 'delivery' ? (isDarkMode ? 'bg-purple-900/60 text-purple-400' : 'bg-purple-100 text-purple-800') : (isDarkMode ? 'bg-orange-900/60 text-orange-400' : 'bg-orange-100 text-orange-800')}`}>
                   {currentNotificationTrip.type === 'offer' ? 'سائق' : currentNotificationTrip.type === 'delivery' ? 'دليفري' : 'راكب'}
                 </span>
                 <span className={`text-xs font-bold truncate ${isDarkMode ? 'text-indigo-100' : 'text-slate-800'}`}>
@@ -928,7 +918,7 @@ export default function App() {
       )}
 
       {alertMsg && (
-        <div className="fixed inset-0 bg-slate-900/70 backdrop-blur-sm z-[110] flex justify-center items-center p-4">
+        <div className="fixed inset-0 bg-slate-900/70 backdrop-blur-sm z-[250] flex justify-center items-center p-4">
           <div className={`${bgModal} rounded-3xl p-6 max-w-sm w-full text-center shadow-2xl`}>
             <div className="bg-rose-100 w-16 h-16 rounded-full flex items-center justify-center mx-auto mb-4"><AlertCircle size={30} className="text-rose-600" /></div>
             <p className="font-bold text-lg mb-6">{alertMsg}</p>
@@ -938,7 +928,7 @@ export default function App() {
       )}
 
       {deleteConfirmId && (
-        <div className="fixed inset-0 bg-slate-900/70 backdrop-blur-sm z-[110] flex justify-center items-center p-4">
+        <div className="fixed inset-0 bg-slate-900/70 backdrop-blur-sm z-[250] flex justify-center items-center p-4">
           <div className={`${bgModal} rounded-3xl p-6 max-w-sm w-full text-center shadow-2xl`}>
             <div className="bg-rose-100 w-16 h-16 rounded-full flex items-center justify-center mx-auto mb-4"><Trash2 size={30} className="text-rose-600" /></div>
             <p className="font-bold text-lg mb-6">هل أنت متأكد من الحذف نهائياً؟</p>
@@ -952,7 +942,7 @@ export default function App() {
 
       {/* لوحة تحكم الإدارة الشاملة */}
       {showAdminPanel && isAdmin && (
-        <div className="fixed inset-0 bg-slate-900/80 backdrop-blur-md z-[80] flex justify-center items-center p-4">
+        <div className="fixed inset-0 bg-slate-900/80 backdrop-blur-md z-[150] flex justify-center items-center p-4">
           <div className={`${bgModal} rounded-3xl w-full max-w-2xl h-[85vh] shadow-2xl border flex flex-col ${isDarkMode ? 'border-amber-500/30' : 'border-amber-400'}`}>
             <div className="bg-gradient-to-r from-amber-500 to-orange-600 text-white p-5 flex justify-between items-center rounded-t-3xl">
               <h2 className="text-xl font-black flex items-center gap-2"><Crown size={24}/> لوحة تحكم الإدارة</h2>
@@ -970,7 +960,7 @@ export default function App() {
                   <div className="flex-1">
                     <label className="flex items-center justify-center w-full p-3 border-2 border-dashed rounded-xl cursor-pointer hover:bg-slate-50 dark:hover:bg-slate-800 transition">
                       <div className="flex items-center gap-2 text-sm font-bold text-slate-500">
-                        <Camera size={18}/> <span>اختر لوجو جديد (PNG/JPG)</span>
+                        <Camera size={18}/> <span>ارفع لوجو جديد (PNG/JPG)</span>
                       </div>
                       <input type="file" className="hidden" accept="image/*" onChange={adminUploadAppLogo} />
                     </label>
@@ -1078,23 +1068,19 @@ export default function App() {
         </div>
       )}
 
-      {/* --- الهيدر الرئيسي --- */}
+      {/* --- الهيدر الرئيسي (كلمة خدني معاك على اليمين بجوار اللوجو) --- */}
       <header className={`sticky top-0 z-40 transition-all duration-300 border-b ${isDarkMode ? 'bg-slate-900 border-slate-800' : 'bg-white border-slate-100 shadow-sm'}`}>
         <div className="max-w-7xl mx-auto px-4 h-16 flex justify-between items-center w-full relative">
           
-          <div className="flex items-center">
-             {/* مساحة فارغة للحفاظ على التوازن */}
-          </div>
-
-          <div className="absolute left-1/2 transform -translate-x-1/2 flex items-center justify-center gap-2 w-full max-w-[200px] cursor-pointer" onClick={() => setActiveTab('trips')}>
+          <div className="flex items-center gap-2 cursor-pointer" onClick={() => setActiveTab('trips')}>
             {appLogo ? (
-              <img src={appLogo} alt="Logo" className="h-10 sm:h-12 w-auto object-contain shrink-0" />
+              <img src={appLogo} alt="Logo" className="h-10 sm:h-12 w-auto object-contain" />
             ) : (
-              <div className="flex items-center gap-1.5 shrink-0">
-                <Car size={24} className="text-indigo-600"/>
+              <div className="bg-gradient-to-br from-indigo-600 to-blue-600 text-white p-2 rounded-xl shadow-md transform rotate-3">
+                <Car size={20} className="-rotate-3"/>
               </div>
             )}
-            <span className={`font-extrabold text-lg sm:text-xl tracking-tight truncate ${isDarkMode ? 'text-indigo-400' : 'text-indigo-700'}`}>خدني معاك</span>
+            <span className={`font-extrabold text-lg sm:text-xl tracking-tight ${isDarkMode ? 'text-indigo-400' : 'text-indigo-700'}`}>خدني معاك</span>
           </div>
           
           <div className="flex items-center gap-2 cursor-pointer" onClick={() => setActiveTab('profile')}>
@@ -1106,9 +1092,9 @@ export default function App() {
               </div>
             </div>
             {userData?.photoURL ? (
-              <img src={userData.photoURL} alt="user" className="w-9 h-9 rounded-full object-cover border border-slate-200 shadow-sm shrink-0" />
+              <img src={userData.photoURL} alt="user" className="w-9 h-9 rounded-full object-cover border border-slate-200 shadow-sm" />
             ) : (
-              <div className={`w-9 h-9 rounded-full flex items-center justify-center border shadow-sm shrink-0 ${isDarkMode ? 'bg-slate-700 border-slate-600 text-slate-300' : 'bg-slate-100 border-slate-200 text-slate-500'}`}>
+              <div className={`w-9 h-9 rounded-full flex items-center justify-center border shadow-sm ${isDarkMode ? 'bg-slate-700 border-slate-600 text-slate-300' : 'bg-slate-100 border-slate-200 text-slate-500'}`}>
                 <User size={18} />
               </div>
             )}
@@ -1177,11 +1163,12 @@ export default function App() {
               </div>
             </div>
 
-            <div className="grid grid-cols-4 gap-1.5 mb-6 max-w-2xl mx-auto pb-2">
-              <button onClick={() => setFilterType('all')} className={`py-2 px-1 text-xs font-bold rounded-full transition-all shadow-sm truncate text-center border ${filterType === 'all' ? 'bg-slate-800 text-white border-slate-800 dark:bg-slate-200 dark:text-slate-900 dark:border-slate-200' : 'bg-white text-slate-600 border-slate-200 hover:bg-slate-50 dark:bg-slate-800 dark:text-slate-400 dark:border-slate-700 dark:hover:bg-slate-700'}`}>الكل</button>
-              <button onClick={() => setFilterType('offer')} className={`py-2 px-1 text-xs font-bold rounded-full transition-all shadow-sm truncate text-center border ${filterType === 'offer' ? 'bg-slate-800 text-white border-slate-800 dark:bg-slate-200 dark:text-slate-900 dark:border-slate-200' : 'bg-white text-slate-600 border-slate-200 hover:bg-slate-50 dark:bg-slate-800 dark:text-slate-400 dark:border-slate-700 dark:hover:bg-slate-700'}`}>توصيلات 🚗</button>
-              <button onClick={() => setFilterType('request')} className={`py-2 px-1 text-xs font-bold rounded-full transition-all shadow-sm truncate text-center border ${filterType === 'request' ? 'bg-slate-800 text-white border-slate-800 dark:bg-slate-200 dark:text-slate-900 dark:border-slate-200' : 'bg-white text-slate-600 border-slate-200 hover:bg-slate-50 dark:bg-slate-800 dark:text-slate-400 dark:border-slate-700 dark:hover:bg-slate-700'}`}>ركاب 🙋‍♂️</button>
-              <button onClick={() => setFilterType('delivery')} className={`py-2 px-1 text-xs font-bold rounded-full transition-all shadow-sm truncate text-center border ${filterType === 'delivery' ? 'bg-slate-800 text-white border-slate-800 dark:bg-slate-200 dark:text-slate-900 dark:border-slate-200' : 'bg-white text-slate-600 border-slate-200 hover:bg-slate-50 dark:bg-slate-800 dark:text-slate-400 dark:border-slate-700 dark:hover:bg-slate-700'}`}>دليفري 📦</button>
+            {/* فلاتر ظاهرة بالكامل ومضغوطة عشان مفيش دليفري تهرب بره الشاشة */}
+            <div className="grid grid-cols-4 gap-1 sm:gap-1.5 mb-6 max-w-2xl mx-auto pb-2">
+              <button onClick={() => setFilterType('all')} className={`py-2 px-1 text-[11px] sm:text-xs font-bold rounded-full transition-all shadow-sm truncate text-center border ${filterType === 'all' ? 'bg-slate-800 text-white border-slate-800 dark:bg-slate-200 dark:text-slate-900 dark:border-slate-200' : 'bg-white text-slate-600 border-slate-200 hover:bg-slate-50 dark:bg-slate-800 dark:text-slate-400 dark:border-slate-700 dark:hover:bg-slate-700'}`}>الكل</button>
+              <button onClick={() => setFilterType('offer')} className={`py-2 px-1 text-[11px] sm:text-xs font-bold rounded-full transition-all shadow-sm truncate text-center border ${filterType === 'offer' ? 'bg-slate-800 text-white border-slate-800 dark:bg-slate-200 dark:text-slate-900 dark:border-slate-200' : 'bg-white text-slate-600 border-slate-200 hover:bg-slate-50 dark:bg-slate-800 dark:text-slate-400 dark:border-slate-700 dark:hover:bg-slate-700'}`}>توصيلات 🚗</button>
+              <button onClick={() => setFilterType('request')} className={`py-2 px-1 text-[11px] sm:text-xs font-bold rounded-full transition-all shadow-sm truncate text-center border ${filterType === 'request' ? 'bg-slate-800 text-white border-slate-800 dark:bg-slate-200 dark:text-slate-900 dark:border-slate-200' : 'bg-white text-slate-600 border-slate-200 hover:bg-slate-50 dark:bg-slate-800 dark:text-slate-400 dark:border-slate-700 dark:hover:bg-slate-700'}`}>ركاب 🙋‍♂️</button>
+              <button onClick={() => setFilterType('delivery')} className={`py-2 px-1 text-[11px] sm:text-xs font-bold rounded-full transition-all shadow-sm truncate text-center border ${filterType === 'delivery' ? 'bg-slate-800 text-white border-slate-800 dark:bg-slate-200 dark:text-slate-900 dark:border-slate-200' : 'bg-white text-slate-600 border-slate-200 hover:bg-slate-50 dark:bg-slate-800 dark:text-slate-400 dark:border-slate-700 dark:hover:bg-slate-700'}`}>دليفري 📦</button>
             </div>
 
             {filteredTrips.length === 0 ? (
@@ -1202,15 +1189,9 @@ export default function App() {
                   return (
                   <div key={trip.id} className={`rounded-[1.25rem] p-3.5 shadow-sm hover:shadow-md border relative flex flex-col transition-all duration-300 ${bgCard} ${isCompleted ? 'opacity-75 grayscale-[20%]' : ''}`}>
                     
+                    {/* تعديل جذري لترتيب الرأس: الصورة والاسم على اليمين - سلة المهملات على الشمال مطلقاً */}
                     <div className="flex items-start justify-between mb-3 relative">
-                      <div className="flex items-center gap-2 overflow-hidden text-right w-full" dir="ltr">
-                        <div className="overflow-hidden flex flex-col items-end w-full">
-                          <h3 className={`font-bold text-[11px] flex items-center justify-end gap-1 truncate ${textPrimary} w-full`}>
-                            {trip.verified && <ShieldCheck size={12} className="text-blue-500 shrink-0" />}
-                            {trip.userName ? trip.userName.split(' ')[0] : 'مستخدم'} 
-                          </h3>
-                          <div className="flex justify-end">{renderStars(trip.rating, trip.totalRatings)}</div>
-                        </div>
+                      <div className="flex items-center gap-2 overflow-hidden pr-1 w-full">
                         {trip.userPhoto ? (
                           <img src={trip.userPhoto} className="w-9 h-9 rounded-full object-cover border border-slate-200 shadow-sm shrink-0" alt="user" />
                         ) : (
@@ -1218,6 +1199,13 @@ export default function App() {
                             <User size={16} className="text-slate-400" />
                           </div>
                         )}
+                        <div className="overflow-hidden flex flex-col items-start w-full">
+                          <h3 className={`font-bold text-[11px] flex items-center gap-1 truncate ${textPrimary} w-full`}>
+                            {trip.userName ? trip.userName.split(' ')[0] : 'مستخدم'} 
+                            {trip.verified && <ShieldCheck size={12} className="text-blue-500 shrink-0" />}
+                          </h3>
+                          {renderStars(trip.rating, trip.totalRatings)}
+                        </div>
                       </div>
 
                       {canDelete && !trip.isDummy && (
@@ -1228,14 +1216,16 @@ export default function App() {
                     </div>
 
                     <div className="mb-3 flex gap-1 flex-wrap">
-                      <span className={`inline-block text-[9px] font-bold px-2 py-0.5 rounded-md border ${trip.type === 'offer' ? 'bg-emerald-600 text-white border-emerald-700' : trip.type === 'delivery' ? 'bg-purple-600 text-white border-purple-700' : 'bg-orange-500 text-white border-orange-600'}`}>
+                      <span className={`inline-block text-[9px] font-bold px-2 py-0.5 rounded-md text-white border ${trip.type === 'offer' ? 'bg-emerald-600 border-emerald-700' : trip.type === 'delivery' ? 'bg-purple-600 border-purple-700' : 'bg-orange-500 border-orange-600'}`}>
                         {trip.type === 'offer' ? 'سائق' : trip.type === 'delivery' ? 'دليفري' : 'راكب'}
                       </span>
-                      <span className={`inline-block text-[9px] font-bold px-2 py-0.5 rounded-md border ${isCompleted ? 'bg-slate-600 text-white border-slate-700' : isInProgress ? 'bg-amber-500 text-white border-amber-600' : 'bg-indigo-600 text-white border-indigo-700'}`}>
+                      {/* عرض حالة الرحلة كبادج بجوار النوع بألوان صلبة */}
+                      <span className={`inline-block text-[9px] font-bold px-2 py-0.5 rounded-md text-white border ${isCompleted ? 'bg-slate-600 border-slate-700' : isInProgress ? 'bg-amber-500 border-amber-600' : 'bg-indigo-600 border-indigo-700'}`}>
                          {isCompleted ? 'مكتملة' : isInProgress ? 'بالطريق' : 'متاحة'}
                       </span>
                     </div>
 
+                    {/* مسار الرحلة المعالج تماماً لمنع تداخل النص مع النقط (pr-4) للابتعاد عن النقط */}
                     <div className="relative pr-4 border-r-2 border-dashed border-slate-200 dark:border-slate-700 mb-4 mr-2">
                        <div className="absolute -right-[7px] top-0 w-3 h-3 rounded-full bg-indigo-500 shadow-sm border-2 border-white dark:border-slate-800"></div>
                        <p className={`font-bold text-[11px] leading-snug break-words mb-3 ${textPrimary}`}>{trip.from}</p>
@@ -1258,35 +1248,43 @@ export default function App() {
                        )}
                     </div>
 
-                    <div className="mt-auto pt-2">
+                    <div className="mt-auto pt-2 border-t dark:border-slate-700">
                       {isOwner ? (
                         <div className={`w-full py-1.5 rounded-lg font-bold text-center text-[10px] border border-dashed ${isDarkMode ? 'bg-slate-700/50 text-slate-400 border-slate-600' : 'bg-slate-50 text-slate-500 border-slate-200'}`}>
-                          إعلاني ✨
+                          {isCompleted ? ' رحله مكتمله' : isInProgress ? 'في الطريق 🚗' : 'رحلتك ✨'}
                         </div>
                       ) : isClosedForPublic ? (
-                        <div className={`w-full py-1.5 rounded-lg font-bold text-center text-[10px] border ${isDarkMode ? 'bg-slate-700 text-slate-400 border-slate-600' : 'bg-slate-100 text-slate-500 border-slate-200'}`}>
-                          مغلقة ✅
-                        </div>
+                        isCompleted ? (
+                          !trip.isBot ? (
+                            <div className={`py-1.5 px-2 rounded-lg text-center flex items-center justify-center gap-2 border ${isDarkMode ? 'bg-slate-700 border-slate-600' : 'bg-slate-50 border-slate-200'}`}>
+                              <span className="text-[9px] font-bold">قيّم:</span>
+                              <div className="flex gap-0.5">
+                                {[1,2,3,4,5].map(star => (
+                                  <Star key={star} onClick={() => handleRateTrip(trip.id, star)} className={`cursor-pointer transition-colors ${isDarkMode ? 'text-slate-500 hover:text-amber-400' : 'text-slate-300 hover:text-amber-500'}`} size={12} fill="currentColor" />
+                                ))}
+                              </div>
+                            </div>
+                          ) : (
+                            <div className={`w-full py-1.5 rounded-lg font-bold text-center text-[10px] border ${isDarkMode ? 'bg-slate-700 text-slate-400 border-slate-600' : 'bg-slate-100 text-slate-500 border-slate-200'}`}>
+                              مغلقة ✅
+                            </div>
+                          )
+                        ) : (
+                          <div className={`w-full py-1.5 rounded-lg font-bold text-center text-[10px] border ${isDarkMode ? 'bg-amber-900/20 border-amber-800 text-amber-400' : 'bg-amber-50 border-amber-200 text-amber-700'}`}>
+                            جارية 🚗
+                          </div>
+                        )
                       ) : (
                         <div className="flex gap-1.5">
-                          <button onClick={() => {
-                            if (trip.isDummy || trip.isBot) return setAlertMsg('عذراً، هذه رحلة تجريبية للعرض فقط 😅');
-                            if (!trip.userId) return setAlertMsg('حدث خطأ، لا يمكن التواصل مع صاحب هذه الرحلة.');
-                            requireAuth(() => {
-                              const chatId = trip.id + '_' + (user.uid < trip.userId ? user.uid + '_' + trip.userId : trip.userId + '_' + user.uid);
-                              setActiveChat({
-                                chatId: chatId, tripId: trip.id, otherPersonId: trip.userId, otherPersonName: trip.userName || 'مستخدم', otherPersonPhoto: trip.userPhoto || null, otherPersonVerified: trip.verified || false, tripInfo: `${trip.from} ➔ ${trip.to}`
-                              });
-                            });
-                          }} className="flex-1 py-1.5 rounded-lg font-bold flex justify-center items-center gap-1 text-[10px] text-white transition-colors shadow-sm bg-indigo-600 hover:bg-indigo-700">
+                          <button onClick={() => openChatFromTrip(trip)} className="flex-1 py-1.5 rounded-lg font-bold flex justify-center items-center gap-1 text-[10px] text-white transition-colors shadow-sm bg-indigo-600 hover:bg-indigo-700">
                             <MessageCircle size={10} /> رسالة
                           </button>
                           
                           <button onClick={() => requireAuth(() => {
                             if (trip.isDummy || trip.isBot) {
-                              setAlertMsg('تجريبية فقط 😅');
+                              setAlertMsg(' هذا المستخدم لايقبل مكالمات ');
                             } else if (!trip.userPhone) {
-                              setAlertMsg('لا يوجد رقم 📞');
+                              setAlertMsg(' هذا الرحله تم الاتفاق عليها ');
                             } else {
                               window.location.href = `tel:${trip.userPhone}`;
                             }
@@ -1340,7 +1338,7 @@ export default function App() {
                         ) : (
                           <div className="w-full h-full flex items-center justify-center text-slate-300"><ImageIcon size={40}/></div>
                         )}
-                        <div className="absolute bottom-2 left-2 bg-emerald-600 text-white font-black text-[10px] px-2 py-1 rounded-lg shadow-md border border-emerald-700">
+                        <div className="absolute bottom-2 left-2 bg-emerald-500 text-white font-black text-[10px] px-2 py-1 rounded-lg shadow-md">
                           {product.price} ج
                         </div>
                       </div>
@@ -1358,24 +1356,16 @@ export default function App() {
                                </span>
                              </div>
                             {product.userPhoto ? (
-                              <img src={product.userPhoto} className="w-6 h-6 rounded-full object-cover border border-slate-200" alt="seller" />
+                              <img src={product.userPhoto} className="w-6 h-6 rounded-full object-cover border" alt="seller" />
                             ) : (
-                              <div className="w-6 h-6 rounded-full bg-indigo-100 flex items-center justify-center shrink-0 border border-indigo-200">
+                              <div className="w-6 h-6 rounded-full bg-indigo-100 flex items-center justify-center shrink-0">
                                 <User size={12} className="text-indigo-500"/>
                               </div>
                             )}
                           </div>
                           
                           {!isOwner && (
-                            <button onClick={() => {
-                              if (!product.userId) return setAlertMsg('حدث خطأ، لا يمكن التواصل مع البائع.');
-                              requireAuth(() => {
-                                const chatId = product.id + '_' + (user.uid < product.userId ? user.uid + '_' + product.userId : product.userId + '_' + user.uid);
-                                setActiveChat({
-                                  chatId: chatId, tripId: product.id, otherPersonId: product.userId, otherPersonName: product.userName || 'مستخدم', otherPersonPhoto: product.userPhoto || null, otherPersonVerified: product.verified || false, tripInfo: `مهتم بشراء: ${product.title}`
-                                });
-                              });
-                            }} className="shrink-0 bg-indigo-100 hover:bg-indigo-200 dark:bg-indigo-900/50 dark:hover:bg-indigo-900/80 text-indigo-700 dark:text-indigo-300 p-1.5 rounded-lg transition-colors">
+                            <button onClick={() => openChatFromProduct(product)} className="shrink-0 bg-indigo-50 hover:bg-indigo-100 dark:bg-indigo-900/30 dark:hover:bg-indigo-900/50 text-indigo-600 dark:text-indigo-400 p-1.5 rounded-lg transition-colors">
                               <MessageCircle size={14} />
                             </button>
                           )}
@@ -1476,7 +1466,7 @@ export default function App() {
                   <div className="w-20 h-20 bg-slate-100 dark:bg-slate-800 rounded-full flex items-center justify-center mb-4"><User size={30} className="text-slate-400"/></div>
                   <h3 className="font-bold text-lg mb-2">حساب زائر</h3>
                   <p className="text-sm text-slate-500 mb-4">اضغط هنا لإنشاء حساب وتسجيل الدخول.</p>
-                  <button className="bg-indigo-600 text-white px-6 py-2.5 rounded-full font-bold text-sm hover:bg-indigo-700 shadow-md shadow-indigo-500/30">تسجيل حساب</button>
+                  <button className="bg-indigo-600 text-white px-6 py-2.5 rounded-full font-bold text-sm shadow-md shadow-indigo-500/30">تسجيل حساب</button>
                 </div>
               )}
 
@@ -1528,79 +1518,6 @@ export default function App() {
         )}
 
       </main>
-
-      <nav className={`fixed bottom-0 w-full z-40 border-t backdrop-blur-xl pb-safe transition-colors duration-300 ${isDarkMode ? 'bg-slate-900/95 border-slate-800' : 'bg-white/95 border-slate-200 shadow-[0_-4px_20px_rgba(0,0,0,0.05)]'}`}>
-        <div className="flex justify-between items-center h-16 w-full max-w-md mx-auto px-2">
-          <button onClick={() => setActiveTab('trips')} className={`flex-1 flex flex-col items-center justify-center h-full gap-1 min-w-0 transition-colors ${activeTab === 'trips' ? 'text-indigo-600 dark:text-indigo-400' : 'text-slate-400 dark:text-slate-500 hover:text-slate-600 dark:hover:text-slate-300'}`}>
-            <Car size={22} className={activeTab === 'trips' ? 'fill-indigo-100 dark:fill-indigo-900/50' : ''}/>
-            <span className={`text-[10px] font-bold ${activeTab === 'trips' ? '' : 'font-medium'}`}>الرحلات</span>
-          </button>
-          <button onClick={() => setActiveTab('market')} className={`flex-1 flex flex-col items-center justify-center h-full gap-1 min-w-0 transition-colors ${activeTab === 'market' ? 'text-indigo-600 dark:text-indigo-400' : 'text-slate-400 dark:text-slate-500 hover:text-slate-600 dark:hover:text-slate-300'}`}>
-            <Store size={22} className={activeTab === 'market' ? 'fill-indigo-100 dark:fill-indigo-900/50' : ''}/>
-            <span className={`text-[10px] font-bold ${activeTab === 'market' ? '' : 'font-medium'}`}>السوق</span>
-          </button>
-          <button onClick={() => setActiveTab('inbox')} className={`flex-1 flex flex-col items-center justify-center h-full gap-1 min-w-0 relative transition-colors ${activeTab === 'inbox' ? 'text-indigo-600 dark:text-indigo-400' : 'text-slate-400 dark:text-slate-500 hover:text-slate-600 dark:hover:text-slate-300'}`}>
-            <div className="relative">
-              <MessageCircle size={22} className={activeTab === 'inbox' ? 'fill-indigo-100 dark:fill-indigo-900/50' : ''}/>
-              {myInbox.length > 0 && !isGuest && <span className="absolute -top-1 -right-1 w-2.5 h-2.5 bg-rose-500 rounded-full border-2 border-white dark:border-slate-900"></span>}
-            </div>
-            <span className={`text-[10px] font-bold ${activeTab === 'inbox' ? '' : 'font-medium'}`}>رسائلي</span>
-          </button>
-          <button onClick={() => setActiveTab('profile')} className={`flex-1 flex flex-col items-center justify-center h-full gap-1 min-w-0 transition-colors ${activeTab === 'profile' ? 'text-indigo-600 dark:text-indigo-400' : 'text-slate-400 dark:text-slate-500 hover:text-slate-600 dark:hover:text-slate-300'}`}>
-            <User size={22} className={activeTab === 'profile' ? 'fill-indigo-100 dark:fill-indigo-900/50' : ''}/>
-            <span className={`text-[10px] font-bold ${activeTab === 'profile' ? '' : 'font-medium'}`}>حسابي</span>
-          </button>
-        </div>
-      </nav>
-
-      {/* شاشة الشات المباشرة الوحيدة (المحمية من التكرار) */}
-      {activeChat && !isGuest && (
-        <div className="fixed inset-0 bg-slate-900/80 backdrop-blur-md z-[200] flex justify-center items-end sm:items-center p-0 sm:p-4">
-          <div className={`${bgModal} w-full h-[85vh] sm:h-[600px] sm:max-w-md rounded-t-[2rem] sm:rounded-3xl shadow-2xl flex flex-col overflow-hidden animate-fade-in-up`}>
-            <div className={`text-white p-4 flex items-center gap-3 ${activeChat.otherPersonId === 'admin' ? 'bg-rose-600' : 'bg-indigo-600'}`}>
-              <button onClick={() => setActiveChat(null)} className={`p-2 rounded-full transition-colors ${activeChat.otherPersonId === 'admin' ? 'hover:bg-rose-700' : 'hover:bg-indigo-700'}`}><ChevronLeft size={24} /></button>
-              {activeChat.otherPersonId === 'admin' ? (
-                <div className="w-10 h-10 bg-white/20 rounded-full flex items-center justify-center shrink-0"><Crown size={20}/></div>
-              ) : activeChat.otherPersonPhoto ? (
-                <img src={activeChat.otherPersonPhoto} className="w-10 h-10 rounded-full object-cover border-2 border-white/20 shrink-0" alt="avatar" />
-              ) : (
-                <div className="w-10 h-10 bg-white/20 rounded-full flex items-center justify-center shrink-0"><User size={20}/></div>
-              )}
-              <div className="flex-1">
-                <h3 className="font-bold text-sm leading-tight flex items-center gap-1">
-                  {activeChat.otherPersonName || 'مستخدم'}
-                  {activeChat.otherPersonVerified && <ShieldCheck size={14} className="text-blue-200"/>}
-                </h3>
-                {activeChat.tripInfo && activeChat.tripInfo !== 'system' && <span className="text-[10px] text-indigo-200 leading-tight block mt-0.5 truncate">{activeChat.tripInfo}</span>}
-              </div>
-            </div>
-            <div className={`flex-1 overflow-y-auto p-4 space-y-4 ${isDarkMode ? 'bg-slate-900/80' : 'bg-slate-100'} bg-[url('data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHdpZHRoPSI0MCIgaGVpZ2h0PSI0MCI+PGRlZnM+PHBhdHRlcm4gaWQ9InBhdHRlcm4iIHdpZHRoPSI0MCIgaGVpZ2h0PSI0MCIgcGF0dGVyblVuaXRzPSJ1c2VyU3BhY2VPblVzZSI+PHBhdGggZD0iTTAgMGg0MHY0MEgweiIgZmlsbD0ibm9uZSIvPjxjaXJjbGUgY3g9IjIwIiBjeT0iMjAiIHI9IjEiIGZpbGw9InJnYmEoMTU2LCAxNjMsIDE3NSwgMC4yKSIvPjwvcGF0dGVybj48L2RlZnM+PHJlY3Qgd2lkdGg9IjEwMCUiIGhlaWdodD0iMTAwJSIgZmlsbD0idXJsKCNwYXR0ZXJuKSIvPjwvc3ZnPg==')]`}>
-              {messages.map(msg => {
-                const isMe = msg.senderId === user.uid;
-                const isAdminMsg = msg.senderId === 'admin';
-                return (
-                  <div key={msg.id} className={`flex ${isMe ? 'justify-end' : 'justify-start'}`}>
-                    <div className={`max-w-[85%] p-2.5 rounded-xl text-xs shadow-sm ${isMe ? 'bg-indigo-600 text-white rounded-tl-sm' : (isAdminMsg ? 'bg-rose-100 text-rose-900 border border-rose-200 rounded-tr-sm' : (isDarkMode ? 'bg-slate-800 text-white border border-slate-700 rounded-tr-sm' : 'bg-white border border-slate-200 text-slate-800 rounded-tr-sm'))}`}>
-                      {msg.text}
-                    </div>
-                  </div>
-                )
-              })}
-              <div ref={messagesEndRef} />
-            </div>
-            <div className={`p-4 border-t ${isDarkMode ? 'bg-slate-800 border-slate-700' : 'bg-white border-slate-200'}`}>
-              {activeChat.otherPersonId === 'admin' ? (
-                <div className="text-center text-[10px] font-bold text-slate-400">هذه رسالة إدارية رسمية للمعلومية فقط.</div>
-              ) : (
-                <form onSubmit={handleSendMessage} className="flex gap-2 items-center">
-                  <input type="text" value={newMessage} onChange={(e) => setNewMessage(e.target.value)} placeholder="اكتب رسالة..." className={`flex-1 rounded-xl px-4 py-3 text-[16px] outline-none focus:ring-2 focus:ring-indigo-500 transition-colors ${bgInput}`} />
-                  <button type="submit" disabled={!newMessage.trim()} className="bg-indigo-600 text-white w-12 h-12 flex items-center justify-center rounded-xl hover:bg-indigo-700 disabled:opacity-50 disabled:bg-slate-400 transition-all shadow-md"><Send size={20} className="rtl:rotate-180" /></button>
-                </form>
-              )}
-            </div>
-          </div>
-        </div>
-      )}
 
     </div>
   );
