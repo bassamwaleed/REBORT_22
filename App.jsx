@@ -77,7 +77,8 @@ export default function App() {
   
   const [isLoginMode, setIsLoginMode] = useState(true);
   const [authMethod, setAuthMethod] = useState('phone'); 
-  const [authForm, setAuthForm] = useState({ name: '', phone: '', email: '', password: '' });
+  // تم تهيئة الخانات بشكل صحيح لضمان عدم وجود بيانات سابقة
+  const [authForm, setAuthForm] = useState({ name: '', identifier: '', password: '' });
   const [authLoading, setAuthLoading] = useState(false);
   const [showAuthPrompt, setShowAuthPrompt] = useState(false);
   
@@ -556,7 +557,7 @@ export default function App() {
   const handleLogout = async () => {
     await signOut(auth);
     setActiveTab('trips');
-    setAuthForm({ name: '', phone: '', email: '', password: '' });
+    setAuthForm({ name: '', identifier: '', password: '' });
   };
 
   const requireAuth = (actionCallback) => {
@@ -732,13 +733,26 @@ export default function App() {
   const textPrimary = isDarkMode ? 'text-white' : 'text-slate-800';
   const textSecondary = isDarkMode ? 'text-slate-400' : 'text-slate-500';
 
+  // الألوان الصلبة الثابتة للبادجات عشان متختفيش مع الدارك مود
+  const getBadgeClass = (type) => {
+    if (type === 'offer') return 'bg-emerald-600 text-white border-emerald-700';
+    if (type === 'delivery') return 'bg-purple-600 text-white border-purple-700';
+    return 'bg-orange-500 text-white border-orange-600';
+  };
+
+  const getStatusClass = (status) => {
+    if (status === 'completed') return 'bg-slate-600 text-white border-slate-700';
+    if (status === 'in_progress') return 'bg-amber-500 text-white border-amber-600';
+    return 'bg-indigo-600 text-white border-indigo-700';
+  };
+
   if (loading) return <div className={`min-h-screen flex justify-center items-center ${bgMain}`}><Loader2 size={50} className="animate-spin text-indigo-600" /></div>;
 
   if (!user) {
     return (
       <div dir="rtl" className={`min-h-screen flex items-center justify-center p-4 transition-colors ${bgMain} overflow-x-hidden w-full bg-[url('data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHdpZHRoPSI0MCIgaGVpZ2h0PSI0MCI+PGRlZnM+PHBhdHRlcm4gaWQ9InBhdHRlcm4iIHdpZHRoPSI0MCIgaGVpZ2h0PSI0MCIgcGF0dGVyblVuaXRzPSJ1c2VyU3BhY2VPblVzZSI+PHBhdGggZD0iTTAgMGg0MHY0MEgweiIgZmlsbD0ibm9uZSIvPjxjaXJjbGUgY3g9IjIwIiBjeT0iMjAiIHI9IjEiIGZpbGw9InJnYmEoMTU2LCAxNjMsIDE3NSwgMC4yKSIvPjwvcGF0dGVybj48L2RlZnM+PHJlY3Qgd2lkdGg9IjEwMCUiIGhlaWdodD0iMTAwJSIgZmlsbD0idXJsKCNwYXR0ZXJuKSIvPjwvc3ZnPg==')]`}>
         {alertMsg && (
-          <div className="fixed inset-0 bg-slate-900/70 backdrop-blur-sm z-[100] flex justify-center items-center p-4">
+          <div className="fixed inset-0 bg-slate-900/70 backdrop-blur-sm z-[250] flex justify-center items-center p-4">
             <div className={`${bgModal} rounded-3xl p-6 max-w-sm w-full text-center shadow-2xl`}>
               <div className="bg-rose-100 w-16 h-16 rounded-full flex items-center justify-center mx-auto mb-4"><AlertCircle size={30} className="text-rose-600" /></div>
               <p className="font-bold text-lg mb-6">{alertMsg}</p>
@@ -748,15 +762,16 @@ export default function App() {
         )}
 
         {showForgotPass && (
-          <div className="fixed inset-0 bg-slate-900/80 backdrop-blur-md z-[90] flex justify-center items-center p-4">
+          <div className="fixed inset-0 bg-slate-900/80 backdrop-blur-md z-[200] flex justify-center items-center p-4">
             <div className={`${bgModal} rounded-3xl p-8 max-w-sm w-full shadow-2xl border ${isDarkMode ? 'border-slate-700' : 'border-transparent'}`}>
               <div className="flex justify-between items-center mb-6">
                 <h2 className="text-xl font-extrabold flex items-center gap-2"><Lock className="text-indigo-500" /> استعادة المرور</h2>
                 <button onClick={() => setShowForgotPass(false)} className="p-1 hover:bg-slate-100 dark:hover:bg-slate-700 rounded-full transition-colors"><X size={20} /></button>
               </div>
               <p className={`text-sm mb-4 leading-relaxed ${textSecondary}`}>أدخل البريد الإلكتروني الخاص بك لاستعادة الحساب.</p>
-              <form onSubmit={handleForgotPassword}>
-                <input type="text" required placeholder="الإيميل المسجل" value={forgotPassInput} onChange={e => setForgotPassInput(e.target.value)} className={`w-full border rounded-full py-3 px-5 outline-none focus:ring-2 focus:ring-indigo-500 font-bold text-[16px] text-left transition-all mb-4 ${bgInput}`} dir="ltr" />
+              {/* إيقاف الملء التلقائي */}
+              <form onSubmit={handleForgotPassword} autoComplete="off">
+                <input type="text" required placeholder="الإيميل المسجل" value={forgotPassInput} onChange={e => setForgotPassInput(e.target.value)} autoComplete="off" className={`w-full border rounded-full py-3 px-5 outline-none focus:ring-2 focus:ring-indigo-500 font-bold text-[16px] text-left transition-all mb-4 ${bgInput}`} dir="ltr" />
                 <button type="submit" disabled={isSubmitting} className="w-full bg-indigo-600 text-white py-3.5 rounded-full font-bold hover:bg-indigo-700 flex justify-center items-center gap-2">
                   {isSubmitting ? <Loader2 className="animate-spin" size={20} /> : 'تأكيد'}
                 </button>
@@ -783,29 +798,30 @@ export default function App() {
             <button onClick={() => setAuthMethod('email')} className={`flex-1 py-2 text-[16px] sm:text-xs font-bold rounded-full transition-all ${authMethod === 'email' ? (isDarkMode ? 'bg-indigo-600 text-white shadow' : 'bg-white text-indigo-700 shadow-sm') : (isDarkMode ? 'text-slate-400' : 'text-slate-500')}`}>البريد الإلكتروني ✉️</button>
           </div>
 
-          <form onSubmit={handleAuth} className="space-y-4">
+          {/* إيقاف الملء التلقائي المزعج */}
+          <form onSubmit={handleAuth} className="space-y-4" autoComplete="off">
             {!isLoginMode && (
               <div className="relative group">
                 <User size={18} className={`absolute right-4 top-3.5 transition-colors ${isDarkMode ? 'text-slate-500 group-focus-within:text-indigo-400' : 'text-slate-400 group-focus-within:text-indigo-600'}`} />
-                <input type="text" required placeholder="الاسم الكامل" value={authForm.name} onChange={e => setAuthForm({...authForm, name: e.target.value})} className={`w-full border rounded-full py-3 px-11 outline-none focus:ring-2 focus:ring-indigo-500 font-bold text-[16px] transition-all ${bgInput}`} />
+                <input type="text" required placeholder="الاسم الكامل" value={authForm.name} onChange={e => setAuthForm({...authForm, name: e.target.value})} autoComplete="off" className={`w-full border rounded-full py-3 px-11 outline-none focus:ring-2 focus:ring-indigo-500 font-bold text-[16px] transition-all ${bgInput}`} />
               </div>
             )}
             
             {authMethod === 'phone' ? (
               <div className="relative group">
                 <Phone size={18} className={`absolute right-4 top-3.5 transition-colors ${isDarkMode ? 'text-slate-500 group-focus-within:text-indigo-400' : 'text-slate-400 group-focus-within:text-indigo-600'}`} />
-                <input type="tel" required placeholder="رقم الموبايل" value={authForm.identifier} onChange={e => setAuthForm({...authForm, identifier: e.target.value})} className={`w-full border rounded-full py-3 px-11 outline-none focus:ring-2 focus:ring-indigo-500 font-bold text-[16px] text-left transition-all ${bgInput}`} dir="ltr" />
+                <input type="tel" required placeholder="رقم الموبايل" value={authForm.identifier || ''} onChange={e => setAuthForm({...authForm, identifier: e.target.value})} autoComplete="off" className={`w-full border rounded-full py-3 px-11 outline-none focus:ring-2 focus:ring-indigo-500 font-bold text-[16px] text-left transition-all ${bgInput}`} dir="ltr" />
               </div>
             ) : (
               <div className="relative group">
                 <Mail size={18} className={`absolute right-4 top-3.5 transition-colors ${isDarkMode ? 'text-slate-500 group-focus-within:text-indigo-400' : 'text-slate-400 group-focus-within:text-indigo-600'}`} />
-                <input type="email" required placeholder="البريد الإلكتروني" value={authForm.identifier} onChange={e => setAuthForm({...authForm, identifier: e.target.value})} className={`w-full border rounded-full py-3 px-11 outline-none focus:ring-2 focus:ring-indigo-500 font-bold text-[16px] text-left transition-all ${bgInput}`} dir="ltr" />
+                <input type="email" required placeholder="البريد الإلكتروني" value={authForm.identifier || ''} onChange={e => setAuthForm({...authForm, identifier: e.target.value})} autoComplete="off" className={`w-full border rounded-full py-3 px-11 outline-none focus:ring-2 focus:ring-indigo-500 font-bold text-[16px] text-left transition-all ${bgInput}`} dir="ltr" />
               </div>
             )}
 
             <div className="relative group">
               <Lock size={18} className={`absolute right-4 top-3.5 transition-colors ${isDarkMode ? 'text-slate-500 group-focus-within:text-indigo-400' : 'text-slate-400 group-focus-within:text-indigo-600'}`} />
-              <input type="password" required placeholder="كلمة المرور" value={authForm.password} onChange={e => setAuthForm({...authForm, password: e.target.value})} className={`w-full border rounded-full py-3 px-11 outline-none focus:ring-2 focus:ring-indigo-500 font-bold text-[16px] text-left transition-all ${bgInput}`} dir="ltr" />
+              <input type="password" required placeholder="كلمة المرور" value={authForm.password} onChange={e => setAuthForm({...authForm, password: e.target.value})} autoComplete="new-password" className={`w-full border rounded-full py-3 px-11 outline-none focus:ring-2 focus:ring-indigo-500 font-bold text-[16px] text-left transition-all ${bgInput}`} dir="ltr" />
             </div>
 
             {isLoginMode && (
@@ -848,7 +864,7 @@ export default function App() {
               <Lock size={30} className="transform rotate-6"/>
             </div>
             <h2 className="text-xl font-extrabold mb-2 text-slate-800 dark:text-white">يرجى تسجيل الدخول أولاً</h2>
-            <p className={`mb-6 text-xs leading-relaxed ${textSecondary}`}>لاستخدام هذه الخدمة والتفاعل مع الرحلات أو السوق، يرجى تسجيل الدخول أو إنشاء حساب جديد.</p>
+            <p className={`mb-6 text-xs leading-relaxed ${textSecondary}`}>عشان تقدر تستخدم الخدمة دي وتتفاعل مع الرحلات أو السوق، لازم تسجل حساب معانا في ثواني.</p>
             
             <div className="space-y-2.5">
               <button onClick={() => { setShowAuthPrompt(false); setIsLoginMode(true); handleLogout(); }} className="w-full bg-indigo-600 text-white py-3.5 rounded-full font-extrabold text-sm hover:bg-indigo-700 shadow-md shadow-indigo-500/30 flex justify-center items-center gap-2">
@@ -865,9 +881,9 @@ export default function App() {
         </div>
       )}
 
-      {/* الإشعار العائم المتميز (يعمل في كل الصفحات وللجميع) بلون مميز */}
+      {/* الإشعار العائم المتميز */}
       {showLiveNotification && currentNotificationTrip && (
-        <div className="fixed top-20 left-1/2 transform -translate-x-1/2 z-[200] w-11/12 max-w-sm animate-fade-in-down">
+        <div className="fixed top-20 left-1/2 transform -translate-x-1/2 z-[100] w-11/12 max-w-sm animate-fade-in-down">
           <div className={`p-3 rounded-2xl border flex flex-col gap-2.5 shadow-2xl ${isDarkMode ? 'bg-indigo-900/95 border-indigo-500/50 shadow-indigo-500/20' : 'bg-indigo-50 border-indigo-200 shadow-indigo-600/20'}`}>
             <div className="flex justify-between items-start">
               <div className="flex items-center gap-2.5 overflow-hidden">
@@ -912,7 +928,7 @@ export default function App() {
       )}
 
       {alertMsg && (
-        <div className="fixed inset-0 bg-slate-900/70 backdrop-blur-sm z-[250] flex justify-center items-center p-4">
+        <div className="fixed inset-0 bg-slate-900/70 backdrop-blur-sm z-[110] flex justify-center items-center p-4">
           <div className={`${bgModal} rounded-3xl p-6 max-w-sm w-full text-center shadow-2xl`}>
             <div className="bg-rose-100 w-16 h-16 rounded-full flex items-center justify-center mx-auto mb-4"><AlertCircle size={30} className="text-rose-600" /></div>
             <p className="font-bold text-lg mb-6">{alertMsg}</p>
@@ -922,7 +938,7 @@ export default function App() {
       )}
 
       {deleteConfirmId && (
-        <div className="fixed inset-0 bg-slate-900/70 backdrop-blur-sm z-[250] flex justify-center items-center p-4">
+        <div className="fixed inset-0 bg-slate-900/70 backdrop-blur-sm z-[110] flex justify-center items-center p-4">
           <div className={`${bgModal} rounded-3xl p-6 max-w-sm w-full text-center shadow-2xl`}>
             <div className="bg-rose-100 w-16 h-16 rounded-full flex items-center justify-center mx-auto mb-4"><Trash2 size={30} className="text-rose-600" /></div>
             <p className="font-bold text-lg mb-6">هل أنت متأكد من الحذف نهائياً؟</p>
@@ -934,9 +950,9 @@ export default function App() {
         </div>
       )}
 
-      {/* لوحة تحكم الإدارة الشاملة (آمنة من الكراش 100%) */}
+      {/* لوحة تحكم الإدارة الشاملة */}
       {showAdminPanel && isAdmin && (
-        <div className="fixed inset-0 bg-slate-900/80 backdrop-blur-md z-[150] flex justify-center items-center p-4">
+        <div className="fixed inset-0 bg-slate-900/80 backdrop-blur-md z-[80] flex justify-center items-center p-4">
           <div className={`${bgModal} rounded-3xl w-full max-w-2xl h-[85vh] shadow-2xl border flex flex-col ${isDarkMode ? 'border-amber-500/30' : 'border-amber-400'}`}>
             <div className="bg-gradient-to-r from-amber-500 to-orange-600 text-white p-5 flex justify-between items-center rounded-t-3xl">
               <h2 className="text-xl font-black flex items-center gap-2"><Crown size={24}/> لوحة تحكم الإدارة</h2>
@@ -1057,7 +1073,7 @@ export default function App() {
       )}
 
       {showToast && (
-        <div className="fixed top-24 left-1/2 transform -translate-x-1/2 z-[250] bg-indigo-600 text-white px-6 py-3.5 rounded-full shadow-xl flex items-center gap-3 animate-fade-in-down border border-indigo-400/30">
+        <div className="fixed top-24 left-1/2 transform -translate-x-1/2 z-[120] bg-indigo-600 text-white px-6 py-3.5 rounded-full shadow-xl flex items-center gap-3 animate-fade-in-down border border-indigo-400/30">
           <CheckCircle2 size={20} /><p className="text-sm font-bold whitespace-nowrap">{toastMessage}</p>
         </div>
       )}
@@ -1161,12 +1177,11 @@ export default function App() {
               </div>
             </div>
 
-            {/* فلاتر ظاهرة بالكامل ومضغوطة عشان مفيش دليفري تهرب بره الشاشة */}
-            <div className="grid grid-cols-4 gap-1 sm:gap-1.5 mb-6 max-w-2xl mx-auto pb-2">
-              <button onClick={() => setFilterType('all')} className={`py-2 px-1 text-[11px] sm:text-xs font-bold rounded-full transition-all shadow-sm truncate text-center border ${filterType === 'all' ? 'bg-slate-800 text-white border-slate-800 dark:bg-slate-200 dark:text-slate-900 dark:border-slate-200' : 'bg-white text-slate-600 border-slate-200 hover:bg-slate-50 dark:bg-slate-800 dark:text-slate-400 dark:border-slate-700 dark:hover:bg-slate-700'}`}>الكل</button>
-              <button onClick={() => setFilterType('offer')} className={`py-2 px-1 text-[11px] sm:text-xs font-bold rounded-full transition-all shadow-sm truncate text-center border ${filterType === 'offer' ? 'bg-slate-800 text-white border-slate-800 dark:bg-slate-200 dark:text-slate-900 dark:border-slate-200' : 'bg-white text-slate-600 border-slate-200 hover:bg-slate-50 dark:bg-slate-800 dark:text-slate-400 dark:border-slate-700 dark:hover:bg-slate-700'}`}>توصيلات 🚗</button>
-              <button onClick={() => setFilterType('request')} className={`py-2 px-1 text-[11px] sm:text-xs font-bold rounded-full transition-all shadow-sm truncate text-center border ${filterType === 'request' ? 'bg-slate-800 text-white border-slate-800 dark:bg-slate-200 dark:text-slate-900 dark:border-slate-200' : 'bg-white text-slate-600 border-slate-200 hover:bg-slate-50 dark:bg-slate-800 dark:text-slate-400 dark:border-slate-700 dark:hover:bg-slate-700'}`}>ركاب 🙋‍♂️</button>
-              <button onClick={() => setFilterType('delivery')} className={`py-2 px-1 text-[11px] sm:text-xs font-bold rounded-full transition-all shadow-sm truncate text-center border ${filterType === 'delivery' ? 'bg-slate-800 text-white border-slate-800 dark:bg-slate-200 dark:text-slate-900 dark:border-slate-200' : 'bg-white text-slate-600 border-slate-200 hover:bg-slate-50 dark:bg-slate-800 dark:text-slate-400 dark:border-slate-700 dark:hover:bg-slate-700'}`}>دليفري 📦</button>
+            <div className="grid grid-cols-4 gap-1.5 mb-6 max-w-2xl mx-auto pb-2">
+              <button onClick={() => setFilterType('all')} className={`py-2 px-1 text-xs font-bold rounded-full transition-all shadow-sm truncate text-center border ${filterType === 'all' ? 'bg-slate-800 text-white border-slate-800 dark:bg-slate-200 dark:text-slate-900 dark:border-slate-200' : 'bg-white text-slate-600 border-slate-200 hover:bg-slate-50 dark:bg-slate-800 dark:text-slate-400 dark:border-slate-700 dark:hover:bg-slate-700'}`}>الكل</button>
+              <button onClick={() => setFilterType('offer')} className={`py-2 px-1 text-xs font-bold rounded-full transition-all shadow-sm truncate text-center border ${filterType === 'offer' ? 'bg-slate-800 text-white border-slate-800 dark:bg-slate-200 dark:text-slate-900 dark:border-slate-200' : 'bg-white text-slate-600 border-slate-200 hover:bg-slate-50 dark:bg-slate-800 dark:text-slate-400 dark:border-slate-700 dark:hover:bg-slate-700'}`}>توصيلات 🚗</button>
+              <button onClick={() => setFilterType('request')} className={`py-2 px-1 text-xs font-bold rounded-full transition-all shadow-sm truncate text-center border ${filterType === 'request' ? 'bg-slate-800 text-white border-slate-800 dark:bg-slate-200 dark:text-slate-900 dark:border-slate-200' : 'bg-white text-slate-600 border-slate-200 hover:bg-slate-50 dark:bg-slate-800 dark:text-slate-400 dark:border-slate-700 dark:hover:bg-slate-700'}`}>ركاب 🙋‍♂️</button>
+              <button onClick={() => setFilterType('delivery')} className={`py-2 px-1 text-xs font-bold rounded-full transition-all shadow-sm truncate text-center border ${filterType === 'delivery' ? 'bg-slate-800 text-white border-slate-800 dark:bg-slate-200 dark:text-slate-900 dark:border-slate-200' : 'bg-white text-slate-600 border-slate-200 hover:bg-slate-50 dark:bg-slate-800 dark:text-slate-400 dark:border-slate-700 dark:hover:bg-slate-700'}`}>دليفري 📦</button>
             </div>
 
             {filteredTrips.length === 0 ? (
@@ -1187,11 +1202,10 @@ export default function App() {
                   return (
                   <div key={trip.id} className={`rounded-[1.25rem] p-3.5 shadow-sm hover:shadow-md border relative flex flex-col transition-all duration-300 ${bgCard} ${isCompleted ? 'opacity-75 grayscale-[20%]' : ''}`}>
                     
-                    {/* رأس الكارت (الصورة والاسم على اليمين - الحذف على الشمال) */}
                     <div className="flex items-start justify-between mb-3 relative">
-                      <div className="flex items-center gap-2 overflow-hidden text-right" dir="ltr">
-                        <div className="overflow-hidden">
-                          <h3 className={`font-bold text-[11px] flex items-center justify-end gap-1 truncate ${textPrimary}`}>
+                      <div className="flex items-center gap-2 overflow-hidden text-right w-full" dir="ltr">
+                        <div className="overflow-hidden flex flex-col items-end w-full">
+                          <h3 className={`font-bold text-[11px] flex items-center justify-end gap-1 truncate ${textPrimary} w-full`}>
                             {trip.verified && <ShieldCheck size={12} className="text-blue-500 shrink-0" />}
                             {trip.userName ? trip.userName.split(' ')[0] : 'مستخدم'} 
                           </h3>
@@ -1207,13 +1221,12 @@ export default function App() {
                       </div>
 
                       {canDelete && !trip.isDummy && (
-                        <button onClick={() => {setDeleteType('trip'); setDeleteConfirmId(trip.id);}} className="p-1.5 bg-rose-50 text-rose-600 rounded-full hover:bg-rose-100 transition-colors shrink-0 z-10 ml-1">
+                        <button onClick={() => {setDeleteType('trip'); setDeleteConfirmId(trip.id);}} className="absolute left-0 top-0 p-1.5 bg-rose-50 text-rose-600 rounded-full hover:bg-rose-100 transition-colors shrink-0 z-10">
                           <Trash2 size={14} />
                         </button>
                       )}
                     </div>
 
-                    {/* البادجات بألوان صلبة (Solid) لعدم تأثرها بالـ Dark Mode */}
                     <div className="mb-3 flex gap-1 flex-wrap">
                       <span className={`inline-block text-[9px] font-bold px-2 py-0.5 rounded-md border ${trip.type === 'offer' ? 'bg-emerald-600 text-white border-emerald-700' : trip.type === 'delivery' ? 'bg-purple-600 text-white border-purple-700' : 'bg-orange-500 text-white border-orange-600'}`}>
                         {trip.type === 'offer' ? 'سائق' : trip.type === 'delivery' ? 'دليفري' : 'راكب'}
@@ -1223,18 +1236,12 @@ export default function App() {
                       </span>
                     </div>
 
-                    {/* مسار الرحلة المعالج تماماً لمنع تداخل النص مع النقط */}
-                    <div className="flex flex-col gap-3 mb-4 mr-1">
-                       <div className="flex items-start gap-2">
-                          <div className="w-3 h-3 rounded-full bg-indigo-500 shrink-0 mt-1 relative z-10 shadow-sm">
-                             <div className="absolute top-3 right-[5px] w-0.5 h-8 bg-slate-200 dark:bg-slate-700"></div>
-                          </div>
-                          <p className={`font-bold text-[11px] leading-snug break-words flex-1 ${textPrimary}`}>{trip.from}</p>
-                       </div>
-                       <div className="flex items-start gap-2">
-                          <div className="w-3 h-3 rounded-full bg-rose-500 shrink-0 mt-0.5 relative z-10 shadow-sm"></div>
-                          <p className={`font-bold text-[11px] leading-snug break-words flex-1 ${textPrimary}`}>{trip.to}</p>
-                       </div>
+                    <div className="relative pr-4 border-r-2 border-dashed border-slate-200 dark:border-slate-700 mb-4 mr-2">
+                       <div className="absolute -right-[7px] top-0 w-3 h-3 rounded-full bg-indigo-500 shadow-sm border-2 border-white dark:border-slate-800"></div>
+                       <p className={`font-bold text-[11px] leading-snug break-words mb-3 ${textPrimary}`}>{trip.from}</p>
+
+                       <div className="absolute -right-[7px] bottom-0 w-3 h-3 rounded-full bg-rose-500 shadow-sm border-2 border-white dark:border-slate-800"></div>
+                       <p className={`font-bold text-[11px] leading-snug break-words ${textPrimary}`}>{trip.to}</p>
                     </div>
                     
                     <div className={`text-[10px] font-bold flex justify-between items-center px-1.5 mb-3 ${textSecondary}`}>
