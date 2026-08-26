@@ -1626,7 +1626,7 @@ export default function App() {
                         {trip.type === 'offer' ? 'سائق' : trip.type === 'delivery' ? 'دليفري' : 'راكب'}
                       </span>
                       <span className={`inline-block text-[9px] font-bold px-2 py-0.5 rounded-md border shadow-sm ${isCompleted ? 'bg-slate-800 text-white border-slate-900 dark:bg-slate-700 dark:border-slate-600' : isInProgress ? 'bg-amber-500 text-white border-amber-600' : 'bg-indigo-600 text-white border-indigo-700'}`}>
-                         {isCompleted ? 'مكتملة تلقائياً ✅' : isInProgress ? 'بالطريق 🚗' : 'متاحة ✨'}
+                         {isCompleted ? 'رحله مكتمله' : isInProgress ? 'في الطريق' : 'رحله متاحه '}
                       </span>
                     </div>
 
@@ -1656,7 +1656,7 @@ export default function App() {
                       <div className="mt-auto pt-2">
                         {isOwner ? (
                           <div className={`w-full py-1.5 rounded-lg font-bold text-center text-[10px] border border-dashed ${isDarkMode ? 'bg-slate-700/50 text-slate-400 border-slate-600' : 'bg-slate-50 text-slate-500 border-slate-200'}`}>
-                            إعلاني ✨
+                            رحلتي 
                           </div>
                         ) : (
                           <div className="flex gap-1.5">
