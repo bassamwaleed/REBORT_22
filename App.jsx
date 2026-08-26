@@ -23,7 +23,6 @@ const USERS_COLLECTION = 'khodni_maak_users';
 const MARKET_COLLECTION_NAME = 'khodni_maak_market';
 const ADMIN_EMAIL = "bassamwaleed2000@gmail.com".toLowerCase();
 
-// دالة حماية مطلقة لقراءة التواريخ لمنع الشاشة البيضاء (Crash) نهائياً
 const safeMillis = (timestamp) => {
   if (!timestamp) return 0;
   if (typeof timestamp.toMillis === 'function') return timestamp.toMillis();
@@ -150,6 +149,10 @@ export default function App() {
   const [showLiveNotification, setShowLiveNotification] = useState(false);
   const [notificationIndex, setNotificationIndex] = useState(0);
 
+  // إعدادات إشعارات الرسائل الجديدة
+  const [chatNotification, setChatNotification] = useState(null);
+  const isInitialInboxLoad = useRef(true);
+
   const [liveTimer, setLiveTimer] = useState('00:00:00');
 
   useEffect(() => {
@@ -270,6 +273,7 @@ export default function App() {
   };
 
   useEffect(() => {
+    isInitialInboxLoad.current = true; // ريستارت لتحميل صندوق الوارد عند تغيير المستخدم
     const unsubscribe = onAuthStateChanged(auth, async (currentUser) => {
       try {
         if (currentUser) {
@@ -360,12 +364,30 @@ export default function App() {
     }
   }, [user]);
 
+  // صندوق الوارد + مراقبة الرسائل الجديدة للإشعارات المنبثقة
   useEffect(() => {
     if (!user || isGuest) return;
     try {
       const myInboxPath = collection(db, `inbox_${user.uid}`);
       const unsubscribe = onSnapshot(myInboxPath, async (snapshot) => {
         try {
+          // الجزء الخاص بالرسائل المنبثقة (إشعارات الدردشة)
+          if (!isInitialInboxLoad.current) {
+            snapshot.docChanges().forEach((change) => {
+              if (change.type === 'added' || change.type === 'modified') {
+                const data = change.doc.data();
+                // التأكد أن الرسالة الجديدة ليست مني أنا
+                if (data.lastSenderId && data.lastSenderId !== user.uid) {
+                  setChatNotification(data);
+                  setTimeout(() => setChatNotification(null), 5000); // إخفاء الإشعار بعد 5 ثوان
+                }
+              }
+            });
+          } else {
+            // تجاهل التغييرات في أول تحميل لتجنب ظهور إشعارات قديمة
+            setTimeout(() => { isInitialInboxLoad.current = false; }, 2000);
+          }
+
           const inboxData = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
           inboxData.sort((a, b) => safeMillis(b.createdAt) - safeMillis(a.createdAt));
           
@@ -696,7 +718,6 @@ export default function App() {
     }
   };
 
-  // الدالة المحمية لفتح المودال بأمان وتجنب أي كراش
   const requireAuth = (actionCallback) => {
     try {
       if (isGuest || !user) {
@@ -816,13 +837,14 @@ export default function App() {
       const otherPhoto = activeChat.otherPersonPhoto || null;
       const myPhoto = userData?.photoURL || null;
 
+      // إضافة lastSenderId في الصندوق ليتم تمييز الإشعارات المنبثقة
       await setDoc(doc(db, `inbox_${user.uid}`, chatId), {
-        chatId, tripId: activeChat.tripId || '', otherPersonId: activeChat.otherPersonId || '', otherPersonName: activeChat.otherPersonName || 'مستخدم', otherPersonPhoto: otherPhoto, otherPersonVerified: activeChat.otherPersonVerified || false, lastMessage: newMessage, createdAt: serverTimestamp()
+        chatId, tripId: activeChat.tripId || '', otherPersonId: activeChat.otherPersonId || '', otherPersonName: activeChat.otherPersonName || 'مستخدم', otherPersonPhoto: otherPhoto, otherPersonVerified: activeChat.otherPersonVerified || false, lastMessage: newMessage, lastSenderId: user.uid, createdAt: serverTimestamp()
       }, { merge: true });
       
       if (activeChat.otherPersonId) {
         await setDoc(doc(db, `inbox_${activeChat.otherPersonId}`, chatId), {
-          chatId, tripId: activeChat.tripId || '', otherPersonId: user.uid, otherPersonName: userData?.name || user.displayName || 'مستخدم', otherPersonPhoto: myPhoto, otherPersonVerified: userData?.isVerified || false, lastMessage: newMessage, createdAt: serverTimestamp()
+          chatId, tripId: activeChat.tripId || '', otherPersonId: user.uid, otherPersonName: userData?.name || user.displayName || 'مستخدم', otherPersonPhoto: myPhoto, otherPersonVerified: userData?.isVerified || false, lastMessage: newMessage, lastSenderId: user.uid, createdAt: serverTimestamp()
         }, { merge: true });
       }
       
@@ -855,6 +877,15 @@ export default function App() {
       } else if (actionType === 'complete') {
         newStatus = 'completed';
         systemText = 'تم إنهاء الرحلة بنجاح! نتمنى لك يوماً سعيداً ✅';
+        
+        // تعديل 1: تحديث حالة الرحلة الأساسية لتصبح مكتملة في الكارت بالخارج
+        if (activeChat.tripId && activeChat.tripId !== 'system') {
+           try {
+             await updateDoc(doc(db, APP_COLLECTION_NAME, activeChat.tripId), { status: 'completed' });
+           } catch(err) {
+             console.error("خطأ في تحديث الرحلة بالخارج", err);
+           }
+        }
       }
 
       const updateData = { requestStatus: newStatus };
@@ -888,17 +919,18 @@ export default function App() {
       
       requireAuth(() => {
         if (!user || !user.uid) return;
-        const chatId = trip.id + '_' + (user.uid < trip.userId ? user.uid + '_' + trip.userId : trip.userId + '_' + user.uid);
+        const chatId = user.uid < trip.userId ? user.uid + '_' + trip.userId : trip.userId + '_' + user.uid;
+        
         setActiveChat({
           chatId: chatId, tripId: trip.id, otherPersonId: trip.userId, otherPersonName: trip.userName || 'مستخدم', otherPersonPhoto: trip.userPhoto || null, otherPersonVerified: trip.verified || false, tripInfo: `${trip.from || ''} ➔ ${trip.to || ''}`
         });
         
         setDoc(doc(db, `inbox_${user.uid}`, chatId), {
-          chatId: chatId, tripId: trip.id, otherPersonId: trip.userId, otherPersonName: trip.userName || 'مستخدم', otherPersonPhoto: trip.userPhoto || null, otherPersonVerified: trip.verified || false, tripOwnerId: trip.userId, createdAt: serverTimestamp()
+          chatId: chatId, tripId: trip.id, tripType: trip.type, otherPersonId: trip.userId, otherPersonName: trip.userName || 'مستخدم', otherPersonPhoto: trip.userPhoto || null, otherPersonVerified: trip.verified || false, tripOwnerId: trip.userId, createdAt: serverTimestamp()
         }, { merge: true }).catch(e => console.error(e));
 
         setDoc(doc(db, `inbox_${trip.userId}`, chatId), {
-          chatId: chatId, tripId: trip.id, otherPersonId: user.uid, otherPersonName: userData?.name || 'مستخدم', otherPersonPhoto: userData?.photoURL || null, otherPersonVerified: userData?.isVerified || false, tripOwnerId: trip.userId, createdAt: serverTimestamp()
+          chatId: chatId, tripId: trip.id, tripType: trip.type, otherPersonId: user.uid, otherPersonName: userData?.name || 'مستخدم', otherPersonPhoto: userData?.photoURL || null, otherPersonVerified: userData?.isVerified || false, tripOwnerId: trip.userId, createdAt: serverTimestamp()
         }, { merge: true }).catch(e => console.error(e));
       });
     } catch (e) {
@@ -911,7 +943,7 @@ export default function App() {
       if (!product || !product.userId) return setAlertMsg('حدث خطأ، لا يمكن التواصل مع البائع.');
       requireAuth(() => {
         if (!user || !user.uid) return;
-        const chatId = product.id + '_' + (user.uid < product.userId ? user.uid + '_' + product.userId : product.userId + '_' + user.uid);
+        const chatId = user.uid < product.userId ? user.uid + '_' + product.userId : product.userId + '_' + user.uid;
         setActiveChat({
           chatId: chatId, tripId: product.id, otherPersonId: product.userId, otherPersonName: product.userName || 'مستخدم', otherPersonPhoto: product.userPhoto || null, otherPersonVerified: product.verified || false, tripInfo: `مهتم بشراء: ${product.title || ''}`
         });
@@ -921,11 +953,9 @@ export default function App() {
     }
   };
 
-  // حماية للفلترة والترتيب
   const filteredTrips = Array.isArray(realTrips) ? realTrips.filter(t => t && (filterType === 'all' || t.type === filterType) && ((t.from || '').includes(searchFrom) && (t.to || '').includes(searchTo))) : [];
   filteredTrips.sort((a, b) => safeMillis(b.createdAt) - safeMillis(a.createdAt));
   
-  // -- هذا هو المتغير الذي كان يسبب الشاشة البيضاء وتم تعريفه الآن بشكل آمن --
   const activeLiveTrip = Array.isArray(myInbox) ? myInbox.find(c => c?.requestStatus === 'accepted' || c?.requestStatus === 'arrived') : null;
   
   const renderStars = (rating = 0, total = 0) => {
@@ -1061,6 +1091,43 @@ export default function App() {
   return (
     <div dir="rtl" className={`min-h-screen flex flex-col relative transition-colors duration-300 ${bgMain} overflow-x-hidden w-full pb-20`}>
       
+      {/* إشعار الرسائل الذكي الجديد */}
+      {chatNotification && (!activeChat || activeChat.chatId !== chatNotification.chatId) && (
+        <div 
+           className="fixed top-20 left-1/2 transform -translate-x-1/2 z-[100] w-11/12 max-w-sm animate-fade-in-down cursor-pointer"
+           onClick={() => {
+             setActiveChat(chatNotification);
+             setActiveTab('inbox');
+             setChatNotification(null);
+           }}
+        >
+          <div className={`p-3 rounded-2xl border flex items-center gap-3 shadow-2xl ${isDarkMode ? 'bg-indigo-900/95 border-indigo-500/50 shadow-indigo-500/20' : 'bg-indigo-50 border-indigo-200 shadow-indigo-600/20'}`}>
+            <div className="relative shrink-0">
+              {chatNotification.otherPersonPhoto ? (
+                <img src={chatNotification.otherPersonPhoto} className="w-10 h-10 rounded-full object-cover border border-white/50 shadow-sm" alt="user" />
+              ) : (
+                <div className={`w-10 h-10 rounded-full flex items-center justify-center font-bold border shadow-sm ${isDarkMode ? 'bg-indigo-800 text-white border-indigo-600' : 'bg-white text-indigo-600 border-indigo-200'}`}>
+                  {(chatNotification.otherPersonName || 'م').charAt(0)}
+                </div>
+              )}
+              <span className="absolute -top-1 -right-1 w-3 h-3 bg-rose-500 rounded-full border-2 border-white dark:border-indigo-900 animate-pulse"></span>
+            </div>
+            
+            <div className="flex-1 overflow-hidden">
+              <h4 className={`font-bold text-xs truncate flex items-center gap-1 ${isDarkMode ? 'text-white' : 'text-indigo-900'}`}>
+                رسالة من {chatNotification.otherPersonName ? chatNotification.otherPersonName.split(' ')[0] : 'مستخدم'}
+                {chatNotification.otherPersonVerified && <ShieldCheck size={12} className={isDarkMode ? 'text-blue-300' : 'text-blue-600'} />}
+              </h4>
+              <p className={`text-[11px] truncate font-medium mt-0.5 ${isDarkMode ? 'text-indigo-200' : 'text-indigo-700/80'}`}>{chatNotification.lastMessage}</p>
+            </div>
+            
+            <button className={`p-2 rounded-full shadow-md shrink-0 transition-transform hover:scale-105 ${isDarkMode ? 'bg-indigo-600 text-white' : 'bg-indigo-600 text-white'}`}>
+              <MessageCircle size={16} />
+            </button>
+          </div>
+        </div>
+      )}
+
       {showAuthPrompt && (
         <div className="fixed inset-0 bg-slate-900/70 backdrop-blur-sm z-[200] flex justify-center items-center p-4">
           <div className={`${bgModal} rounded-3xl p-8 max-w-sm w-full text-center shadow-2xl animate-fade-in-up border ${isDarkMode ? 'border-slate-700' : 'border-transparent'}`}>
@@ -1085,7 +1152,7 @@ export default function App() {
         </div>
       )}
 
-      {showLiveNotification && currentNotificationTrip && (
+      {showLiveNotification && currentNotificationTrip && !chatNotification && (
         <div className="fixed top-20 left-1/2 transform -translate-x-1/2 z-[100] w-11/12 max-w-sm animate-fade-in-down">
           <div className={`p-3 rounded-2xl border flex flex-col gap-2.5 shadow-2xl ${isDarkMode ? 'bg-indigo-900/95 border-indigo-500/50 shadow-indigo-500/20' : 'bg-indigo-50 border-indigo-200 shadow-indigo-600/20'}`}>
             <div className="flex justify-between items-start">
@@ -1453,37 +1520,35 @@ export default function App() {
                        )}
                     </div>
 
-                    <div className="mt-auto pt-2">
-                      {isOwner ? (
-                        <div className={`w-full py-1.5 rounded-lg font-bold text-center text-[10px] border border-dashed ${isDarkMode ? 'bg-slate-700/50 text-slate-400 border-slate-600' : 'bg-slate-50 text-slate-500 border-slate-200'}`}>
-                          إعلاني ✨
-                        </div>
-                      ) : isClosedForPublic ? (
-                        <div className={`w-full py-1.5 rounded-lg font-bold text-center text-[10px] border ${isDarkMode ? 'bg-slate-700 text-slate-400 border-slate-600' : 'bg-slate-100 text-slate-500 border-slate-200'}`}>
-                          مغلقة ✅
-                        </div>
-                      ) : (
-                        <div className="flex gap-1.5">
-                          <button onClick={() => openChatFromTrip(trip)} className="flex-1 py-1.5 rounded-lg font-bold flex justify-center items-center gap-1.5 text-[10px] text-white transition-colors shadow-sm bg-indigo-600 hover:bg-indigo-700">
-                            <MessageCircle size={10} /> رسالة
-                          </button>
-                          
-                          <a href={trip.userPhone && !trip.isDummy && !trip.isBot ? `tel:${trip.userPhone}` : '#'} 
-                             onClick={(e) => {
-                               if (trip.isDummy || trip.isBot) {
-                                 e.preventDefault();
-                                 setAlertMsg('لا يوجد رقم لهذه الرحلة');
-                               } else if (!trip.userPhone) {
-                                 e.preventDefault();
-                                 setAlertMsg('صاحب الرحلة لم يقم بإضافة رقم هاتف 📞');
-                               }
-                             }} 
-                             className="flex-1 bg-emerald-600 text-white py-1.5 rounded-lg font-bold flex justify-center items-center gap-1.5 text-[10px] hover:bg-emerald-700 transition-colors shadow-sm no-underline text-center">
-                            <Phone size={10} /> اتصال
-                          </a>
-                        </div>
-                      )}
-                    </div>
+                    {!isClosedForPublic && (
+                      <div className="mt-auto pt-2">
+                        {isOwner ? (
+                          <div className={`w-full py-1.5 rounded-lg font-bold text-center text-[10px] border border-dashed ${isDarkMode ? 'bg-slate-700/50 text-slate-400 border-slate-600' : 'bg-slate-50 text-slate-500 border-slate-200'}`}>
+                            إعلاني ✨
+                          </div>
+                        ) : (
+                          <div className="flex gap-1.5">
+                            <button onClick={() => openChatFromTrip(trip)} className="flex-1 py-1.5 rounded-lg font-bold flex justify-center items-center gap-1.5 text-[10px] text-white transition-colors shadow-sm bg-indigo-600 hover:bg-indigo-700">
+                              <MessageCircle size={10} /> رسالة
+                            </button>
+                            
+                            <a href={trip.userPhone && !trip.isDummy && !trip.isBot ? `tel:${trip.userPhone}` : '#'} 
+                               onClick={(e) => {
+                                 if (trip.isDummy || trip.isBot) {
+                                   e.preventDefault();
+                                   setAlertMsg('لا يوجد رقم لهذه الرحلة');
+                                 } else if (!trip.userPhone) {
+                                   e.preventDefault();
+                                   setAlertMsg('صاحب الرحلة لم يقم بإضافة رقم هاتف 📞');
+                                 }
+                               }} 
+                               className="flex-1 bg-emerald-600 text-white py-1.5 rounded-lg font-bold flex justify-center items-center gap-1.5 text-[10px] hover:bg-emerald-700 transition-colors shadow-sm no-underline text-center">
+                              <Phone size={10} /> اتصال
+                            </a>
+                          </div>
+                        )}
+                      </div>
+                    )}
                   </div>
                 )})}
               </div>
@@ -1713,7 +1778,7 @@ export default function App() {
 
       </main>
 
-      {/* الشريط العائم الذكي */}
+      {/* الشريط العائم الذكي للرحلة الفعالة */}
       {activeLiveTrip && !isGuest && (
         <div className="fixed bottom-[76px] left-0 right-0 px-4 z-30 pointer-events-none animate-fade-in-up">
           <div onClick={() => { 
@@ -1897,11 +1962,12 @@ export default function App() {
               </div>
             </div>
 
-            {/* لوحة تحكم الرحلة (آمنة تماماً) */}
+            {/* لوحة تحكم الرحلة */}
             {(() => {
                try {
                  const chatInfo = myInbox.find(c => c && c.chatId === activeChat.chatId);
-                 if (!chatInfo || activeChat.tripInfo === 'system' || activeChat.tripInfo?.includes('مهتم بشراء') || !user) return null;
+                 // إخفاء اللوحة لو مفيش معلومات، أو شات سيستم، أو بيع منتج، أو لو كانت الرحلة "راكب" (طلب توصيلة)
+                 if (!chatInfo || activeChat.tripInfo === 'system' || activeChat.tripInfo?.includes('مهتم بشراء') || !user || chatInfo.tripType === 'request') return null;
 
                  const isTripOwner = chatInfo.tripOwnerId === user.uid; 
                  const isPassenger = chatInfo.tripOwnerId && chatInfo.tripOwnerId !== user.uid;
