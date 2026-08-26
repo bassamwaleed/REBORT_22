@@ -3,7 +3,7 @@ import { initializeApp } from 'firebase/app';
 import { getAuth, createUserWithEmailAndPassword, signInWithEmailAndPassword, signInAnonymously, onAuthStateChanged, updateProfile, signOut, sendPasswordResetEmail } from 'firebase/auth';
 import { getFirestore, collection, onSnapshot, addDoc, deleteDoc, updateDoc, doc, setDoc, getDoc, serverTimestamp } from 'firebase/firestore';
 import { getStorage } from 'firebase/storage';
-import { MapPin, Navigation, Car, User, MessageCircle, ShieldCheck, X, CheckCircle2, Loader2, Trash2, Send, LogOut, Bell, Phone, Mail, Lock, LogIn, AlertCircle, Settings, Moon, Sun, Info, History, Star, Play, CheckSquare, Megaphone, Clock, ChevronLeft, Wallet, Sparkles, ArrowRight, Crown, Shield, Image as ImageIcon, Camera, Package, Store, ShoppingBag, Plus, Tag, Map, Flag, ThumbsUp } from 'lucide-react';
+import { MapPin, Navigation, Car, User, MessageCircle, ShieldCheck, X, CheckCircle2, Loader2, Trash2, Send, LogOut, Bell, Phone, Mail, Lock, LogIn, AlertCircle, Settings, Moon, Sun, Info, History, Star, Play, CheckSquare, Megaphone, Clock, ChevronLeft, ChevronDown, Wallet, Sparkles, ArrowRight, Crown, Shield, Image as ImageIcon, Camera, Package, Store, ShoppingBag, Plus, Tag, Map, Flag, ThumbsUp } from 'lucide-react';
 
 const firebaseConfig = {
   apiKey: "AIzaSyC3JM11miWda_leIk0LPViRNVdSZRCQ8N8",
@@ -23,7 +23,7 @@ const USERS_COLLECTION = 'khodni_maak_users';
 const MARKET_COLLECTION_NAME = 'khodni_maak_market';
 const ADMIN_EMAIL = "bassamwaleed2000@gmail.com".toLowerCase();
 
-const CURRENT_APP_VERSION = "v4.1_live";
+const CURRENT_APP_VERSION = "v4.3_live";
 
 const safeMillis = (timestamp) => {
   if (!timestamp) return 0;
@@ -157,6 +157,8 @@ export default function App() {
   const notifiedMessages = useRef({});
 
   const [liveTimer, setLiveTimer] = useState('00:00:00');
+  
+  const [isLiveTripMinimized, setIsLiveTripMinimized] = useState(false);
 
   useEffect(() => {
     try {
@@ -203,7 +205,6 @@ export default function App() {
     let interval;
     try {
       if (!myInbox || !Array.isArray(myInbox)) return;
-      // تفعيل التايمر لو الرحلة في أي مرحلة من مراحل التنفيذ
       const activeTrip = myInbox.find(c => ['accepted', 'moving', 'arrived', 'in_progress_trip'].includes(c?.requestStatus));
       if (activeTrip && activeTrip.tripStartTime) {
         interval = setInterval(() => {
@@ -877,7 +878,6 @@ export default function App() {
     }
   };
 
-  // 🟢 التحكم في حالة الرحلة بالتعديلات الجديدة (الإلغاء - التحرك - الوصول - بدء الرحلة - الإنهاء) 🟢
   const handleTripAction = async (actionType, targetChat = activeChat) => {
     if (!targetChat || isGuest || !user) return;
     try {
@@ -1047,7 +1047,6 @@ export default function App() {
   const filteredTrips = Array.isArray(realTrips) ? realTrips.filter(t => t && (filterType === 'all' || t.type === filterType) && ((t.from || '').includes(searchFrom) && (t.to || '').includes(searchTo))) : [];
   filteredTrips.sort((a, b) => safeMillis(b.createdAt) - safeMillis(a.createdAt));
   
-  // 🟢 شريط التحكم العائم: نختار الرحلة اللي فيها حركة (بما فيها المراحل الجديدة والطلبات المعلقة) 🟢
   const priorityLiveTrip = Array.isArray(myInbox) ? (
     myInbox.find(c => c?.requestStatus === 'in_progress_trip') ||
     myInbox.find(c => c?.requestStatus === 'arrived') || 
@@ -1056,8 +1055,16 @@ export default function App() {
     myInbox.find(c => c?.requestStatus === 'pending')
   ) : null;
 
-  const renderStars = (rating = 0, total = 0, userCreatedAtMillis = 0) => {
-    const isNewUser = total === 0 && (!userCreatedAtMillis || (Date.now() - userCreatedAtMillis < 86400000));
+  useEffect(() => {
+    if (!priorityLiveTrip) {
+      setIsLiveTripMinimized(false);
+    }
+  }, [priorityLiveTrip]);
+
+  // 🟢 حل مشكلة المستخدمين القدامى مع كلمة "مستخدم جديد" 🟢
+  const renderStars = (rating = 0, total = 0, userCreatedAtMillis = null) => {
+    // لو مفيش وقت إنشاء متسجل (userCreatedAtMillis = null)، ده معناه إنه مستخدم قديم، فمش هيعتبره جديد
+    const isNewUser = total === 0 && (userCreatedAtMillis && (Date.now() - userCreatedAtMillis < 86400000));
     
     if (isNewUser) {
       return <span className="text-[9px] text-slate-400 font-bold bg-slate-100 dark:bg-slate-700 px-1.5 py-0.5 rounded">مستخدم جديد ✨</span>;
@@ -1194,6 +1201,7 @@ export default function App() {
   return (
     <div dir="rtl" className={`min-h-screen flex flex-col relative transition-colors duration-300 ${bgMain} overflow-x-hidden w-full pb-20`}>
       
+      {/* إشعار الشات الذكي المنبثق */}
       {chatNotification && (!activeChat || activeChat.chatId !== chatNotification.chatId) && (
         <div 
            className="fixed top-20 left-1/2 transform -translate-x-1/2 z-[150] w-11/12 max-w-sm animate-fade-in-down cursor-pointer"
@@ -1576,16 +1584,9 @@ export default function App() {
                   const canDelete = isOwner || isAdmin;
                   
                   return (
-                  <div key={trip.id} className={`rounded-[1.25rem] p-3.5 shadow-sm hover:shadow-md border relative flex flex-col transition-all duration-300 ${bgCard} ${isCompleted ? 'opacity-80 grayscale-[50%]' : ''}`}>
+                  <div key={trip.id} className={`rounded-[1.25rem] p-3.5 shadow-sm hover:shadow-md border relative flex flex-col transition-all duration-300 h-fit ${bgCard}`}>
                     
-                    {isCompleted && (
-                       <div className="absolute top-0 right-0 left-0 bg-slate-800/95 dark:bg-slate-950/95 text-white text-[11px] font-extrabold py-1.5 text-center z-20 shadow-md flex items-center justify-center gap-1 rounded-t-[1.10rem]">
-                         <CheckCircle2 size={14} className="text-emerald-400" />
-                         الرحلة مكتملة تلقائياً
-                       </div>
-                    )}
-
-                    <div className={`flex items-start justify-between mb-3 relative ${isCompleted ? 'mt-4' : ''}`}>
+                    <div className="flex items-start justify-between mb-3 relative">
                       <div className="flex items-center gap-2 overflow-hidden text-right w-full" dir="ltr">
                         <div className="overflow-hidden flex flex-col items-end w-full">
                           <h3 className={`font-bold text-[11px] flex items-center justify-end gap-1 truncate ${textPrimary} w-full`}>
@@ -1634,7 +1635,7 @@ export default function App() {
                        <span>{trip.time}</span>
                     </div>
 
-                    <div className={`flex items-center justify-between px-2.5 py-1.5 rounded-xl mb-3 border ${isDarkMode ? 'bg-slate-700/30 border-slate-600' : 'bg-slate-50 border-slate-100'}`}>
+                    <div className={`flex items-center justify-between px-2.5 py-1.5 rounded-xl border ${isDarkMode ? 'bg-slate-700/30 border-slate-600' : 'bg-slate-50 border-slate-100'} ${isClosedForPublic ? 'mb-0' : 'mb-3'}`}>
                        <span className={`text-[11px] font-extrabold flex items-center gap-1 ${textPrimary}`}>
                          {trip.type === 'delivery' ? <Package size={12}/> : <User size={12}/>} {trip.seats}
                        </span>
@@ -1904,65 +1905,81 @@ export default function App() {
 
       </main>
 
-      {/* 🟢 شريط التحكم العائم الذكي (تم إضافة حالات: تحرك، وصول، وبدء الرحلة) 🟢 */}
+      {/* شريط التحكم العائم الذكي (قابل للتصغير والتكبير) */}
       {priorityLiveTrip && !isGuest && (!activeChat || activeChat.chatId !== priorityLiveTrip.chatId) && (
-        <div className="fixed bottom-[76px] left-0 right-0 px-4 z-30 pointer-events-none animate-fade-in-up">
-          <div className={`max-w-md mx-auto pointer-events-auto rounded-2xl p-3.5 shadow-2xl border flex flex-col gap-3 transition-colors ${isDarkMode ? 'bg-slate-800 border-indigo-500 shadow-indigo-900/30' : 'bg-white border-indigo-300 shadow-indigo-200/50'}`}>
-            <div 
-              className="flex justify-between items-center cursor-pointer"
-              onClick={() => {
-                setActiveChat({ chatId: priorityLiveTrip.chatId, tripId: priorityLiveTrip.tripId, tripType: priorityLiveTrip.tripType, tripOwnerId: priorityLiveTrip.tripOwnerId, otherPersonId: priorityLiveTrip.otherPersonId, otherPersonName: priorityLiveTrip.otherPersonName, otherPersonPhoto: priorityLiveTrip.otherPersonPhoto, otherPersonVerified: priorityLiveTrip.otherPersonVerified });
-                setActiveTab('inbox');
-              }}
+        <div className={`fixed z-30 transition-all duration-300 animate-fade-in-up ${isLiveTripMinimized ? 'bottom-[80px] left-4 w-auto right-auto' : 'bottom-[76px] left-0 right-0 px-4'}`}>
+          {isLiveTripMinimized ? (
+            <button 
+              onClick={() => setIsLiveTripMinimized(false)} 
+              className="bg-indigo-600 text-white px-4 py-2.5 rounded-full shadow-lg shadow-indigo-500/30 font-bold text-xs flex items-center gap-2 hover:bg-indigo-700 transform hover:scale-105 transition-all border border-indigo-400/50"
             >
-              <div className="flex items-center gap-3">
-                <div className={`p-2 rounded-full shrink-0 ${priorityLiveTrip.requestStatus === 'arrived' ? 'bg-rose-100 text-rose-600' : 'bg-indigo-100 text-indigo-600'}`}>
-                  {priorityLiveTrip.requestStatus === 'arrived' ? <MapPin className="animate-bounce" size={20} /> : <Car className="animate-pulse" size={20} />}
-                </div>
-                <div className="flex flex-col">
-                  <span className={`text-sm font-extrabold ${textPrimary}`}>
-                    {priorityLiveTrip.requestStatus === 'pending' && (priorityLiveTrip.tripOwnerId === user.uid ? 'يوجد طلب جديد لرحلتك' : 'طلبك قيد المراجعة...')}
-                    {priorityLiveTrip.requestStatus === 'accepted' && (priorityLiveTrip.tripOwnerId === user.uid ? 'تم قبول الطلب ✅' : 'تمت الموافقة على طلبك ✅')}
-                    {priorityLiveTrip.requestStatus === 'moving' && (priorityLiveTrip.tripOwnerId === user.uid ? 'أنت في الطريق للعميل 🚙' : 'الكابتن في الطريق إليك 🚙')}
-                    {priorityLiveTrip.requestStatus === 'arrived' && (priorityLiveTrip.tripOwnerId === user.uid ? 'أنت في نقطة اللقاء 📍' : 'الكابتن بالخارج 📍')}
-                    {priorityLiveTrip.requestStatus === 'in_progress_trip' && (priorityLiveTrip.tripOwnerId === user.uid ? 'الرحلة جارية الآن 🛣️' : 'الرحلة جارية الآن 🛣️')}
-                  </span>
-                  <span className={`text-[10px] font-bold ${textSecondary}`}>مع: {priorityLiveTrip.otherPersonName}</span>
-                </div>
-              </div>
-              {/* إظهار التايمر فقط أثناء الرحلة الفعلية */}
-              {(['accepted', 'moving', 'arrived', 'in_progress_trip'].includes(priorityLiveTrip.requestStatus)) && (
-                <div className={`font-mono font-bold text-xs px-2 py-1 rounded-lg border ${isDarkMode ? 'bg-slate-700 border-slate-600 text-indigo-300' : 'bg-slate-100 border-slate-200 text-indigo-700'}`}>
-                  {liveTimer}
-                </div>
-              )}
-            </div>
+              <Car size={16} className="animate-pulse"/> متابعة الطلب
+            </button>
+          ) : (
+            <div className={`max-w-md mx-auto pointer-events-auto rounded-2xl p-3.5 shadow-2xl border flex flex-col gap-3 transition-colors relative ${isDarkMode ? 'bg-slate-800 border-indigo-500 shadow-indigo-900/30' : 'bg-white border-indigo-300 shadow-indigo-200/50'}`}>
+              
+              <button 
+                onClick={(e) => { e.stopPropagation(); setIsLiveTripMinimized(true); }} 
+                className={`absolute -top-3 left-4 p-1 rounded-full shadow-md z-10 border transition-colors ${isDarkMode ? 'bg-slate-700 text-slate-300 border-slate-600 hover:bg-slate-600' : 'bg-slate-100 text-slate-600 border-slate-300 hover:bg-slate-200'}`}
+              >
+                <ChevronDown size={16} />
+              </button>
 
-            {/* أزرار التحكم من الشريط العائم لصاحب الرحلة وللعميل (للإلغاء) */}
-            <div className="flex gap-2">
-              {priorityLiveTrip.requestStatus === 'pending' && priorityLiveTrip.tripOwnerId === user.uid && (
-                <>
-                  <button onClick={() => handleTripAction('accept', priorityLiveTrip)} className="flex-1 bg-emerald-500 text-white font-bold py-2.5 rounded-xl text-xs shadow hover:bg-emerald-600 flex items-center justify-center gap-1"><CheckCircle2 size={16}/> قبول الطلب</button>
-                  <button onClick={() => handleTripAction('reject', priorityLiveTrip)} className="flex-1 bg-rose-500 text-white font-bold py-2.5 rounded-xl text-xs shadow hover:bg-rose-600 flex items-center justify-center gap-1"><X size={16}/> رفض</button>
-                </>
-              )}
-              {priorityLiveTrip.requestStatus === 'pending' && priorityLiveTrip.tripOwnerId !== user.uid && (
-                 <button onClick={() => handleTripAction('cancel_request', priorityLiveTrip)} className="w-full bg-rose-100 text-rose-600 font-bold py-2.5 rounded-xl text-xs hover:bg-rose-200 transition">إلغاء الطلب</button>
-              )}
-              {priorityLiveTrip.requestStatus === 'accepted' && priorityLiveTrip.tripOwnerId === user.uid && (
-                <button onClick={() => handleTripAction('start_moving', priorityLiveTrip)} className="w-full bg-indigo-600 text-white font-bold py-2.5 rounded-xl text-xs shadow hover:bg-indigo-700 flex items-center justify-center gap-1"><Navigation size={16}/> تحركت نحو العميل</button>
-              )}
-              {priorityLiveTrip.requestStatus === 'moving' && priorityLiveTrip.tripOwnerId === user.uid && (
-                <button onClick={() => handleTripAction('arrive', priorityLiveTrip)} className="w-full bg-orange-500 text-white font-bold py-2.5 rounded-xl text-xs shadow hover:bg-orange-600 flex items-center justify-center gap-1"><MapPin size={16}/> إبلاغ بالوصول</button>
-              )}
-              {priorityLiveTrip.requestStatus === 'arrived' && priorityLiveTrip.tripOwnerId === user.uid && (
-                <button onClick={() => handleTripAction('start_trip', priorityLiveTrip)} className="w-full bg-emerald-500 text-white font-bold py-2.5 rounded-xl text-xs shadow hover:bg-emerald-600 flex items-center justify-center gap-1"><Play size={16}/> بدء الرحلة الفعلي</button>
-              )}
-              {priorityLiveTrip.requestStatus === 'in_progress_trip' && priorityLiveTrip.tripOwnerId === user.uid && (
-                <button onClick={() => handleTripAction('complete', priorityLiveTrip)} className="w-full bg-rose-600 text-white font-bold py-2.5 rounded-xl text-xs shadow hover:bg-rose-700 flex items-center justify-center gap-1"><Flag size={16}/> إنهاء الرحلة بنجاح</button>
-              )}
+              <div 
+                className="flex justify-between items-center cursor-pointer pt-1"
+                onClick={() => {
+                  setActiveChat({ chatId: priorityLiveTrip.chatId, tripId: priorityLiveTrip.tripId, tripType: priorityLiveTrip.tripType, tripOwnerId: priorityLiveTrip.tripOwnerId, otherPersonId: priorityLiveTrip.otherPersonId, otherPersonName: priorityLiveTrip.otherPersonName, otherPersonPhoto: priorityLiveTrip.otherPersonPhoto, otherPersonVerified: priorityLiveTrip.otherPersonVerified });
+                  setActiveTab('inbox');
+                }}
+              >
+                <div className="flex items-center gap-3">
+                  <div className={`p-2 rounded-full shrink-0 ${priorityLiveTrip.requestStatus === 'arrived' ? 'bg-rose-100 text-rose-600' : 'bg-indigo-100 text-indigo-600'}`}>
+                    {priorityLiveTrip.requestStatus === 'arrived' ? <MapPin className="animate-bounce" size={20} /> : <Car className="animate-pulse" size={20} />}
+                  </div>
+                  <div className="flex flex-col">
+                    <span className={`text-sm font-extrabold ${textPrimary}`}>
+                      {priorityLiveTrip.requestStatus === 'pending' && (priorityLiveTrip.tripOwnerId === user.uid ? 'يوجد طلب جديد لرحلتك' : 'طلبك قيد المراجعة...')}
+                      {priorityLiveTrip.requestStatus === 'accepted' && (priorityLiveTrip.tripOwnerId === user.uid ? 'تم قبول الطلب ✅' : 'تمت الموافقة على طلبك ✅')}
+                      {priorityLiveTrip.requestStatus === 'moving' && (priorityLiveTrip.tripOwnerId === user.uid ? 'أنت في الطريق للعميل 🚙' : 'الكابتن في الطريق إليك 🚙')}
+                      {priorityLiveTrip.requestStatus === 'arrived' && (priorityLiveTrip.tripOwnerId === user.uid ? 'أنت في نقطة اللقاء 📍' : 'الكابتن بالخارج 📍')}
+                      {priorityLiveTrip.requestStatus === 'in_progress_trip' && (priorityLiveTrip.tripOwnerId === user.uid ? 'الرحلة جارية الآن 🛣️' : 'الرحلة جارية الآن 🛣️')}
+                    </span>
+                    <span className={`text-[10px] font-bold ${textSecondary}`}>مع: {priorityLiveTrip.otherPersonName}</span>
+                  </div>
+                </div>
+                {(['accepted', 'moving', 'arrived', 'in_progress_trip'].includes(priorityLiveTrip.requestStatus)) && (
+                  <div className={`font-mono font-bold text-xs px-2 py-1 rounded-lg border ${isDarkMode ? 'bg-slate-700 border-slate-600 text-indigo-300' : 'bg-slate-100 border-slate-200 text-indigo-700'}`}>
+                    {liveTimer}
+                  </div>
+                )}
+              </div>
+
+              {/* أزرار التحكم من الشريط العائم */}
+              <div className="flex gap-2">
+                {priorityLiveTrip.requestStatus === 'pending' && priorityLiveTrip.tripOwnerId === user.uid && (
+                  <>
+                    <button onClick={() => handleTripAction('accept', priorityLiveTrip)} className="flex-1 bg-emerald-500 text-white font-bold py-2.5 rounded-xl text-xs shadow hover:bg-emerald-600 flex items-center justify-center gap-1"><CheckCircle2 size={16}/> قبول الطلب</button>
+                    <button onClick={() => handleTripAction('reject', priorityLiveTrip)} className="flex-1 bg-rose-500 text-white font-bold py-2.5 rounded-xl text-xs shadow hover:bg-rose-600 flex items-center justify-center gap-1"><X size={16}/> رفض</button>
+                  </>
+                )}
+                {priorityLiveTrip.requestStatus === 'pending' && priorityLiveTrip.tripOwnerId !== user.uid && (
+                   <button onClick={() => handleTripAction('cancel_request', priorityLiveTrip)} className="w-full bg-rose-100 text-rose-600 font-bold py-2.5 rounded-xl text-xs hover:bg-rose-200 transition">إلغاء الطلب</button>
+                )}
+                {priorityLiveTrip.requestStatus === 'accepted' && priorityLiveTrip.tripOwnerId === user.uid && (
+                  <button onClick={() => handleTripAction('start_moving', priorityLiveTrip)} className="w-full bg-indigo-600 text-white font-bold py-2.5 rounded-xl text-xs shadow hover:bg-indigo-700 flex items-center justify-center gap-1"><Navigation size={16}/> تحركت نحو العميل</button>
+                )}
+                {priorityLiveTrip.requestStatus === 'moving' && priorityLiveTrip.tripOwnerId === user.uid && (
+                  <button onClick={() => handleTripAction('arrive', priorityLiveTrip)} className="w-full bg-orange-500 text-white font-bold py-2.5 rounded-xl text-xs shadow hover:bg-orange-600 flex items-center justify-center gap-1"><MapPin size={16}/> إبلاغ بالوصول</button>
+                )}
+                {priorityLiveTrip.requestStatus === 'arrived' && priorityLiveTrip.tripOwnerId === user.uid && (
+                  <button onClick={() => handleTripAction('start_trip', priorityLiveTrip)} className="w-full bg-emerald-500 text-white font-bold py-2.5 rounded-xl text-xs shadow hover:bg-emerald-600 flex items-center justify-center gap-1"><Play size={16}/> بدء الرحلة الفعلي</button>
+                )}
+                {priorityLiveTrip.requestStatus === 'in_progress_trip' && priorityLiveTrip.tripOwnerId === user.uid && (
+                  <button onClick={() => handleTripAction('complete', priorityLiveTrip)} className="w-full bg-rose-600 text-white font-bold py-2.5 rounded-xl text-xs shadow hover:bg-rose-700 flex items-center justify-center gap-1"><Flag size={16}/> إنهاء الرحلة بنجاح</button>
+                )}
+              </div>
             </div>
-          </div>
+          )}
         </div>
       )}
 
@@ -2101,7 +2118,7 @@ export default function App() {
         </div>
       )}
 
-      {/* 🟢 شاشة الشات المباشرة مع لوحة التحكم الثلاثية للمالك، وإلغاء الطلب للراكب 🟢 */}
+      {/* شاشة الشات المباشرة مع لوحة التحكم ونظام التقييم */}
       {activeChat && !isGuest && (
         <div className="fixed inset-0 bg-slate-900/80 backdrop-blur-md z-[250] flex justify-center items-end sm:items-center p-0 sm:p-4">
           <div className={`${bgModal} w-full h-[85vh] sm:h-[600px] sm:max-w-md rounded-t-[2rem] sm:rounded-3xl shadow-2xl flex flex-col overflow-hidden animate-fade-in-up relative`}>
@@ -2148,7 +2165,6 @@ export default function App() {
                        </button>
                      )}
                      
-                     {/* 🟢 زرار الإلغاء للراكب أثناء الانتظار 🟢 */}
                      {reqStatus === 'pending' && isRequester && (
                        <div className="flex items-center justify-between gap-2 bg-amber-50 dark:bg-amber-900/20 p-2 rounded-xl border border-amber-200 dark:border-amber-800/50">
                          <p className="text-xs font-bold text-amber-600 dark:text-amber-400 flex items-center gap-1.5"><Loader2 size={14} className="animate-spin"/> بانتظار الموافقة...</p>
@@ -2163,7 +2179,6 @@ export default function App() {
                        </div>
                      )}
 
-                     {/* 🟢 الدورة الثلاثية للسائق (تحرك -> وصول -> بدء الرحلة) 🟢 */}
                      {isTripOwner && reqStatus === 'accepted' && (
                         <button onClick={() => handleTripAction('start_moving')} className="w-full bg-indigo-600 text-white font-bold py-2 rounded-xl text-sm shadow hover:bg-indigo-700 flex items-center justify-center gap-1.5"><Navigation size={16}/> تحركت نحو العميل 🚙</button>
                      )}
@@ -2177,7 +2192,6 @@ export default function App() {
                         <button onClick={() => handleTripAction('complete')} className="w-full bg-rose-600 text-white font-bold py-2 rounded-xl text-sm shadow hover:bg-rose-700 flex items-center justify-center gap-1.5"><Flag size={16}/> إنهاء الرحلة 🏁</button>
                      )}
 
-                     {/* حالة الراكب بيشوف بس التايمر وحالة السائق */}
                      {isRequester && ['accepted', 'moving', 'arrived', 'in_progress_trip'].includes(reqStatus) && (
                        <div className="flex justify-between items-center px-2">
                          <span className={`text-xs font-bold ${reqStatus === 'arrived' ? 'text-rose-500' : 'text-emerald-500'}`}>
