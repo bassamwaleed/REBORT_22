@@ -23,7 +23,7 @@ const USERS_COLLECTION = 'khodni_maak_users';
 const MARKET_COLLECTION_NAME = 'khodni_maak_market';
 const ADMIN_EMAIL = "bassamwaleed2000@gmail.com".toLowerCase();
 
-const CURRENT_APP_VERSION = "v3.8_live";
+const CURRENT_APP_VERSION = "v3.9_live";
 
 const safeMillis = (timestamp) => {
   if (!timestamp) return 0;
@@ -154,6 +154,7 @@ export default function App() {
   const [chatNotification, setChatNotification] = useState(null);
   const chatNotifTimer = useRef(null);
   const isInitialInboxLoad = useRef(true);
+  const notifiedMessages = useRef({}); // لتتبع الرسائل التي ظهر لها إشعار لمنع التكرار
 
   const [liveTimer, setLiveTimer] = useState('00:00:00');
 
@@ -378,6 +379,7 @@ export default function App() {
     }
   }, [user]);
 
+  // تحديثات صندوق الرسائل و إشعارات الدردشة المفلترة
   useEffect(() => {
     if (!user || isGuest) return;
     try {
@@ -388,10 +390,14 @@ export default function App() {
             snapshot.docChanges().forEach((change) => {
               if (change.type === 'added' || change.type === 'modified') {
                 const data = change.doc.data();
-                if (data.lastSenderId && data.lastSenderId !== user.uid) {
-                  setChatNotification(data);
-                  if (chatNotifTimer.current) clearTimeout(chatNotifTimer.current);
-                  chatNotifTimer.current = setTimeout(() => setChatNotification(null), 6000);
+                // الفلترة هنا: يظهر الإشعار فقط إذا كانت رسالة نصية جديدة فعلاً (بمقارنة وقت الرسالة)
+                if (data.lastSenderId && data.lastSenderId !== user.uid && data.lastMessageTime) {
+                  if (notifiedMessages.current[data.chatId] !== data.lastMessageTime) {
+                    notifiedMessages.current[data.chatId] = data.lastMessageTime;
+                    setChatNotification(data);
+                    if (chatNotifTimer.current) clearTimeout(chatNotifTimer.current);
+                    chatNotifTimer.current = setTimeout(() => setChatNotification(null), 6000);
+                  }
                 }
               }
             });
@@ -825,6 +831,8 @@ export default function App() {
     try {
       const chatId = activeChat.chatId;
       if(!chatId) return;
+      
+      const currentTime = Date.now();
       const msgData = {
         text: newMessage, senderId: user.uid, senderName: userData?.name || user.displayName || 'مستخدم', createdAt: serverTimestamp()
       };
@@ -845,6 +853,7 @@ export default function App() {
         otherPersonVerified: activeChat.otherPersonVerified || false, 
         lastMessage: newMessage, 
         lastSenderId: user.uid, 
+        lastMessageTime: currentTime, // إضافة وقت الرسالة لمنع تكرار الإشعارات
         createdAt: serverTimestamp()
       };
 
@@ -907,6 +916,7 @@ export default function App() {
         updateData.tripStartTime = serverTimestamp(); 
       }
       
+      // ملاحظة: هنا لا نقوم بتحديث lastMessageTime عشان مايطلعش إشعار منبثق لحالة الرحلة
       await setDoc(doc(db, `inbox_${user.uid}`, chatId), updateData, { merge: true });
       if (activeChat.otherPersonId) {
         await setDoc(doc(db, `inbox_${activeChat.otherPersonId}`, chatId), updateData, { merge: true });
@@ -930,7 +940,11 @@ export default function App() {
       
       requireAuth(() => {
         if (!user || !user.uid) return;
-        const chatId = user.uid < trip.userId ? user.uid + '_' + trip.userId : trip.userId + '_' + user.uid;
+        
+        // تعديل هام جداً: ربط الشات برقم الرحلة نفسه (trip.id) لضمان دورة جديدة لكل رحلة
+        const user1 = user.uid < trip.userId ? user.uid : trip.userId;
+        const user2 = user.uid < trip.userId ? trip.userId : user.uid;
+        const chatId = `${trip.id}_${user1}_${user2}`;
         
         const chatData = {
           chatId: chatId, 
@@ -983,7 +997,11 @@ export default function App() {
       if (!product || !product.userId) return setAlertMsg('حدث خطأ، لا يمكن التواصل مع البائع.');
       requireAuth(() => {
         if (!user || !user.uid) return;
-        const chatId = user.uid < product.userId ? user.uid + '_' + product.userId : product.userId + '_' + user.uid;
+        
+        const user1 = user.uid < product.userId ? user.uid : product.userId;
+        const user2 = user.uid < product.userId ? product.userId : user.uid;
+        const chatId = `${product.id}_${user1}_${user2}`;
+        
         setActiveChat({
           chatId: chatId, tripId: product.id, tripType: 'market', tripOwnerId: product.userId, otherPersonId: product.userId, otherPersonName: product.userName || 'مستخدم', otherPersonPhoto: product.userPhoto || null, otherPersonVerified: product.verified || false, tripInfo: `مهتم بشراء: ${product.title || ''}`
         });
@@ -1131,6 +1149,7 @@ export default function App() {
   return (
     <div dir="rtl" className={`min-h-screen flex flex-col relative transition-colors duration-300 ${bgMain} overflow-x-hidden w-full pb-20`}>
       
+      {/* 🟢 إشعار الشات الذكي المنبثق الجديد 🟢 */}
       {chatNotification && (!activeChat || activeChat.chatId !== chatNotification.chatId) && (
         <div 
            className="fixed top-20 left-1/2 transform -translate-x-1/2 z-[150] w-11/12 max-w-sm animate-fade-in-down cursor-pointer"
