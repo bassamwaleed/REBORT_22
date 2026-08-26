@@ -23,7 +23,7 @@ const USERS_COLLECTION = 'khodni_maak_users';
 const MARKET_COLLECTION_NAME = 'khodni_maak_market';
 const ADMIN_EMAIL = "bassamwaleed2000@gmail.com".toLowerCase();
 
-const CURRENT_APP_VERSION = "v4.3_live";
+const CURRENT_APP_VERSION = "v4.4_live"; // تم التحديث لضمان عمل التعديلات الجديدة
 
 const safeMillis = (timestamp) => {
   if (!timestamp) return 0;
@@ -920,7 +920,14 @@ export default function App() {
         }
       }
 
-      const updateData = { requestStatus: newStatus };
+      // تفعيل الإشعار المنبثق لجميع أحداث الرحلة عن طريق تحديث وقت آخر رسالة واسم المرسل
+      const updateData = { 
+        requestStatus: newStatus,
+        lastMessage: systemText,
+        lastSenderId: user.uid,
+        lastMessageTime: Date.now()
+      };
+
       if (actionType === 'request') {
         updateData.requestSenderId = user.uid;
       }
@@ -951,11 +958,13 @@ export default function App() {
       const otherUserSnap = await getDoc(otherUserRef);
       if (otherUserSnap.exists()) {
         const uData = otherUserSnap.data();
-        const oldTotal = uData.totalRatings || 0;
-        const oldRating = uData.rating || 0;
+        
+        // التحويل الدقيق للأرقام لمعالجة الحسابات القديمة بسلاسة تامة
+        const oldTotal = Number(uData.totalRatings) || 0;
+        const oldRating = Number(uData.rating) || 0;
         
         const newTotal = oldTotal + 1;
-        const newRating = ((oldRating * oldTotal) + score) / newTotal;
+        const newRating = Number((((oldRating * oldTotal) + score) / newTotal).toFixed(1));
         
         await updateDoc(otherUserRef, { rating: newRating, totalRatings: newTotal });
       }
@@ -1061,9 +1070,8 @@ export default function App() {
     }
   }, [priorityLiveTrip]);
 
-  // 🟢 حل مشكلة المستخدمين القدامى مع كلمة "مستخدم جديد" 🟢
   const renderStars = (rating = 0, total = 0, userCreatedAtMillis = null) => {
-    // لو مفيش وقت إنشاء متسجل (userCreatedAtMillis = null)، ده معناه إنه مستخدم قديم، فمش هيعتبره جديد
+    // تحديد دقيق للمستخدم الجديد بناءً على توفر وقت الإنشاء
     const isNewUser = total === 0 && (userCreatedAtMillis && (Date.now() - userCreatedAtMillis < 86400000));
     
     if (isNewUser) {
@@ -1585,7 +1593,7 @@ export default function App() {
                   
                   return (
                   <div key={trip.id} className={`rounded-[1.25rem] p-3.5 shadow-sm hover:shadow-md border relative flex flex-col transition-all duration-300 h-fit ${bgCard}`}>
-                    
+
                     <div className="flex items-start justify-between mb-3 relative">
                       <div className="flex items-center gap-2 overflow-hidden text-right w-full" dir="ltr">
                         <div className="overflow-hidden flex flex-col items-end w-full">
