@@ -23,6 +23,8 @@ const USERS_COLLECTION = 'khodni_maak_users';
 const MARKET_COLLECTION_NAME = 'khodni_maak_market';
 const ADMIN_EMAIL = "bassamwaleed2000@gmail.com".toLowerCase();
 
+const CURRENT_APP_VERSION = "v3.8_live";
+
 const safeMillis = (timestamp) => {
   if (!timestamp) return 0;
   if (typeof timestamp.toMillis === 'function') return timestamp.toMillis();
@@ -149,11 +151,23 @@ export default function App() {
   const [showLiveNotification, setShowLiveNotification] = useState(false);
   const [notificationIndex, setNotificationIndex] = useState(0);
 
-  // إعدادات إشعارات الرسائل الجديدة
   const [chatNotification, setChatNotification] = useState(null);
+  const chatNotifTimer = useRef(null);
   const isInitialInboxLoad = useRef(true);
 
   const [liveTimer, setLiveTimer] = useState('00:00:00');
+
+  useEffect(() => {
+    try {
+      const savedVersion = localStorage.getItem('khodnimaak_app_version');
+      if (savedVersion !== CURRENT_APP_VERSION) {
+        localStorage.setItem('khodnimaak_app_version', CURRENT_APP_VERSION);
+        window.location.reload();
+      }
+    } catch (e) {
+      console.error(e);
+    }
+  }, []);
 
   useEffect(() => {
     if (user) {
@@ -273,7 +287,7 @@ export default function App() {
   };
 
   useEffect(() => {
-    isInitialInboxLoad.current = true; // ريستارت لتحميل صندوق الوارد عند تغيير المستخدم
+    isInitialInboxLoad.current = true;
     const unsubscribe = onAuthStateChanged(auth, async (currentUser) => {
       try {
         if (currentUser) {
@@ -364,27 +378,24 @@ export default function App() {
     }
   }, [user]);
 
-  // صندوق الوارد + مراقبة الرسائل الجديدة للإشعارات المنبثقة
   useEffect(() => {
     if (!user || isGuest) return;
     try {
       const myInboxPath = collection(db, `inbox_${user.uid}`);
       const unsubscribe = onSnapshot(myInboxPath, async (snapshot) => {
         try {
-          // الجزء الخاص بالرسائل المنبثقة (إشعارات الدردشة)
           if (!isInitialInboxLoad.current) {
             snapshot.docChanges().forEach((change) => {
               if (change.type === 'added' || change.type === 'modified') {
                 const data = change.doc.data();
-                // التأكد أن الرسالة الجديدة ليست مني أنا
                 if (data.lastSenderId && data.lastSenderId !== user.uid) {
                   setChatNotification(data);
-                  setTimeout(() => setChatNotification(null), 5000); // إخفاء الإشعار بعد 5 ثوان
+                  if (chatNotifTimer.current) clearTimeout(chatNotifTimer.current);
+                  chatNotifTimer.current = setTimeout(() => setChatNotification(null), 6000);
                 }
               }
             });
           } else {
-            // تجاهل التغييرات في أول تحميل لتجنب ظهور إشعارات قديمة
             setTimeout(() => { isInitialInboxLoad.current = false; }, 2000);
           }
 
@@ -791,16 +802,6 @@ export default function App() {
     }
   };
 
-  const handleUpdateTripStatus = async (tripId, newStatus) => {
-    try {
-      if(!tripId) return;
-      await updateDoc(doc(db, APP_COLLECTION_NAME, tripId), { status: newStatus });
-      triggerToast(newStatus === 'in_progress' ? 'تم بدء الرحلة/التوصيل بنجاح! 🚗' : 'تمت العملية بنجاح! ✅');
-    } catch (error) {
-      setAlertMsg('حدث خطأ أثناء التحديث.');
-    }
-  };
-
   const confirmDelete = async () => {
     if(!deleteConfirmId) return;
     try {
@@ -818,10 +819,6 @@ export default function App() {
     }
   };
 
-  const handleRateTrip = (tripId, ratingValue) => {
-    requireAuth(() => triggerToast(`شكراً! تم تقييم الرحلة بـ ${ratingValue} نجوم ⭐`));
-  };
-
   const handleSendMessage = async (e) => {
     e.preventDefault();
     if (!newMessage?.trim() || !activeChat || isGuest || !user) return;
@@ -837,14 +834,29 @@ export default function App() {
       const otherPhoto = activeChat.otherPersonPhoto || null;
       const myPhoto = userData?.photoURL || null;
 
-      // إضافة lastSenderId في الصندوق ليتم تمييز الإشعارات المنبثقة
-      await setDoc(doc(db, `inbox_${user.uid}`, chatId), {
-        chatId, tripId: activeChat.tripId || '', otherPersonId: activeChat.otherPersonId || '', otherPersonName: activeChat.otherPersonName || 'مستخدم', otherPersonPhoto: otherPhoto, otherPersonVerified: activeChat.otherPersonVerified || false, lastMessage: newMessage, lastSenderId: user.uid, createdAt: serverTimestamp()
-      }, { merge: true });
+      const inboxPayload = {
+        chatId, 
+        tripId: activeChat.tripId || '', 
+        tripType: activeChat.tripType || 'offer', 
+        tripOwnerId: activeChat.tripOwnerId || '', 
+        otherPersonId: activeChat.otherPersonId || '', 
+        otherPersonName: activeChat.otherPersonName || 'مستخدم', 
+        otherPersonPhoto: otherPhoto, 
+        otherPersonVerified: activeChat.otherPersonVerified || false, 
+        lastMessage: newMessage, 
+        lastSenderId: user.uid, 
+        createdAt: serverTimestamp()
+      };
+
+      await setDoc(doc(db, `inbox_${user.uid}`, chatId), inboxPayload, { merge: true });
       
       if (activeChat.otherPersonId) {
         await setDoc(doc(db, `inbox_${activeChat.otherPersonId}`, chatId), {
-          chatId, tripId: activeChat.tripId || '', otherPersonId: user.uid, otherPersonName: userData?.name || user.displayName || 'مستخدم', otherPersonPhoto: myPhoto, otherPersonVerified: userData?.isVerified || false, lastMessage: newMessage, lastSenderId: user.uid, createdAt: serverTimestamp()
+          ...inboxPayload,
+          otherPersonId: user.uid,
+          otherPersonName: userData?.name || user.displayName || 'مستخدم',
+          otherPersonPhoto: myPhoto,
+          otherPersonVerified: userData?.isVerified || false
         }, { merge: true });
       }
       
@@ -876,9 +888,8 @@ export default function App() {
         systemText = 'تنبيه: الكابتن وصل إلى نقطة اللقاء 📍';
       } else if (actionType === 'complete') {
         newStatus = 'completed';
-        systemText = 'تم إنهاء الرحلة بنجاح! نتمنى لك يوماً سعيداً ✅';
+        systemText = 'تم إنهاء العملية بنجاح! نتمنى لك يوماً سعيداً ✅';
         
-        // تعديل 1: تحديث حالة الرحلة الأساسية لتصبح مكتملة في الكارت بالخارج
         if (activeChat.tripId && activeChat.tripId !== 'system') {
            try {
              await updateDoc(doc(db, APP_COLLECTION_NAME, activeChat.tripId), { status: 'completed' });
@@ -921,17 +932,46 @@ export default function App() {
         if (!user || !user.uid) return;
         const chatId = user.uid < trip.userId ? user.uid + '_' + trip.userId : trip.userId + '_' + user.uid;
         
-        setActiveChat({
-          chatId: chatId, tripId: trip.id, otherPersonId: trip.userId, otherPersonName: trip.userName || 'مستخدم', otherPersonPhoto: trip.userPhoto || null, otherPersonVerified: trip.verified || false, tripInfo: `${trip.from || ''} ➔ ${trip.to || ''}`
-        });
-        
-        setDoc(doc(db, `inbox_${user.uid}`, chatId), {
-          chatId: chatId, tripId: trip.id, tripType: trip.type, otherPersonId: trip.userId, otherPersonName: trip.userName || 'مستخدم', otherPersonPhoto: trip.userPhoto || null, otherPersonVerified: trip.verified || false, tripOwnerId: trip.userId, createdAt: serverTimestamp()
-        }, { merge: true }).catch(e => console.error(e));
+        const chatData = {
+          chatId: chatId, 
+          tripId: trip.id, 
+          tripType: trip.type || 'offer', 
+          tripOwnerId: trip.userId, 
+          otherPersonId: trip.userId, 
+          otherPersonName: trip.userName || 'مستخدم', 
+          otherPersonPhoto: trip.userPhoto || null, 
+          otherPersonVerified: trip.verified || false, 
+          tripInfo: `${trip.from || ''} ➔ ${trip.to || ''}`
+        };
 
-        setDoc(doc(db, `inbox_${trip.userId}`, chatId), {
-          chatId: chatId, tripId: trip.id, tripType: trip.type, otherPersonId: user.uid, otherPersonName: userData?.name || 'مستخدم', otherPersonPhoto: userData?.photoURL || null, otherPersonVerified: userData?.isVerified || false, tripOwnerId: trip.userId, createdAt: serverTimestamp()
-        }, { merge: true }).catch(e => console.error(e));
+        setActiveChat(chatData);
+        
+        const inboxMe = {
+          chatId: chatId, 
+          tripId: trip.id, 
+          tripType: trip.type || 'offer', 
+          tripOwnerId: trip.userId, 
+          otherPersonId: trip.userId, 
+          otherPersonName: trip.userName || 'مستخدم', 
+          otherPersonPhoto: trip.userPhoto || null, 
+          otherPersonVerified: trip.verified || false, 
+          createdAt: serverTimestamp()
+        };
+
+        const inboxOther = {
+          chatId: chatId, 
+          tripId: trip.id, 
+          tripType: trip.type || 'offer', 
+          tripOwnerId: trip.userId, 
+          otherPersonId: user.uid, 
+          otherPersonName: userData?.name || 'مستخدم', 
+          otherPersonPhoto: userData?.photoURL || null, 
+          otherPersonVerified: userData?.isVerified || false, 
+          createdAt: serverTimestamp()
+        };
+
+        setDoc(doc(db, `inbox_${user.uid}`, chatId), inboxMe, { merge: true }).catch(e => console.error(e));
+        setDoc(doc(db, `inbox_${trip.userId}`, chatId), inboxOther, { merge: true }).catch(e => console.error(e));
       });
     } catch (e) {
       console.error(e);
@@ -945,7 +985,7 @@ export default function App() {
         if (!user || !user.uid) return;
         const chatId = user.uid < product.userId ? user.uid + '_' + product.userId : product.userId + '_' + user.uid;
         setActiveChat({
-          chatId: chatId, tripId: product.id, otherPersonId: product.userId, otherPersonName: product.userName || 'مستخدم', otherPersonPhoto: product.userPhoto || null, otherPersonVerified: product.verified || false, tripInfo: `مهتم بشراء: ${product.title || ''}`
+          chatId: chatId, tripId: product.id, tripType: 'market', tripOwnerId: product.userId, otherPersonId: product.userId, otherPersonName: product.userName || 'مستخدم', otherPersonPhoto: product.userPhoto || null, otherPersonVerified: product.verified || false, tripInfo: `مهتم بشراء: ${product.title || ''}`
         });
       });
     } catch(e) {
@@ -1091,39 +1131,51 @@ export default function App() {
   return (
     <div dir="rtl" className={`min-h-screen flex flex-col relative transition-colors duration-300 ${bgMain} overflow-x-hidden w-full pb-20`}>
       
-      {/* إشعار الرسائل الذكي الجديد */}
       {chatNotification && (!activeChat || activeChat.chatId !== chatNotification.chatId) && (
         <div 
-           className="fixed top-20 left-1/2 transform -translate-x-1/2 z-[100] w-11/12 max-w-sm animate-fade-in-down cursor-pointer"
+           className="fixed top-20 left-1/2 transform -translate-x-1/2 z-[150] w-11/12 max-w-sm animate-fade-in-down cursor-pointer"
            onClick={() => {
              setActiveChat(chatNotification);
              setActiveTab('inbox');
              setChatNotification(null);
            }}
         >
-          <div className={`p-3 rounded-2xl border flex items-center gap-3 shadow-2xl ${isDarkMode ? 'bg-indigo-900/95 border-indigo-500/50 shadow-indigo-500/20' : 'bg-indigo-50 border-indigo-200 shadow-indigo-600/20'}`}>
-            <div className="relative shrink-0">
-              {chatNotification.otherPersonPhoto ? (
-                <img src={chatNotification.otherPersonPhoto} className="w-10 h-10 rounded-full object-cover border border-white/50 shadow-sm" alt="user" />
-              ) : (
-                <div className={`w-10 h-10 rounded-full flex items-center justify-center font-bold border shadow-sm ${isDarkMode ? 'bg-indigo-800 text-white border-indigo-600' : 'bg-white text-indigo-600 border-indigo-200'}`}>
-                  {(chatNotification.otherPersonName || 'م').charAt(0)}
+          <div className={`p-3 rounded-2xl border flex flex-col gap-2.5 shadow-2xl ${isDarkMode ? 'bg-indigo-900/95 border-indigo-500/50 shadow-indigo-500/20' : 'bg-indigo-50 border-indigo-200 shadow-indigo-600/20'}`}>
+            <div className="flex justify-between items-start">
+              <div className="flex items-center gap-2.5 overflow-hidden">
+                <div className="relative shrink-0">
+                  {chatNotification.otherPersonPhoto ? (
+                    <img src={chatNotification.otherPersonPhoto} className="w-10 h-10 rounded-full object-cover border border-white/50 shadow-sm" alt="user" />
+                  ) : (
+                    <div className={`w-10 h-10 rounded-full flex items-center justify-center font-bold border shadow-sm ${isDarkMode ? 'bg-indigo-800 text-white border-indigo-600' : 'bg-white text-indigo-600 border-indigo-200'}`}>
+                      {(chatNotification.otherPersonName || 'م').charAt(0)}
+                    </div>
+                  )}
+                  <span className="absolute -top-1 -right-1 w-3.5 h-3.5 bg-rose-500 rounded-full border-2 border-white dark:border-indigo-900 animate-pulse"></span>
                 </div>
-              )}
-              <span className="absolute -top-1 -right-1 w-3 h-3 bg-rose-500 rounded-full border-2 border-white dark:border-indigo-900 animate-pulse"></span>
+                <div className="overflow-hidden">
+                  <h4 className={`font-bold text-xs truncate flex items-center gap-1 ${isDarkMode ? 'text-white' : 'text-indigo-900'}`}>
+                    رسالة جديدة من {chatNotification.otherPersonName ? chatNotification.otherPersonName.split(' ')[0] : 'مستخدم'}
+                    {chatNotification.otherPersonVerified && <ShieldCheck size={12} className={isDarkMode ? 'text-blue-300' : 'text-blue-600'} />}
+                  </h4>
+                </div>
+              </div>
+              <button onClick={(e) => { e.stopPropagation(); setChatNotification(null); }} className={`p-1.5 rounded-full transition-colors shrink-0 ${isDarkMode ? 'hover:bg-indigo-800 text-indigo-300' : 'hover:bg-indigo-200 text-indigo-500'}`}>
+                <X size={16} />
+              </button>
             </div>
             
-            <div className="flex-1 overflow-hidden">
-              <h4 className={`font-bold text-xs truncate flex items-center gap-1 ${isDarkMode ? 'text-white' : 'text-indigo-900'}`}>
-                رسالة من {chatNotification.otherPersonName ? chatNotification.otherPersonName.split(' ')[0] : 'مستخدم'}
-                {chatNotification.otherPersonVerified && <ShieldCheck size={12} className={isDarkMode ? 'text-blue-300' : 'text-blue-600'} />}
-              </h4>
-              <p className={`text-[11px] truncate font-medium mt-0.5 ${isDarkMode ? 'text-indigo-200' : 'text-indigo-700/80'}`}>{chatNotification.lastMessage}</p>
+            <div className={`flex items-center justify-between p-2.5 rounded-xl border ${isDarkMode ? 'bg-indigo-950/50 border-indigo-800/50' : 'bg-white border-indigo-100'}`}>
+              <div className="flex items-center gap-2 overflow-hidden pr-1">
+                <MessageCircle size={14} className={isDarkMode ? 'text-indigo-400' : 'text-indigo-500'} shrink-0 />
+                <span className={`text-xs font-medium truncate ${isDarkMode ? 'text-indigo-100' : 'text-slate-800'}`}>
+                  {chatNotification.lastMessage}
+                </span>
+              </div>
+              <button className={`shrink-0 text-white px-3 py-1.5 rounded-lg text-[10px] font-bold shadow-md transition-colors mr-2 ${isDarkMode ? 'bg-indigo-600 hover:bg-indigo-500' : 'bg-indigo-600 hover:bg-indigo-700'}`}>
+                تواصل
+              </button>
             </div>
-            
-            <button className={`p-2 rounded-full shadow-md shrink-0 transition-transform hover:scale-105 ${isDarkMode ? 'bg-indigo-600 text-white' : 'bg-indigo-600 text-white'}`}>
-              <MessageCircle size={16} />
-            </button>
           </div>
         </div>
       )}
@@ -1462,9 +1514,16 @@ export default function App() {
                   const canDelete = isOwner || isAdmin;
                   
                   return (
-                  <div key={trip.id} className={`rounded-[1.25rem] p-3.5 shadow-sm hover:shadow-md border relative flex flex-col transition-all duration-300 ${bgCard} ${isCompleted ? 'opacity-75 grayscale-[20%]' : ''}`}>
+                  <div key={trip.id} className={`rounded-[1.25rem] p-3.5 shadow-sm hover:shadow-md border relative flex flex-col transition-all duration-300 ${bgCard} ${isCompleted ? 'opacity-80 grayscale-[50%]' : ''}`}>
                     
-                    <div className="flex items-start justify-between mb-3 relative">
+                    {isCompleted && (
+                       <div className="absolute top-0 right-0 left-0 bg-slate-800/95 dark:bg-slate-950/95 text-white text-[11px] font-extrabold py-1.5 text-center z-20 shadow-md flex items-center justify-center gap-1 rounded-t-[1.10rem]">
+                         <CheckCircle2 size={14} className="text-emerald-400" />
+                         الرحلة مكتملة تلقائياً
+                       </div>
+                    )}
+
+                    <div className={`flex items-start justify-between mb-3 relative ${isCompleted ? 'mt-4' : ''}`}>
                       <div className="flex items-center gap-2 overflow-hidden text-right w-full" dir="ltr">
                         <div className="overflow-hidden flex flex-col items-end w-full">
                           <h3 className={`font-bold text-[11px] flex items-center justify-end gap-1 truncate ${textPrimary} w-full`}>
@@ -1493,8 +1552,8 @@ export default function App() {
                       <span className={`inline-block text-[9px] font-bold px-2 py-0.5 rounded-md border ${trip.type === 'offer' ? 'bg-emerald-600 text-white border-emerald-700' : trip.type === 'delivery' ? 'bg-purple-600 text-white border-purple-700' : 'bg-orange-500 text-white border-orange-600'}`}>
                         {trip.type === 'offer' ? 'سائق' : trip.type === 'delivery' ? 'دليفري' : 'راكب'}
                       </span>
-                      <span className={`inline-block text-[9px] font-bold px-2 py-0.5 rounded-md border ${isCompleted ? 'bg-slate-600 text-white border-slate-700' : isInProgress ? 'bg-amber-500 text-white border-amber-600' : 'bg-indigo-600 text-white border-indigo-700'}`}>
-                         {isCompleted ? 'مكتملة ✅' : isInProgress ? 'بالطريق 🚗' : 'متاحة ✨'}
+                      <span className={`inline-block text-[9px] font-bold px-2 py-0.5 rounded-md border shadow-sm ${isCompleted ? 'bg-slate-800 text-white border-slate-900 dark:bg-slate-700 dark:border-slate-600' : isInProgress ? 'bg-amber-500 text-white border-amber-600' : 'bg-indigo-600 text-white border-indigo-700'}`}>
+                         {isCompleted ? 'مكتملة تلقائياً ✅' : isInProgress ? 'بالطريق 🚗' : 'متاحة ✨'}
                       </span>
                     </div>
 
@@ -1783,7 +1842,7 @@ export default function App() {
         <div className="fixed bottom-[76px] left-0 right-0 px-4 z-30 pointer-events-none animate-fade-in-up">
           <div onClick={() => { 
                 try {
-                  setActiveChat({ chatId: activeLiveTrip.chatId, tripId: activeLiveTrip.tripId, otherPersonId: activeLiveTrip.otherPersonId, otherPersonName: activeLiveTrip.otherPersonName, otherPersonPhoto: activeLiveTrip.otherPersonPhoto, otherPersonVerified: activeLiveTrip.otherPersonVerified }); 
+                  setActiveChat({ chatId: activeLiveTrip.chatId, tripId: activeLiveTrip.tripId, tripType: activeLiveTrip.tripType, tripOwnerId: activeLiveTrip.tripOwnerId, otherPersonId: activeLiveTrip.otherPersonId, otherPersonName: activeLiveTrip.otherPersonName, otherPersonPhoto: activeLiveTrip.otherPersonPhoto, otherPersonVerified: activeLiveTrip.otherPersonVerified }); 
                   setActiveTab('inbox');
                 } catch(e){} 
                }} 
@@ -1793,7 +1852,7 @@ export default function App() {
                 {activeLiveTrip.requestStatus === 'arrived' ? <MapPin className="animate-bounce" size={20} /> : <Car className="animate-pulse" size={20} />}
               </div>
               <div className="flex flex-col">
-                <span className="text-sm font-extrabold">{activeLiveTrip.requestStatus === 'arrived' ? 'الكابتن في الخارج 📍' : 'الرحلة جارية 🚗'}</span>
+                <span className="text-sm font-extrabold">{activeLiveTrip.requestStatus === 'arrived' ? 'تم الوصول لنقطة اللقاء 📍' : 'الرحلة جارية 🚗'}</span>
                 <span className="text-[10px] text-emerald-100 font-medium">اضغط للمتابعة</span>
               </div>
             </div>
@@ -1965,52 +2024,61 @@ export default function App() {
             {/* لوحة تحكم الرحلة */}
             {(() => {
                try {
-                 const chatInfo = myInbox.find(c => c && c.chatId === activeChat.chatId);
-                 // إخفاء اللوحة لو مفيش معلومات، أو شات سيستم، أو بيع منتج، أو لو كانت الرحلة "راكب" (طلب توصيلة)
-                 if (!chatInfo || activeChat.tripInfo === 'system' || activeChat.tripInfo?.includes('مهتم بشراء') || !user || chatInfo.tripType === 'request') return null;
+                 // ندمج بيانات الشات من الـ Inbox مع activeChat عشان نتفادى تأخير الفايربيز
+                 const inboxChat = myInbox.find(c => c && c.chatId === activeChat.chatId) || {};
+                 const chatInfo = { ...activeChat, ...inboxChat };
 
-                 const isTripOwner = chatInfo.tripOwnerId === user.uid; 
-                 const isPassenger = chatInfo.tripOwnerId && chatInfo.tripOwnerId !== user.uid;
-                 
+                 // منع ظهور الأزرار في حالة شات النظام أو شات السوق أو لو مفيش مستخدم
+                 if (chatInfo.tripInfo === 'system' || chatInfo.tripInfo?.includes('مهتم بشراء') || chatInfo.tripType === 'market' || !user) return null;
+
+                 const currentTripOwnerId = chatInfo.tripOwnerId;
+                 if (!currentTripOwnerId) return null;
+
+                 // لو صاحب الرحلة هو نفسه المستخدم الحالي
+                 const isTripOwner = currentTripOwnerId === user.uid;
+                 // لو المستخدم الحالي مش هو صاحب الرحلة (يعني هو اللي باعت الطلب)
+                 const isRequester = currentTripOwnerId !== user.uid;
+                 const reqStatus = chatInfo.requestStatus || 'none';
+
                  return (
                    <div className={`p-3 border-b text-center shadow-sm z-10 ${isDarkMode ? 'bg-slate-800 border-slate-700' : 'bg-slate-50 border-slate-200'}`}>
-                     {(!chatInfo.requestStatus || chatInfo.requestStatus === 'none') && isPassenger && (
+                     {reqStatus === 'none' && isRequester && (
                        <button onClick={() => handleTripAction('request')} className="w-full bg-indigo-600 text-white font-bold py-2 rounded-xl text-sm shadow hover:bg-indigo-700 flex items-center justify-center gap-2">
-                         <Navigation size={16}/> إرسال طلب انضمام للرحلة
+                         <Navigation size={16}/> إرسال طلب لصاحب الإعلان
                        </button>
                      )}
-                     {chatInfo.requestStatus === 'pending' && (
+                     {reqStatus === 'pending' && (
                        isTripOwner ? (
                          <div className="flex gap-2">
                            <button onClick={() => handleTripAction('accept')} className="flex-1 bg-emerald-500 text-white font-bold py-2 rounded-xl text-sm shadow hover:bg-emerald-600 flex items-center justify-center gap-1"><CheckCircle2 size={16}/> قبول</button>
                            <button onClick={() => handleTripAction('reject')} className="flex-1 bg-rose-500 text-white font-bold py-2 rounded-xl text-sm shadow hover:bg-rose-600 flex items-center justify-center gap-1"><X size={16}/> رفض</button>
                          </div>
                        ) : (
-                          <p className="text-xs font-bold text-amber-600 dark:text-amber-400 flex items-center justify-center gap-1.5"><Loader2 size={14} className="animate-spin"/> جاري انتظار موافقة الكابتن...</p>
+                          <p className="text-xs font-bold text-amber-600 dark:text-amber-400 flex items-center justify-center gap-1.5"><Loader2 size={14} className="animate-spin"/> جاري انتظار موافقة صاحب الإعلان...</p>
                        )
                      )}
-                     {(chatInfo.requestStatus === 'accepted' || chatInfo.requestStatus === 'arrived') && (
+                     {(reqStatus === 'accepted' || reqStatus === 'arrived') && (
                        <div className="flex flex-col gap-2">
                          <div className="flex justify-between items-center px-2">
-                           <span className={`text-xs font-bold ${chatInfo.requestStatus === 'arrived' ? 'text-rose-500' : 'text-emerald-500'}`}>
-                             {chatInfo.requestStatus === 'arrived' ? '📍 الكابتن بالخارج' : '🚗 الرحلة جارية'}
+                           <span className={`text-xs font-bold ${reqStatus === 'arrived' ? 'text-rose-500' : 'text-emerald-500'}`}>
+                             {reqStatus === 'arrived' ? '📍 تم الوصول' : '🚗 الرحلة جارية'}
                            </span>
                            <span className="font-mono font-bold text-sm bg-slate-200 dark:bg-slate-700 px-2 py-0.5 rounded">{liveTimer}</span>
                          </div>
-                         {isTripOwner && chatInfo.requestStatus === 'accepted' && (
-                            <button onClick={() => handleTripAction('arrive')} className="w-full bg-blue-600 text-white font-bold py-2 rounded-xl text-sm shadow hover:bg-blue-700">إبلاغ الراكب بالوصول 📍</button>
+                         {isTripOwner && reqStatus === 'accepted' && (
+                            <button onClick={() => handleTripAction('arrive')} className="w-full bg-blue-600 text-white font-bold py-2 rounded-xl text-sm shadow hover:bg-blue-700">إبلاغ بالوصول 📍</button>
                          )}
-                         {isTripOwner && chatInfo.requestStatus === 'arrived' && (
-                            <button onClick={() => handleTripAction('complete')} className="w-full bg-rose-600 text-white font-bold py-2 rounded-xl text-sm shadow hover:bg-rose-700">إنهاء الرحلة 🏁</button>
+                         {isTripOwner && reqStatus === 'arrived' && (
+                            <button onClick={() => handleTripAction('complete')} className="w-full bg-rose-600 text-white font-bold py-2 rounded-xl text-sm shadow hover:bg-rose-700">إنهاء العملية 🏁</button>
                          )}
                        </div>
                      )}
-                     {chatInfo.requestStatus === 'completed' && (
+                     {reqStatus === 'completed' && (
                        <div className="text-emerald-600 dark:text-emerald-400 font-bold text-sm flex items-center justify-center gap-1">
-                         <Flag size={16}/> تم إكمال الرحلة بنجاح
+                         <Flag size={16}/> تم الإكمال بنجاح
                        </div>
                      )}
-                     {chatInfo.requestStatus === 'rejected' && (
+                     {reqStatus === 'rejected' && (
                        <div className="text-rose-500 font-bold text-sm flex items-center justify-center gap-1">
                          <X size={16}/> تم رفض الطلب
                        </div>
