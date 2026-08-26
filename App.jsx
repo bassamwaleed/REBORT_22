@@ -3,7 +3,7 @@ import { initializeApp } from 'firebase/app';
 import { getAuth, createUserWithEmailAndPassword, signInWithEmailAndPassword, signInAnonymously, onAuthStateChanged, updateProfile, signOut, sendPasswordResetEmail } from 'firebase/auth';
 import { getFirestore, collection, onSnapshot, addDoc, deleteDoc, updateDoc, doc, setDoc, getDoc, serverTimestamp } from 'firebase/firestore';
 import { getStorage } from 'firebase/storage';
-import { MapPin, Navigation, Car, User, MessageCircle, ShieldCheck, X, CheckCircle2, Loader2, Trash2, Send, LogOut, Bell, Phone, Mail, Lock, LogIn, AlertCircle, Settings, Moon, Sun, Info, History, Star, Play, CheckSquare, Megaphone, Clock, ChevronLeft, Wallet, Sparkles, ArrowRight, Crown, Shield, Image as ImageIcon, Camera, Package, Store, ShoppingBag, Plus, Tag, Map, Flag } from 'lucide-react';
+import { MapPin, Navigation, Car, User, MessageCircle, ShieldCheck, X, CheckCircle2, Loader2, Trash2, Send, LogOut, Bell, Phone, Mail, Lock, LogIn, AlertCircle, Settings, Moon, Sun, Info, History, Star, Play, CheckSquare, Megaphone, Clock, ChevronLeft, Wallet, Sparkles, ArrowRight, Crown, Shield, Image as ImageIcon, Camera, Package, Store, ShoppingBag, Plus, Tag, Map, Flag, ThumbsUp } from 'lucide-react';
 
 const firebaseConfig = {
   apiKey: "AIzaSyC3JM11miWda_leIk0LPViRNVdSZRCQ8N8",
@@ -23,7 +23,7 @@ const USERS_COLLECTION = 'khodni_maak_users';
 const MARKET_COLLECTION_NAME = 'khodni_maak_market';
 const ADMIN_EMAIL = "bassamwaleed2000@gmail.com".toLowerCase();
 
-const CURRENT_APP_VERSION = "v3.9_live";
+const CURRENT_APP_VERSION = "v4.1_live";
 
 const safeMillis = (timestamp) => {
   if (!timestamp) return 0;
@@ -154,7 +154,7 @@ export default function App() {
   const [chatNotification, setChatNotification] = useState(null);
   const chatNotifTimer = useRef(null);
   const isInitialInboxLoad = useRef(true);
-  const notifiedMessages = useRef({}); // لتتبع الرسائل التي ظهر لها إشعار لمنع التكرار
+  const notifiedMessages = useRef({});
 
   const [liveTimer, setLiveTimer] = useState('00:00:00');
 
@@ -203,7 +203,8 @@ export default function App() {
     let interval;
     try {
       if (!myInbox || !Array.isArray(myInbox)) return;
-      const activeTrip = myInbox.find(c => c?.requestStatus === 'accepted' || c?.requestStatus === 'arrived');
+      // تفعيل التايمر لو الرحلة في أي مرحلة من مراحل التنفيذ
+      const activeTrip = myInbox.find(c => ['accepted', 'moving', 'arrived', 'in_progress_trip'].includes(c?.requestStatus));
       if (activeTrip && activeTrip.tripStartTime) {
         interval = setInterval(() => {
           const startMillis = safeMillis(activeTrip.tripStartTime);
@@ -314,7 +315,8 @@ export default function App() {
                   rating: 0, 
                   totalRatings: 0, 
                   email: currentUser.email,
-                  phone: currentUser.email && currentUser.email.includes('@khodnimaak.com') ? currentUser.email.split('@')[0] : ''
+                  phone: currentUser.email && currentUser.email.includes('@khodnimaak.com') ? currentUser.email.split('@')[0] : '',
+                  createdAt: Date.now() 
                 };
                 await setDoc(doc(db, USERS_COLLECTION, currentUser.uid), initialData, { merge: true });
                 setUserData(initialData);
@@ -379,7 +381,6 @@ export default function App() {
     }
   }, [user]);
 
-  // تحديثات صندوق الرسائل و إشعارات الدردشة المفلترة
   useEffect(() => {
     if (!user || isGuest) return;
     try {
@@ -390,7 +391,6 @@ export default function App() {
             snapshot.docChanges().forEach((change) => {
               if (change.type === 'added' || change.type === 'modified') {
                 const data = change.doc.data();
-                // الفلترة هنا: يظهر الإشعار فقط إذا كانت رسالة نصية جديدة فعلاً (بمقارنة وقت الرسالة)
                 if (data.lastSenderId && data.lastSenderId !== user.uid && data.lastMessageTime) {
                   if (notifiedMessages.current[data.chatId] !== data.lastMessageTime) {
                     notifiedMessages.current[data.chatId] = data.lastMessageTime;
@@ -673,7 +673,8 @@ export default function App() {
         await updateProfile(userCred.user, { displayName: authForm.name });
         const phoneToSave = identifier.includes('@') ? '' : identifier;
         await setDoc(doc(db, USERS_COLLECTION, userCred.user.uid), {
-          phone: phoneToSave, name: authForm.name, email: emailForFirebase, isVerified: false, rating: 0, totalRatings: 0 
+          phone: phoneToSave, name: authForm.name, email: emailForFirebase, isVerified: false, rating: 0, totalRatings: 0,
+          createdAt: Date.now() 
         });
       }
     } catch (error) {
@@ -767,6 +768,7 @@ export default function App() {
         verified: userData?.isVerified || false,
         rating: userData?.rating || 0,
         totalRatings: userData?.totalRatings || 0,
+        userCreatedAt: userData?.createdAt || Date.now(), 
         status: 'open', 
         createdAt: serverTimestamp()
       });
@@ -853,7 +855,7 @@ export default function App() {
         otherPersonVerified: activeChat.otherPersonVerified || false, 
         lastMessage: newMessage, 
         lastSenderId: user.uid, 
-        lastMessageTime: currentTime, // إضافة وقت الرسالة لمنع تكرار الإشعارات
+        lastMessageTime: currentTime, 
         createdAt: serverTimestamp()
       };
 
@@ -875,10 +877,11 @@ export default function App() {
     }
   };
 
-  const handleTripAction = async (actionType) => {
-    if (!activeChat || isGuest || !user) return;
+  // 🟢 التحكم في حالة الرحلة بالتعديلات الجديدة (الإلغاء - التحرك - الوصول - بدء الرحلة - الإنهاء) 🟢
+  const handleTripAction = async (actionType, targetChat = activeChat) => {
+    if (!targetChat || isGuest || !user) return;
     try {
-      const chatId = activeChat.chatId;
+      const chatId = targetChat.chatId;
       if(!chatId) return;
       let newStatus = '';
       let systemText = '';
@@ -886,22 +889,31 @@ export default function App() {
       if (actionType === 'request') {
         newStatus = 'pending';
         systemText = 'قام بإرسال طلب انضمام للرحلة 🙋‍♂️';
+      } else if (actionType === 'cancel_request') {
+        newStatus = 'none';
+        systemText = 'قام بإلغاء الطلب 🔙';
       } else if (actionType === 'accept') {
         newStatus = 'accepted';
-        systemText = 'تم قبول طلبك! الكابتن يتحرك الآن 🚗';
+        systemText = 'تم قبول طلبك! سيتم التواصل معك للتحرك 🚗';
       } else if (actionType === 'reject') {
         newStatus = 'rejected';
         systemText = 'عذراً، تم رفض الطلب ❌';
+      } else if (actionType === 'start_moving') {
+        newStatus = 'moving';
+        systemText = 'تنبيه: الكابتن في الطريق إليك الآن 🚙';
       } else if (actionType === 'arrive') {
         newStatus = 'arrived';
         systemText = 'تنبيه: الكابتن وصل إلى نقطة اللقاء 📍';
+      } else if (actionType === 'start_trip') {
+        newStatus = 'in_progress_trip';
+        systemText = 'بدأت الرحلة.. نتمنى لكم طريقاً آمناً 🛣️';
       } else if (actionType === 'complete') {
         newStatus = 'completed';
         systemText = 'تم إنهاء العملية بنجاح! نتمنى لك يوماً سعيداً ✅';
         
-        if (activeChat.tripId && activeChat.tripId !== 'system') {
+        if (targetChat.tripId && targetChat.tripId !== 'system') {
            try {
-             await updateDoc(doc(db, APP_COLLECTION_NAME, activeChat.tripId), { status: 'completed' });
+             await updateDoc(doc(db, APP_COLLECTION_NAME, targetChat.tripId), { status: 'completed' });
            } catch(err) {
              console.error("خطأ في تحديث الرحلة بالخارج", err);
            }
@@ -916,10 +928,9 @@ export default function App() {
         updateData.tripStartTime = serverTimestamp(); 
       }
       
-      // ملاحظة: هنا لا نقوم بتحديث lastMessageTime عشان مايطلعش إشعار منبثق لحالة الرحلة
       await setDoc(doc(db, `inbox_${user.uid}`, chatId), updateData, { merge: true });
-      if (activeChat.otherPersonId) {
-        await setDoc(doc(db, `inbox_${activeChat.otherPersonId}`, chatId), updateData, { merge: true });
+      if (targetChat.otherPersonId) {
+        await setDoc(doc(db, `inbox_${targetChat.otherPersonId}`, chatId), updateData, { merge: true });
       }
       
       await addDoc(collection(db, `chats_${chatId}`), {
@@ -932,6 +943,29 @@ export default function App() {
     }
   };
 
+  const submitRating = async (chatInfo, score) => {
+    try {
+      await setDoc(doc(db, `inbox_${user.uid}`, chatInfo.chatId), { [`rated_${chatInfo.tripId}`]: true }, { merge: true });
+      
+      const otherUserRef = doc(db, USERS_COLLECTION, chatInfo.otherPersonId);
+      const otherUserSnap = await getDoc(otherUserRef);
+      if (otherUserSnap.exists()) {
+        const uData = otherUserSnap.data();
+        const oldTotal = uData.totalRatings || 0;
+        const oldRating = uData.rating || 0;
+        
+        const newTotal = oldTotal + 1;
+        const newRating = ((oldRating * oldTotal) + score) / newTotal;
+        
+        await updateDoc(otherUserRef, { rating: newRating, totalRatings: newTotal });
+      }
+      triggerToast('تم إرسال التقييم بنجاح! شكراً لك ⭐');
+    } catch(e) {
+      console.error(e);
+      setAlertMsg("حدث خطأ أثناء إرسال التقييم.");
+    }
+  };
+
   const openChatFromTrip = async (trip) => {
     try {
       if (!trip) return;
@@ -941,7 +975,6 @@ export default function App() {
       requireAuth(() => {
         if (!user || !user.uid) return;
         
-        // تعديل هام جداً: ربط الشات برقم الرحلة نفسه (trip.id) لضمان دورة جديدة لكل رحلة
         const user1 = user.uid < trip.userId ? user.uid : trip.userId;
         const user2 = user.uid < trip.userId ? trip.userId : user.uid;
         const chatId = `${trip.id}_${user1}_${user2}`;
@@ -1014,10 +1047,22 @@ export default function App() {
   const filteredTrips = Array.isArray(realTrips) ? realTrips.filter(t => t && (filterType === 'all' || t.type === filterType) && ((t.from || '').includes(searchFrom) && (t.to || '').includes(searchTo))) : [];
   filteredTrips.sort((a, b) => safeMillis(b.createdAt) - safeMillis(a.createdAt));
   
-  const activeLiveTrip = Array.isArray(myInbox) ? myInbox.find(c => c?.requestStatus === 'accepted' || c?.requestStatus === 'arrived') : null;
-  
-  const renderStars = (rating = 0, total = 0) => {
-    if (!total || total === 0) return <span className="text-[9px] text-slate-400 font-bold">جديد ✨</span>;
+  // 🟢 شريط التحكم العائم: نختار الرحلة اللي فيها حركة (بما فيها المراحل الجديدة والطلبات المعلقة) 🟢
+  const priorityLiveTrip = Array.isArray(myInbox) ? (
+    myInbox.find(c => c?.requestStatus === 'in_progress_trip') ||
+    myInbox.find(c => c?.requestStatus === 'arrived') || 
+    myInbox.find(c => c?.requestStatus === 'moving') || 
+    myInbox.find(c => c?.requestStatus === 'accepted') || 
+    myInbox.find(c => c?.requestStatus === 'pending')
+  ) : null;
+
+  const renderStars = (rating = 0, total = 0, userCreatedAtMillis = 0) => {
+    const isNewUser = total === 0 && (!userCreatedAtMillis || (Date.now() - userCreatedAtMillis < 86400000));
+    
+    if (isNewUser) {
+      return <span className="text-[9px] text-slate-400 font-bold bg-slate-100 dark:bg-slate-700 px-1.5 py-0.5 rounded">مستخدم جديد ✨</span>;
+    }
+
     const numRating = Number(rating) || 0;
     const fullStars = Math.floor(numRating);
     const hasHalfStar = numRating % 1 !== 0;
@@ -1149,7 +1194,6 @@ export default function App() {
   return (
     <div dir="rtl" className={`min-h-screen flex flex-col relative transition-colors duration-300 ${bgMain} overflow-x-hidden w-full pb-20`}>
       
-      {/* 🟢 إشعار الشات الذكي المنبثق الجديد 🟢 */}
       {chatNotification && (!activeChat || activeChat.chatId !== chatNotification.chatId) && (
         <div 
            className="fixed top-20 left-1/2 transform -translate-x-1/2 z-[150] w-11/12 max-w-sm animate-fade-in-down cursor-pointer"
@@ -1240,9 +1284,8 @@ export default function App() {
                     {currentNotificationTrip.userName ? currentNotificationTrip.userName.split(' ')[0] : 'مستخدم'}
                     {currentNotificationTrip.verified && <ShieldCheck size={12} className={isDarkMode ? 'text-blue-300 shrink-0' : 'text-blue-600 shrink-0'} />}
                   </h4>
-                  <div className={`flex items-center gap-0.5 mt-1 ${isDarkMode ? 'text-amber-300' : 'text-amber-500'}`}>
-                    <Star size={10} fill="currentColor" />
-                    <span className={`text-[9px] font-bold ml-1 ${isDarkMode ? 'text-indigo-200' : 'text-indigo-700'}`}>({Number(currentNotificationTrip.rating || 0).toFixed(1)})</span>
+                  <div className="flex items-center justify-start mt-1">
+                    {renderStars(currentNotificationTrip.rating, currentNotificationTrip.totalRatings, currentNotificationTrip.userCreatedAt)}
                   </div>
                 </div>
               </div>
@@ -1549,7 +1592,9 @@ export default function App() {
                             {trip.verified && <ShieldCheck size={12} className="text-blue-500 shrink-0" />}
                             {trip.userName ? trip.userName.split(' ')[0] : 'مستخدم'} 
                           </h3>
-                          <div className="flex justify-end">{renderStars(trip.rating, trip.totalRatings)}</div>
+                          <div className="flex justify-end">
+                            {renderStars(trip.rating, trip.totalRatings, trip.userCreatedAt)}
+                          </div>
                         </div>
                         {trip.userPhoto ? (
                           <img src={trip.userPhoto} className="w-9 h-9 rounded-full object-cover border border-slate-200 shadow-sm shrink-0" alt="user" />
@@ -1796,7 +1841,10 @@ export default function App() {
                     {userData?.name || 'مستخدم'}
                     {userData?.isVerified && <ShieldCheck size={20} className="text-blue-500" title="موثق"/>}
                   </h3>
-                  <p className={`text-sm font-medium ${textSecondary}`}>{userData?.phone || userData?.email}</p>
+                  <div className="flex items-center justify-center my-1.5">
+                    {renderStars(userData?.rating, userData?.totalRatings, userData?.createdAt)}
+                  </div>
+                  <p className={`text-sm font-medium mt-1 ${textSecondary}`}>{userData?.phone || userData?.email}</p>
                 </div>
               ) : (
                 <div onClick={() => setShowAuthPrompt(true)} className={`cursor-pointer p-6 rounded-3xl flex flex-col items-center justify-center border shadow-sm text-center hover:bg-slate-50 dark:hover:bg-slate-800/50 transition-colors ${bgCard}`}>
@@ -1856,27 +1904,63 @@ export default function App() {
 
       </main>
 
-      {/* الشريط العائم الذكي للرحلة الفعالة */}
-      {activeLiveTrip && !isGuest && (
+      {/* 🟢 شريط التحكم العائم الذكي (تم إضافة حالات: تحرك، وصول، وبدء الرحلة) 🟢 */}
+      {priorityLiveTrip && !isGuest && (!activeChat || activeChat.chatId !== priorityLiveTrip.chatId) && (
         <div className="fixed bottom-[76px] left-0 right-0 px-4 z-30 pointer-events-none animate-fade-in-up">
-          <div onClick={() => { 
-                try {
-                  setActiveChat({ chatId: activeLiveTrip.chatId, tripId: activeLiveTrip.tripId, tripType: activeLiveTrip.tripType, tripOwnerId: activeLiveTrip.tripOwnerId, otherPersonId: activeLiveTrip.otherPersonId, otherPersonName: activeLiveTrip.otherPersonName, otherPersonPhoto: activeLiveTrip.otherPersonPhoto, otherPersonVerified: activeLiveTrip.otherPersonVerified }); 
-                  setActiveTab('inbox');
-                } catch(e){} 
-               }} 
-               className="max-w-md mx-auto pointer-events-auto bg-gradient-to-r from-emerald-500 to-teal-600 text-white rounded-2xl p-3 shadow-[0_4px_20px_rgba(16,185,129,0.4)] flex justify-between items-center cursor-pointer border border-emerald-400/50">
-            <div className="flex items-center gap-3">
-              <div className="bg-white/20 p-2 rounded-full shrink-0">
-                {activeLiveTrip.requestStatus === 'arrived' ? <MapPin className="animate-bounce" size={20} /> : <Car className="animate-pulse" size={20} />}
+          <div className={`max-w-md mx-auto pointer-events-auto rounded-2xl p-3.5 shadow-2xl border flex flex-col gap-3 transition-colors ${isDarkMode ? 'bg-slate-800 border-indigo-500 shadow-indigo-900/30' : 'bg-white border-indigo-300 shadow-indigo-200/50'}`}>
+            <div 
+              className="flex justify-between items-center cursor-pointer"
+              onClick={() => {
+                setActiveChat({ chatId: priorityLiveTrip.chatId, tripId: priorityLiveTrip.tripId, tripType: priorityLiveTrip.tripType, tripOwnerId: priorityLiveTrip.tripOwnerId, otherPersonId: priorityLiveTrip.otherPersonId, otherPersonName: priorityLiveTrip.otherPersonName, otherPersonPhoto: priorityLiveTrip.otherPersonPhoto, otherPersonVerified: priorityLiveTrip.otherPersonVerified });
+                setActiveTab('inbox');
+              }}
+            >
+              <div className="flex items-center gap-3">
+                <div className={`p-2 rounded-full shrink-0 ${priorityLiveTrip.requestStatus === 'arrived' ? 'bg-rose-100 text-rose-600' : 'bg-indigo-100 text-indigo-600'}`}>
+                  {priorityLiveTrip.requestStatus === 'arrived' ? <MapPin className="animate-bounce" size={20} /> : <Car className="animate-pulse" size={20} />}
+                </div>
+                <div className="flex flex-col">
+                  <span className={`text-sm font-extrabold ${textPrimary}`}>
+                    {priorityLiveTrip.requestStatus === 'pending' && (priorityLiveTrip.tripOwnerId === user.uid ? 'يوجد طلب جديد لرحلتك' : 'طلبك قيد المراجعة...')}
+                    {priorityLiveTrip.requestStatus === 'accepted' && (priorityLiveTrip.tripOwnerId === user.uid ? 'تم قبول الطلب ✅' : 'تمت الموافقة على طلبك ✅')}
+                    {priorityLiveTrip.requestStatus === 'moving' && (priorityLiveTrip.tripOwnerId === user.uid ? 'أنت في الطريق للعميل 🚙' : 'الكابتن في الطريق إليك 🚙')}
+                    {priorityLiveTrip.requestStatus === 'arrived' && (priorityLiveTrip.tripOwnerId === user.uid ? 'أنت في نقطة اللقاء 📍' : 'الكابتن بالخارج 📍')}
+                    {priorityLiveTrip.requestStatus === 'in_progress_trip' && (priorityLiveTrip.tripOwnerId === user.uid ? 'الرحلة جارية الآن 🛣️' : 'الرحلة جارية الآن 🛣️')}
+                  </span>
+                  <span className={`text-[10px] font-bold ${textSecondary}`}>مع: {priorityLiveTrip.otherPersonName}</span>
+                </div>
               </div>
-              <div className="flex flex-col">
-                <span className="text-sm font-extrabold">{activeLiveTrip.requestStatus === 'arrived' ? 'تم الوصول لنقطة اللقاء 📍' : 'الرحلة جارية 🚗'}</span>
-                <span className="text-[10px] text-emerald-100 font-medium">اضغط للمتابعة</span>
-              </div>
+              {/* إظهار التايمر فقط أثناء الرحلة الفعلية */}
+              {(['accepted', 'moving', 'arrived', 'in_progress_trip'].includes(priorityLiveTrip.requestStatus)) && (
+                <div className={`font-mono font-bold text-xs px-2 py-1 rounded-lg border ${isDarkMode ? 'bg-slate-700 border-slate-600 text-indigo-300' : 'bg-slate-100 border-slate-200 text-indigo-700'}`}>
+                  {liveTimer}
+                </div>
+              )}
             </div>
-            <div className="font-mono font-bold text-sm bg-black/30 px-3 py-1.5 rounded-lg border border-white/10 shadow-inner">
-              {liveTimer}
+
+            {/* أزرار التحكم من الشريط العائم لصاحب الرحلة وللعميل (للإلغاء) */}
+            <div className="flex gap-2">
+              {priorityLiveTrip.requestStatus === 'pending' && priorityLiveTrip.tripOwnerId === user.uid && (
+                <>
+                  <button onClick={() => handleTripAction('accept', priorityLiveTrip)} className="flex-1 bg-emerald-500 text-white font-bold py-2.5 rounded-xl text-xs shadow hover:bg-emerald-600 flex items-center justify-center gap-1"><CheckCircle2 size={16}/> قبول الطلب</button>
+                  <button onClick={() => handleTripAction('reject', priorityLiveTrip)} className="flex-1 bg-rose-500 text-white font-bold py-2.5 rounded-xl text-xs shadow hover:bg-rose-600 flex items-center justify-center gap-1"><X size={16}/> رفض</button>
+                </>
+              )}
+              {priorityLiveTrip.requestStatus === 'pending' && priorityLiveTrip.tripOwnerId !== user.uid && (
+                 <button onClick={() => handleTripAction('cancel_request', priorityLiveTrip)} className="w-full bg-rose-100 text-rose-600 font-bold py-2.5 rounded-xl text-xs hover:bg-rose-200 transition">إلغاء الطلب</button>
+              )}
+              {priorityLiveTrip.requestStatus === 'accepted' && priorityLiveTrip.tripOwnerId === user.uid && (
+                <button onClick={() => handleTripAction('start_moving', priorityLiveTrip)} className="w-full bg-indigo-600 text-white font-bold py-2.5 rounded-xl text-xs shadow hover:bg-indigo-700 flex items-center justify-center gap-1"><Navigation size={16}/> تحركت نحو العميل</button>
+              )}
+              {priorityLiveTrip.requestStatus === 'moving' && priorityLiveTrip.tripOwnerId === user.uid && (
+                <button onClick={() => handleTripAction('arrive', priorityLiveTrip)} className="w-full bg-orange-500 text-white font-bold py-2.5 rounded-xl text-xs shadow hover:bg-orange-600 flex items-center justify-center gap-1"><MapPin size={16}/> إبلاغ بالوصول</button>
+              )}
+              {priorityLiveTrip.requestStatus === 'arrived' && priorityLiveTrip.tripOwnerId === user.uid && (
+                <button onClick={() => handleTripAction('start_trip', priorityLiveTrip)} className="w-full bg-emerald-500 text-white font-bold py-2.5 rounded-xl text-xs shadow hover:bg-emerald-600 flex items-center justify-center gap-1"><Play size={16}/> بدء الرحلة الفعلي</button>
+              )}
+              {priorityLiveTrip.requestStatus === 'in_progress_trip' && priorityLiveTrip.tripOwnerId === user.uid && (
+                <button onClick={() => handleTripAction('complete', priorityLiveTrip)} className="w-full bg-rose-600 text-white font-bold py-2.5 rounded-xl text-xs shadow hover:bg-rose-700 flex items-center justify-center gap-1"><Flag size={16}/> إنهاء الرحلة بنجاح</button>
+              )}
             </div>
           </div>
         </div>
@@ -2017,7 +2101,7 @@ export default function App() {
         </div>
       )}
 
-      {/* شاشة الشات المباشرة مع لوحة التحكم المحمية بالكامل */}
+      {/* 🟢 شاشة الشات المباشرة مع لوحة التحكم الثلاثية للمالك، وإلغاء الطلب للراكب 🟢 */}
       {activeChat && !isGuest && (
         <div className="fixed inset-0 bg-slate-900/80 backdrop-blur-md z-[250] flex justify-center items-end sm:items-center p-0 sm:p-4">
           <div className={`${bgModal} w-full h-[85vh] sm:h-[600px] sm:max-w-md rounded-t-[2rem] sm:rounded-3xl shadow-2xl flex flex-col overflow-hidden animate-fade-in-up relative`}>
@@ -2040,61 +2124,98 @@ export default function App() {
               </div>
             </div>
 
-            {/* لوحة تحكم الرحلة */}
             {(() => {
                try {
-                 // ندمج بيانات الشات من الـ Inbox مع activeChat عشان نتفادى تأخير الفايربيز
                  const inboxChat = myInbox.find(c => c && c.chatId === activeChat.chatId) || {};
                  const chatInfo = { ...activeChat, ...inboxChat };
 
-                 // منع ظهور الأزرار في حالة شات النظام أو شات السوق أو لو مفيش مستخدم
                  if (chatInfo.tripInfo === 'system' || chatInfo.tripInfo?.includes('مهتم بشراء') || chatInfo.tripType === 'market' || !user) return null;
 
                  const currentTripOwnerId = chatInfo.tripOwnerId;
                  if (!currentTripOwnerId) return null;
 
-                 // لو صاحب الرحلة هو نفسه المستخدم الحالي
                  const isTripOwner = currentTripOwnerId === user.uid;
-                 // لو المستخدم الحالي مش هو صاحب الرحلة (يعني هو اللي باعت الطلب)
                  const isRequester = currentTripOwnerId !== user.uid;
                  const reqStatus = chatInfo.requestStatus || 'none';
+                 const hasRated = chatInfo[`rated_${chatInfo.tripId}`];
 
                  return (
                    <div className={`p-3 border-b text-center shadow-sm z-10 ${isDarkMode ? 'bg-slate-800 border-slate-700' : 'bg-slate-50 border-slate-200'}`}>
+                     
                      {reqStatus === 'none' && isRequester && (
                        <button onClick={() => handleTripAction('request')} className="w-full bg-indigo-600 text-white font-bold py-2 rounded-xl text-sm shadow hover:bg-indigo-700 flex items-center justify-center gap-2">
                          <Navigation size={16}/> إرسال طلب لصاحب الإعلان
                        </button>
                      )}
-                     {reqStatus === 'pending' && (
-                       isTripOwner ? (
-                         <div className="flex gap-2">
-                           <button onClick={() => handleTripAction('accept')} className="flex-1 bg-emerald-500 text-white font-bold py-2 rounded-xl text-sm shadow hover:bg-emerald-600 flex items-center justify-center gap-1"><CheckCircle2 size={16}/> قبول</button>
-                           <button onClick={() => handleTripAction('reject')} className="flex-1 bg-rose-500 text-white font-bold py-2 rounded-xl text-sm shadow hover:bg-rose-600 flex items-center justify-center gap-1"><X size={16}/> رفض</button>
-                         </div>
-                       ) : (
-                          <p className="text-xs font-bold text-amber-600 dark:text-amber-400 flex items-center justify-center gap-1.5"><Loader2 size={14} className="animate-spin"/> جاري انتظار موافقة صاحب الإعلان...</p>
-                       )
-                     )}
-                     {(reqStatus === 'accepted' || reqStatus === 'arrived') && (
-                       <div className="flex flex-col gap-2">
-                         <div className="flex justify-between items-center px-2">
-                           <span className={`text-xs font-bold ${reqStatus === 'arrived' ? 'text-rose-500' : 'text-emerald-500'}`}>
-                             {reqStatus === 'arrived' ? '📍 تم الوصول' : '🚗 الرحلة جارية'}
-                           </span>
-                           <span className="font-mono font-bold text-sm bg-slate-200 dark:bg-slate-700 px-2 py-0.5 rounded">{liveTimer}</span>
-                         </div>
-                         {isTripOwner && reqStatus === 'accepted' && (
-                            <button onClick={() => handleTripAction('arrive')} className="w-full bg-blue-600 text-white font-bold py-2 rounded-xl text-sm shadow hover:bg-blue-700">إبلاغ بالوصول 📍</button>
-                         )}
-                         {isTripOwner && reqStatus === 'arrived' && (
-                            <button onClick={() => handleTripAction('complete')} className="w-full bg-rose-600 text-white font-bold py-2 rounded-xl text-sm shadow hover:bg-rose-700">إنهاء العملية 🏁</button>
-                         )}
+                     
+                     {/* 🟢 زرار الإلغاء للراكب أثناء الانتظار 🟢 */}
+                     {reqStatus === 'pending' && isRequester && (
+                       <div className="flex items-center justify-between gap-2 bg-amber-50 dark:bg-amber-900/20 p-2 rounded-xl border border-amber-200 dark:border-amber-800/50">
+                         <p className="text-xs font-bold text-amber-600 dark:text-amber-400 flex items-center gap-1.5"><Loader2 size={14} className="animate-spin"/> بانتظار الموافقة...</p>
+                         <button onClick={() => handleTripAction('cancel_request')} className="px-3 py-1.5 bg-rose-100 text-rose-600 hover:bg-rose-200 dark:bg-rose-900/50 dark:hover:bg-rose-900/80 rounded-lg text-xs font-bold transition">إلغاء الطلب</button>
                        </div>
                      )}
+
+                     {reqStatus === 'pending' && isTripOwner && (
+                       <div className="flex gap-2">
+                         <button onClick={() => handleTripAction('accept')} className="flex-1 bg-emerald-500 text-white font-bold py-2 rounded-xl text-sm shadow hover:bg-emerald-600 flex items-center justify-center gap-1"><CheckCircle2 size={16}/> قبول</button>
+                         <button onClick={() => handleTripAction('reject')} className="flex-1 bg-rose-500 text-white font-bold py-2 rounded-xl text-sm shadow hover:bg-rose-600 flex items-center justify-center gap-1"><X size={16}/> رفض</button>
+                       </div>
+                     )}
+
+                     {/* 🟢 الدورة الثلاثية للسائق (تحرك -> وصول -> بدء الرحلة) 🟢 */}
+                     {isTripOwner && reqStatus === 'accepted' && (
+                        <button onClick={() => handleTripAction('start_moving')} className="w-full bg-indigo-600 text-white font-bold py-2 rounded-xl text-sm shadow hover:bg-indigo-700 flex items-center justify-center gap-1.5"><Navigation size={16}/> تحركت نحو العميل 🚙</button>
+                     )}
+                     {isTripOwner && reqStatus === 'moving' && (
+                        <button onClick={() => handleTripAction('arrive')} className="w-full bg-orange-500 text-white font-bold py-2 rounded-xl text-sm shadow hover:bg-orange-600 flex items-center justify-center gap-1.5"><MapPin size={16}/> إبلاغ بالوصول 📍</button>
+                     )}
+                     {isTripOwner && reqStatus === 'arrived' && (
+                        <button onClick={() => handleTripAction('start_trip')} className="w-full bg-emerald-500 text-white font-bold py-2 rounded-xl text-sm shadow hover:bg-emerald-600 flex items-center justify-center gap-1.5"><Play size={16}/> بدء الرحلة (الراكب صعد) 🛣️</button>
+                     )}
+                     {isTripOwner && reqStatus === 'in_progress_trip' && (
+                        <button onClick={() => handleTripAction('complete')} className="w-full bg-rose-600 text-white font-bold py-2 rounded-xl text-sm shadow hover:bg-rose-700 flex items-center justify-center gap-1.5"><Flag size={16}/> إنهاء الرحلة 🏁</button>
+                     )}
+
+                     {/* حالة الراكب بيشوف بس التايمر وحالة السائق */}
+                     {isRequester && ['accepted', 'moving', 'arrived', 'in_progress_trip'].includes(reqStatus) && (
+                       <div className="flex justify-between items-center px-2">
+                         <span className={`text-xs font-bold ${reqStatus === 'arrived' ? 'text-rose-500' : 'text-emerald-500'}`}>
+                           {reqStatus === 'accepted' && 'تمت الموافقة ✅'}
+                           {reqStatus === 'moving' && 'الكابتن في الطريق 🚙'}
+                           {reqStatus === 'arrived' && 'الكابتن بالخارج 📍'}
+                           {reqStatus === 'in_progress_trip' && 'الرحلة جارية 🛣️'}
+                         </span>
+                         <span className="font-mono font-bold text-sm bg-slate-200 dark:bg-slate-700 px-2 py-0.5 rounded">{liveTimer}</span>
+                       </div>
+                     )}
+
                      {reqStatus === 'completed' && (
-                       <div className="text-emerald-600 dark:text-emerald-400 font-bold text-sm flex items-center justify-center gap-1">
-                         <Flag size={16}/> تم الإكمال بنجاح
+                       <div className="flex flex-col gap-2 animate-fade-in-up">
+                         <div className="text-emerald-600 dark:text-emerald-400 font-bold text-sm flex items-center justify-center gap-1">
+                           <CheckCircle2 size={16}/> تم الإكمال بنجاح
+                         </div>
+                         
+                         {!hasRated ? (
+                           <div className={`p-2 rounded-xl mt-1 ${isDarkMode ? 'bg-slate-700/50' : 'bg-white'}`}>
+                             <p className="text-xs font-bold mb-2">ما تقييمك لـ {chatInfo.otherPersonName} في هذه الرحلة؟</p>
+                             <div className="flex justify-center gap-2" dir="ltr">
+                               {[1, 2, 3, 4, 5].map((star) => (
+                                 <button 
+                                   key={star} 
+                                   onClick={() => submitRating(chatInfo, star)} 
+                                   className="text-slate-300 dark:text-slate-600 hover:text-amber-400 hover:scale-110 transition-all"
+                                 >
+                                   <Star size={28} />
+                                 </button>
+                               ))}
+                             </div>
+                           </div>
+                         ) : (
+                           <div className="text-xs font-bold text-indigo-500 bg-indigo-50 dark:bg-indigo-900/30 p-2 rounded-xl flex items-center justify-center gap-1">
+                             <ThumbsUp size={14}/> شكراً لتقييمك!
+                           </div>
+                         )}
                        </div>
                      )}
                      {reqStatus === 'rejected' && (
