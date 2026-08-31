@@ -23,7 +23,7 @@ const USERS_COLLECTION = 'khodni_maak_users';
 const MARKET_COLLECTION_NAME = 'khodni_maak_market';
 const ADMIN_EMAIL = "bassamwaleed2000@gmail.com".toLowerCase();
 
-const CURRENT_APP_VERSION = "v4.4_live"; // تم التحديث لضمان عمل التعديلات الجديدة
+const CURRENT_APP_VERSION = "v4.6_splash_screen"; 
 
 const safeMillis = (timestamp) => {
   if (!timestamp) return 0;
@@ -335,7 +335,8 @@ export default function App() {
       } catch (e) {
         console.error(e);
       } finally {
-        setLoading(false);
+        // إضافة تأخير بسيط لتجنب وميض شاشة التحميل إذا كان التحميل سريعاً جداً
+        setTimeout(() => setLoading(false), 800); 
       }
     });
     return () => unsubscribe();
@@ -920,7 +921,6 @@ export default function App() {
         }
       }
 
-      // تفعيل الإشعار المنبثق لجميع أحداث الرحلة عن طريق تحديث وقت آخر رسالة واسم المرسل
       const updateData = { 
         requestStatus: newStatus,
         lastMessage: systemText,
@@ -959,7 +959,6 @@ export default function App() {
       if (otherUserSnap.exists()) {
         const uData = otherUserSnap.data();
         
-        // التحويل الدقيق للأرقام لمعالجة الحسابات القديمة بسلاسة تامة
         const oldTotal = Number(uData.totalRatings) || 0;
         const oldRating = Number(uData.rating) || 0;
         
@@ -1071,7 +1070,6 @@ export default function App() {
   }, [priorityLiveTrip]);
 
   const renderStars = (rating = 0, total = 0, userCreatedAtMillis = null) => {
-    // تحديد دقيق للمستخدم الجديد بناءً على توفر وقت الإنشاء
     const isNewUser = total === 0 && (userCreatedAtMillis && (Date.now() - userCreatedAtMillis < 86400000));
     
     if (isNewUser) {
@@ -1101,7 +1099,51 @@ export default function App() {
   const textPrimary = isDarkMode ? 'text-white' : 'text-slate-800';
   const textSecondary = isDarkMode ? 'text-slate-400' : 'text-slate-500';
 
-  if (loading) return <div className={`min-h-screen flex justify-center items-center ${bgMain}`}><Loader2 size={50} className="animate-spin text-indigo-600" /></div>;
+  // --- شاشة التحميل (Splash Screen) الجديدة والاحترافية ---
+  if (loading) {
+    return (
+      <div className={`fixed inset-0 flex flex-col items-center justify-center transition-colors duration-500 z-[9999] ${isDarkMode ? 'bg-slate-900' : 'bg-indigo-600'}`}>
+        <div className="relative flex flex-col items-center animate-fade-in-up">
+          
+          {/* تأثير النبض للخلفية */}
+          <div className="absolute inset-0 bg-white/20 rounded-full blur-2xl animate-pulse w-32 h-32 -z-10"></div>
+          
+          {/* الأيقونة أو اللوجو */}
+          {appLogo ? (
+            <img src={appLogo} alt="Logo" className="w-24 h-24 object-contain drop-shadow-2xl mb-6 animate-bounce" style={{ animationDuration: '2s' }} />
+          ) : (
+            <div className={`w-24 h-24 rounded-3xl flex items-center justify-center mb-6 shadow-2xl transform rotate-12 bg-white text-indigo-600`}>
+              <Car size={48} className="transform -rotate-12" />
+            </div>
+          )}
+          
+          {/* اسم التطبيق */}
+          <h1 className="text-4xl font-black text-white tracking-tight drop-shadow-md mb-2">
+            خدني معاك
+          </h1>
+          
+          {/* شعار أو جملة ترحيبية */}
+          <p className="text-indigo-100/80 font-medium text-sm tracking-wide">
+            رفيق دربك.. أينما كنت
+          </p>
+
+          {/* شريط تحميل صغير */}
+          <div className="mt-12 w-32 h-1.5 bg-indigo-900/40 rounded-full overflow-hidden">
+            <div className="w-1/2 h-full bg-white rounded-full animate-[ping-pong_1.5s_ease-in-out_infinite]"></div>
+          </div>
+          
+        </div>
+        
+        {/* ستايل مخصص لحركة شريط التحميل */}
+        <style dangerouslySetInnerHTML={{__html: `
+          @keyframes ping-pong {
+            0% { transform: translateX(-100%); }
+            100% { transform: translateX(200%); }
+          }
+        `}} />
+      </div>
+    );
+  }
 
   if (!user) {
     return (
@@ -1656,7 +1698,7 @@ export default function App() {
                       <div className="mt-auto pt-2">
                         {isOwner ? (
                           <div className={`w-full py-1.5 rounded-lg font-bold text-center text-[10px] border border-dashed ${isDarkMode ? 'bg-slate-700/50 text-slate-400 border-slate-600' : 'bg-slate-50 text-slate-500 border-slate-200'}`}>
-                            رحلتي 
+                            إعلاني 
                           </div>
                         ) : (
                           <div className="flex gap-1.5">
@@ -1913,83 +1955,88 @@ export default function App() {
 
       </main>
 
-      {/* شريط التحكم العائم الذكي (قابل للتصغير والتكبير) */}
-      {priorityLiveTrip && !isGuest && (!activeChat || activeChat.chatId !== priorityLiveTrip.chatId) && (
-        <div className={`fixed z-30 transition-all duration-300 animate-fade-in-up ${isLiveTripMinimized ? 'bottom-[80px] left-4 w-auto right-auto' : 'bottom-[76px] left-0 right-0 px-4'}`}>
-          {isLiveTripMinimized ? (
-            <button 
-              onClick={() => setIsLiveTripMinimized(false)} 
-              className="bg-indigo-600 text-white px-4 py-2.5 rounded-full shadow-lg shadow-indigo-500/30 font-bold text-xs flex items-center gap-2 hover:bg-indigo-700 transform hover:scale-105 transition-all border border-indigo-400/50"
-            >
-              <Car size={16} className="animate-pulse"/> متابعة الطلب
-            </button>
-          ) : (
-            <div className={`max-w-md mx-auto pointer-events-auto rounded-2xl p-3.5 shadow-2xl border flex flex-col gap-3 transition-colors relative ${isDarkMode ? 'bg-slate-800 border-indigo-500 shadow-indigo-900/30' : 'bg-white border-indigo-300 shadow-indigo-200/50'}`}>
-              
+      {/* شريط التحكم العائم الذكي (يعتمد الآن على دور السائق الفعلي) */}
+      {priorityLiveTrip && !isGuest && (!activeChat || activeChat.chatId !== priorityLiveTrip.chatId) && (() => {
+        const isOwner = priorityLiveTrip.tripOwnerId === user.uid;
+        const isActualDriver = (priorityLiveTrip.tripType === 'offer' || priorityLiveTrip.tripType === 'delivery') ? isOwner : !isOwner;
+        
+        return (
+          <div className={`fixed z-30 transition-all duration-300 animate-fade-in-up ${isLiveTripMinimized ? 'bottom-[80px] left-4 w-auto right-auto' : 'bottom-[76px] left-0 right-0 px-4'}`}>
+            {isLiveTripMinimized ? (
               <button 
-                onClick={(e) => { e.stopPropagation(); setIsLiveTripMinimized(true); }} 
-                className={`absolute -top-3 left-4 p-1 rounded-full shadow-md z-10 border transition-colors ${isDarkMode ? 'bg-slate-700 text-slate-300 border-slate-600 hover:bg-slate-600' : 'bg-slate-100 text-slate-600 border-slate-300 hover:bg-slate-200'}`}
+                onClick={() => setIsLiveTripMinimized(false)} 
+                className="bg-indigo-600 text-white px-4 py-2.5 rounded-full shadow-lg shadow-indigo-500/30 font-bold text-xs flex items-center gap-2 hover:bg-indigo-700 transform hover:scale-105 transition-all border border-indigo-400/50"
               >
-                <ChevronDown size={16} />
+                <Car size={16} className="animate-pulse"/> متابعة الطلب
               </button>
+            ) : (
+              <div className={`max-w-md mx-auto pointer-events-auto rounded-2xl p-3.5 shadow-2xl border flex flex-col gap-3 transition-colors relative ${isDarkMode ? 'bg-slate-800 border-indigo-500 shadow-indigo-900/30' : 'bg-white border-indigo-300 shadow-indigo-200/50'}`}>
+                
+                <button 
+                  onClick={(e) => { e.stopPropagation(); setIsLiveTripMinimized(true); }} 
+                  className={`absolute -top-3 left-4 p-1 rounded-full shadow-md z-10 border transition-colors ${isDarkMode ? 'bg-slate-700 text-slate-300 border-slate-600 hover:bg-slate-600' : 'bg-slate-100 text-slate-600 border-slate-300 hover:bg-slate-200'}`}
+                >
+                  <ChevronDown size={16} />
+                </button>
 
-              <div 
-                className="flex justify-between items-center cursor-pointer pt-1"
-                onClick={() => {
-                  setActiveChat({ chatId: priorityLiveTrip.chatId, tripId: priorityLiveTrip.tripId, tripType: priorityLiveTrip.tripType, tripOwnerId: priorityLiveTrip.tripOwnerId, otherPersonId: priorityLiveTrip.otherPersonId, otherPersonName: priorityLiveTrip.otherPersonName, otherPersonPhoto: priorityLiveTrip.otherPersonPhoto, otherPersonVerified: priorityLiveTrip.otherPersonVerified });
-                  setActiveTab('inbox');
-                }}
-              >
-                <div className="flex items-center gap-3">
-                  <div className={`p-2 rounded-full shrink-0 ${priorityLiveTrip.requestStatus === 'arrived' ? 'bg-rose-100 text-rose-600' : 'bg-indigo-100 text-indigo-600'}`}>
-                    {priorityLiveTrip.requestStatus === 'arrived' ? <MapPin className="animate-bounce" size={20} /> : <Car className="animate-pulse" size={20} />}
+                <div 
+                  className="flex justify-between items-center cursor-pointer pt-1"
+                  onClick={() => {
+                    setActiveChat({ chatId: priorityLiveTrip.chatId, tripId: priorityLiveTrip.tripId, tripType: priorityLiveTrip.tripType, tripOwnerId: priorityLiveTrip.tripOwnerId, otherPersonId: priorityLiveTrip.otherPersonId, otherPersonName: priorityLiveTrip.otherPersonName, otherPersonPhoto: priorityLiveTrip.otherPersonPhoto, otherPersonVerified: priorityLiveTrip.otherPersonVerified });
+                    setActiveTab('inbox');
+                  }}
+                >
+                  <div className="flex items-center gap-3">
+                    <div className={`p-2 rounded-full shrink-0 ${priorityLiveTrip.requestStatus === 'arrived' ? 'bg-rose-100 text-rose-600' : 'bg-indigo-100 text-indigo-600'}`}>
+                      {priorityLiveTrip.requestStatus === 'arrived' ? <MapPin className="animate-bounce" size={20} /> : <Car className="animate-pulse" size={20} />}
+                    </div>
+                    <div className="flex flex-col">
+                      <span className={`text-sm font-extrabold ${textPrimary}`}>
+                        {priorityLiveTrip.requestStatus === 'pending' && (isOwner ? 'يوجد طلب جديد لرحلتك' : 'طلبك قيد المراجعة...')}
+                        {priorityLiveTrip.requestStatus === 'accepted' && (isActualDriver ? 'تم قبول الطلب ✅' : 'تمت الموافقة على طلبك ✅')}
+                        {priorityLiveTrip.requestStatus === 'moving' && (isActualDriver ? 'أنت في الطريق للعميل 🚙' : 'الكابتن في الطريق إليك 🚙')}
+                        {priorityLiveTrip.requestStatus === 'arrived' && (isActualDriver ? 'أنت في نقطة اللقاء 📍' : 'الكابتن بالخارج 📍')}
+                        {priorityLiveTrip.requestStatus === 'in_progress_trip' && 'الرحلة جارية الآن 🛣️'}
+                      </span>
+                      <span className={`text-[10px] font-bold ${textSecondary}`}>مع: {priorityLiveTrip.otherPersonName}</span>
+                    </div>
                   </div>
-                  <div className="flex flex-col">
-                    <span className={`text-sm font-extrabold ${textPrimary}`}>
-                      {priorityLiveTrip.requestStatus === 'pending' && (priorityLiveTrip.tripOwnerId === user.uid ? 'يوجد طلب جديد لرحلتك' : 'طلبك قيد المراجعة...')}
-                      {priorityLiveTrip.requestStatus === 'accepted' && (priorityLiveTrip.tripOwnerId === user.uid ? 'تم قبول الطلب ✅' : 'تمت الموافقة على طلبك ✅')}
-                      {priorityLiveTrip.requestStatus === 'moving' && (priorityLiveTrip.tripOwnerId === user.uid ? 'أنت في الطريق للعميل 🚙' : 'الكابتن في الطريق إليك 🚙')}
-                      {priorityLiveTrip.requestStatus === 'arrived' && (priorityLiveTrip.tripOwnerId === user.uid ? 'أنت في نقطة اللقاء 📍' : 'الكابتن بالخارج 📍')}
-                      {priorityLiveTrip.requestStatus === 'in_progress_trip' && (priorityLiveTrip.tripOwnerId === user.uid ? 'الرحلة جارية الآن 🛣️' : 'الرحلة جارية الآن 🛣️')}
-                    </span>
-                    <span className={`text-[10px] font-bold ${textSecondary}`}>مع: {priorityLiveTrip.otherPersonName}</span>
-                  </div>
+                  {(['accepted', 'moving', 'arrived', 'in_progress_trip'].includes(priorityLiveTrip.requestStatus)) && (
+                    <div className={`font-mono font-bold text-xs px-2 py-1 rounded-lg border ${isDarkMode ? 'bg-slate-700 border-slate-600 text-indigo-300' : 'bg-slate-100 border-slate-200 text-indigo-700'}`}>
+                      {liveTimer}
+                    </div>
+                  )}
                 </div>
-                {(['accepted', 'moving', 'arrived', 'in_progress_trip'].includes(priorityLiveTrip.requestStatus)) && (
-                  <div className={`font-mono font-bold text-xs px-2 py-1 rounded-lg border ${isDarkMode ? 'bg-slate-700 border-slate-600 text-indigo-300' : 'bg-slate-100 border-slate-200 text-indigo-700'}`}>
-                    {liveTimer}
-                  </div>
-                )}
-              </div>
 
-              {/* أزرار التحكم من الشريط العائم */}
-              <div className="flex gap-2">
-                {priorityLiveTrip.requestStatus === 'pending' && priorityLiveTrip.tripOwnerId === user.uid && (
-                  <>
-                    <button onClick={() => handleTripAction('accept', priorityLiveTrip)} className="flex-1 bg-emerald-500 text-white font-bold py-2.5 rounded-xl text-xs shadow hover:bg-emerald-600 flex items-center justify-center gap-1"><CheckCircle2 size={16}/> قبول الطلب</button>
-                    <button onClick={() => handleTripAction('reject', priorityLiveTrip)} className="flex-1 bg-rose-500 text-white font-bold py-2.5 rounded-xl text-xs shadow hover:bg-rose-600 flex items-center justify-center gap-1"><X size={16}/> رفض</button>
-                  </>
-                )}
-                {priorityLiveTrip.requestStatus === 'pending' && priorityLiveTrip.tripOwnerId !== user.uid && (
-                   <button onClick={() => handleTripAction('cancel_request', priorityLiveTrip)} className="w-full bg-rose-100 text-rose-600 font-bold py-2.5 rounded-xl text-xs hover:bg-rose-200 transition">إلغاء الطلب</button>
-                )}
-                {priorityLiveTrip.requestStatus === 'accepted' && priorityLiveTrip.tripOwnerId === user.uid && (
-                  <button onClick={() => handleTripAction('start_moving', priorityLiveTrip)} className="w-full bg-indigo-600 text-white font-bold py-2.5 rounded-xl text-xs shadow hover:bg-indigo-700 flex items-center justify-center gap-1"><Navigation size={16}/> تحركت نحو العميل</button>
-                )}
-                {priorityLiveTrip.requestStatus === 'moving' && priorityLiveTrip.tripOwnerId === user.uid && (
-                  <button onClick={() => handleTripAction('arrive', priorityLiveTrip)} className="w-full bg-orange-500 text-white font-bold py-2.5 rounded-xl text-xs shadow hover:bg-orange-600 flex items-center justify-center gap-1"><MapPin size={16}/> إبلاغ بالوصول</button>
-                )}
-                {priorityLiveTrip.requestStatus === 'arrived' && priorityLiveTrip.tripOwnerId === user.uid && (
-                  <button onClick={() => handleTripAction('start_trip', priorityLiveTrip)} className="w-full bg-emerald-500 text-white font-bold py-2.5 rounded-xl text-xs shadow hover:bg-emerald-600 flex items-center justify-center gap-1"><Play size={16}/> بدء الرحلة الفعلي</button>
-                )}
-                {priorityLiveTrip.requestStatus === 'in_progress_trip' && priorityLiveTrip.tripOwnerId === user.uid && (
-                  <button onClick={() => handleTripAction('complete', priorityLiveTrip)} className="w-full bg-rose-600 text-white font-bold py-2.5 rounded-xl text-xs shadow hover:bg-rose-700 flex items-center justify-center gap-1"><Flag size={16}/> إنهاء الرحلة بنجاح</button>
-                )}
+                {/* أزرار التحكم للسائق فقط */}
+                <div className="flex gap-2">
+                  {priorityLiveTrip.requestStatus === 'pending' && isOwner && (
+                    <>
+                      <button onClick={() => handleTripAction('accept', priorityLiveTrip)} className="flex-1 bg-emerald-500 text-white font-bold py-2.5 rounded-xl text-xs shadow hover:bg-emerald-600 flex items-center justify-center gap-1"><CheckCircle2 size={16}/> قبول الطلب</button>
+                      <button onClick={() => handleTripAction('reject', priorityLiveTrip)} className="flex-1 bg-rose-500 text-white font-bold py-2.5 rounded-xl text-xs shadow hover:bg-rose-600 flex items-center justify-center gap-1"><X size={16}/> رفض</button>
+                    </>
+                  )}
+                  {priorityLiveTrip.requestStatus === 'pending' && !isOwner && (
+                     <button onClick={() => handleTripAction('cancel_request', priorityLiveTrip)} className="w-full bg-rose-100 text-rose-600 font-bold py-2.5 rounded-xl text-xs hover:bg-rose-200 transition">إلغاء الطلب</button>
+                  )}
+                  {priorityLiveTrip.requestStatus === 'accepted' && isActualDriver && (
+                    <button onClick={() => handleTripAction('start_moving', priorityLiveTrip)} className="w-full bg-indigo-600 text-white font-bold py-2.5 rounded-xl text-xs shadow hover:bg-indigo-700 flex items-center justify-center gap-1"><Navigation size={16}/> تحركت نحو العميل</button>
+                  )}
+                  {priorityLiveTrip.requestStatus === 'moving' && isActualDriver && (
+                    <button onClick={() => handleTripAction('arrive', priorityLiveTrip)} className="w-full bg-orange-500 text-white font-bold py-2.5 rounded-xl text-xs shadow hover:bg-orange-600 flex items-center justify-center gap-1"><MapPin size={16}/> إبلاغ بالوصول</button>
+                  )}
+                  {priorityLiveTrip.requestStatus === 'arrived' && isActualDriver && (
+                    <button onClick={() => handleTripAction('start_trip', priorityLiveTrip)} className="w-full bg-emerald-500 text-white font-bold py-2.5 rounded-xl text-xs shadow hover:bg-emerald-600 flex items-center justify-center gap-1"><Play size={16}/> بدء الرحلة الفعلي</button>
+                  )}
+                  {priorityLiveTrip.requestStatus === 'in_progress_trip' && isActualDriver && (
+                    <button onClick={() => handleTripAction('complete', priorityLiveTrip)} className="w-full bg-rose-600 text-white font-bold py-2.5 rounded-xl text-xs shadow hover:bg-rose-700 flex items-center justify-center gap-1"><Flag size={16}/> إنهاء الرحلة بنجاح</button>
+                  )}
+                </div>
               </div>
-            </div>
-          )}
-        </div>
-      )}
+            )}
+          </div>
+        )
+      })()}
 
       <nav className={`fixed bottom-0 w-full z-40 border-t backdrop-blur-xl pb-safe transition-colors duration-300 ${isDarkMode ? 'bg-slate-900/95 border-slate-800' : 'bg-white/95 border-slate-200 shadow-[0_-4px_20px_rgba(0,0,0,0.05)]'}`}>
         <div className="flex justify-between items-center h-16 w-full max-w-md mx-auto px-2">
@@ -2127,166 +2174,171 @@ export default function App() {
       )}
 
       {/* شاشة الشات المباشرة مع لوحة التحكم ونظام التقييم */}
-      {activeChat && !isGuest && (
-        <div className="fixed inset-0 bg-slate-900/80 backdrop-blur-md z-[250] flex justify-center items-end sm:items-center p-0 sm:p-4">
-          <div className={`${bgModal} w-full h-[85vh] sm:h-[600px] sm:max-w-md rounded-t-[2rem] sm:rounded-3xl shadow-2xl flex flex-col overflow-hidden animate-fade-in-up relative`}>
-            
-            <div className={`text-white p-4 flex items-center gap-3 ${activeChat.otherPersonId === 'admin' ? 'bg-rose-600' : 'bg-indigo-600'}`}>
-              <button onClick={() => setActiveChat(null)} className={`p-2 rounded-full transition-colors ${activeChat.otherPersonId === 'admin' ? 'hover:bg-rose-700' : 'hover:bg-indigo-700'}`}><ChevronLeft size={24} /></button>
-              {activeChat.otherPersonId === 'admin' ? (
-                <div className="w-10 h-10 bg-white/20 rounded-full flex items-center justify-center shrink-0"><Crown size={20}/></div>
-              ) : activeChat.otherPersonPhoto ? (
-                <img src={activeChat.otherPersonPhoto} className="w-10 h-10 rounded-full object-cover border-2 border-white/20 shrink-0" alt="avatar" />
-              ) : (
-                <div className="w-10 h-10 bg-white/20 rounded-full flex items-center justify-center shrink-0"><User size={20}/></div>
+      {activeChat && !isGuest && (() => {
+         const inboxChat = myInbox.find(c => c && c.chatId === activeChat.chatId) || {};
+         const chatInfo = { ...activeChat, ...inboxChat };
+         
+         // تحديد من هو السائق الفعلي للتحكم في الأزرار
+         let isActualDriver = false;
+         let isTripOwner = false;
+         let reqStatus = chatInfo.requestStatus || 'none';
+         
+         if (chatInfo.tripOwnerId) {
+            isTripOwner = chatInfo.tripOwnerId === user.uid;
+            if (chatInfo.tripType === 'offer' || chatInfo.tripType === 'delivery') {
+                isActualDriver = isTripOwner;
+            } else if (chatInfo.tripType === 'request') {
+                isActualDriver = !isTripOwner;
+            }
+         }
+
+         return (
+          <div className="fixed inset-0 bg-slate-900/80 backdrop-blur-md z-[250] flex justify-center items-end sm:items-center p-0 sm:p-4">
+            <div className={`${bgModal} w-full h-[85vh] sm:h-[600px] sm:max-w-md rounded-t-[2rem] sm:rounded-3xl shadow-2xl flex flex-col overflow-hidden animate-fade-in-up relative`}>
+              
+              <div className={`text-white p-4 flex items-center gap-3 ${activeChat.otherPersonId === 'admin' ? 'bg-rose-600' : 'bg-indigo-600'}`}>
+                <button onClick={() => setActiveChat(null)} className={`p-2 rounded-full transition-colors ${activeChat.otherPersonId === 'admin' ? 'hover:bg-rose-700' : 'hover:bg-indigo-700'}`}><ChevronLeft size={24} /></button>
+                {activeChat.otherPersonId === 'admin' ? (
+                  <div className="w-10 h-10 bg-white/20 rounded-full flex items-center justify-center shrink-0"><Crown size={20}/></div>
+                ) : activeChat.otherPersonPhoto ? (
+                  <img src={activeChat.otherPersonPhoto} className="w-10 h-10 rounded-full object-cover border-2 border-white/20 shrink-0" alt="avatar" />
+                ) : (
+                  <div className="w-10 h-10 bg-white/20 rounded-full flex items-center justify-center shrink-0"><User size={20}/></div>
+                )}
+                <div className="flex-1">
+                  <h3 className="font-bold text-sm leading-tight flex items-center gap-1">
+                    {activeChat.otherPersonName || 'مستخدم'}
+                    {activeChat.otherPersonVerified && <ShieldCheck size={14} className="text-blue-200"/>}
+                  </h3>
+                  {activeChat.tripInfo && activeChat.tripInfo !== 'system' && <span className="text-[10px] text-indigo-200 leading-tight block mt-0.5 truncate">{activeChat.tripInfo}</span>}
+                </div>
+              </div>
+
+              {/* لوحة تحكم الشات */}
+              {chatInfo.tripInfo !== 'system' && !chatInfo.tripInfo?.includes('مهتم بشراء') && chatInfo.tripType !== 'market' && user && chatInfo.tripOwnerId && (
+                <div className={`p-3 border-b text-center shadow-sm z-10 ${isDarkMode ? 'bg-slate-800 border-slate-700' : 'bg-slate-50 border-slate-200'}`}>
+                  
+                  {reqStatus === 'none' && !isTripOwner && (
+                    <button onClick={() => handleTripAction('request')} className="w-full bg-indigo-600 text-white font-bold py-2 rounded-xl text-sm shadow hover:bg-indigo-700 flex items-center justify-center gap-2">
+                      <Navigation size={16}/> إرسال طلب لصاحب الإعلان
+                    </button>
+                  )}
+                  
+                  {reqStatus === 'pending' && !isTripOwner && (
+                    <div className="flex items-center justify-between gap-2 bg-amber-50 dark:bg-amber-900/20 p-2 rounded-xl border border-amber-200 dark:border-amber-800/50">
+                      <p className="text-xs font-bold text-amber-600 dark:text-amber-400 flex items-center gap-1.5"><Loader2 size={14} className="animate-spin"/> بانتظار الموافقة...</p>
+                      <button onClick={() => handleTripAction('cancel_request')} className="px-3 py-1.5 bg-rose-100 text-rose-600 hover:bg-rose-200 dark:bg-rose-900/50 dark:hover:bg-rose-900/80 rounded-lg text-xs font-bold transition">إلغاء الطلب</button>
+                    </div>
+                  )}
+
+                  {reqStatus === 'pending' && isTripOwner && (
+                    <div className="flex gap-2">
+                      <button onClick={() => handleTripAction('accept')} className="flex-1 bg-emerald-500 text-white font-bold py-2 rounded-xl text-sm shadow hover:bg-emerald-600 flex items-center justify-center gap-1"><CheckCircle2 size={16}/> قبول</button>
+                      <button onClick={() => handleTripAction('reject')} className="flex-1 bg-rose-500 text-white font-bold py-2 rounded-xl text-sm shadow hover:bg-rose-600 flex items-center justify-center gap-1"><X size={16}/> رفض</button>
+                    </div>
+                  )}
+
+                  {/* أزرار السائق فقط */}
+                  {reqStatus === 'accepted' && isActualDriver && (
+                     <button onClick={() => handleTripAction('start_moving')} className="w-full bg-indigo-600 text-white font-bold py-2 rounded-xl text-sm shadow hover:bg-indigo-700 flex items-center justify-center gap-1.5"><Navigation size={16}/> تحركت نحو العميل 🚙</button>
+                  )}
+                  {reqStatus === 'moving' && isActualDriver && (
+                     <button onClick={() => handleTripAction('arrive')} className="w-full bg-orange-500 text-white font-bold py-2 rounded-xl text-sm shadow hover:bg-orange-600 flex items-center justify-center gap-1.5"><MapPin size={16}/> إبلاغ بالوصول 📍</button>
+                  )}
+                  {reqStatus === 'arrived' && isActualDriver && (
+                     <button onClick={() => handleTripAction('start_trip')} className="w-full bg-emerald-500 text-white font-bold py-2 rounded-xl text-sm shadow hover:bg-emerald-600 flex items-center justify-center gap-1.5"><Play size={16}/> بدء الرحلة الفعلي 🛣️</button>
+                  )}
+                  {reqStatus === 'in_progress_trip' && isActualDriver && (
+                     <button onClick={() => handleTripAction('complete')} className="w-full bg-rose-600 text-white font-bold py-2 rounded-xl text-sm shadow hover:bg-rose-700 flex items-center justify-center gap-1.5"><Flag size={16}/> إنهاء الرحلة 🏁</button>
+                  )}
+
+                  {/* نصوص الراكب فقط */}
+                  {!isActualDriver && ['accepted', 'moving', 'arrived', 'in_progress_trip'].includes(reqStatus) && (
+                    <div className="flex justify-between items-center px-2">
+                      <span className={`text-xs font-bold ${reqStatus === 'arrived' ? 'text-rose-500' : 'text-emerald-500'}`}>
+                        {reqStatus === 'accepted' && 'تمت الموافقة ✅'}
+                        {reqStatus === 'moving' && 'الكابتن في الطريق 🚙'}
+                        {reqStatus === 'arrived' && 'الكابتن بالخارج 📍'}
+                        {reqStatus === 'in_progress_trip' && 'الرحلة جارية 🛣️'}
+                      </span>
+                      <span className="font-mono font-bold text-sm bg-slate-200 dark:bg-slate-700 px-2 py-0.5 rounded">{liveTimer}</span>
+                    </div>
+                  )}
+
+                  {reqStatus === 'completed' && (
+                    <div className="flex flex-col gap-2 animate-fade-in-up">
+                      <div className="text-emerald-600 dark:text-emerald-400 font-bold text-sm flex items-center justify-center gap-1">
+                        <CheckCircle2 size={16}/> تم الإكمال بنجاح
+                      </div>
+                      
+                      {!chatInfo[`rated_${chatInfo.tripId}`] ? (
+                        <div className={`p-2 rounded-xl mt-1 ${isDarkMode ? 'bg-slate-700/50' : 'bg-white'}`}>
+                          <p className="text-xs font-bold mb-2">ما تقييمك لـ {chatInfo.otherPersonName} في هذه الرحلة؟</p>
+                          <div className="flex justify-center gap-2" dir="ltr">
+                            {[1, 2, 3, 4, 5].map((star) => (
+                              <button 
+                                key={star} 
+                                onClick={() => submitRating(chatInfo, star)} 
+                                className="text-slate-300 dark:text-slate-600 hover:text-amber-400 hover:scale-110 transition-all"
+                              >
+                                <Star size={28} />
+                              </button>
+                            ))}
+                          </div>
+                        </div>
+                      ) : (
+                        <div className="text-xs font-bold text-indigo-500 bg-indigo-50 dark:bg-indigo-900/30 p-2 rounded-xl flex items-center justify-center gap-1">
+                          <ThumbsUp size={14}/> شكراً لتقييمك!
+                        </div>
+                      )}
+                    </div>
+                  )}
+                  {reqStatus === 'rejected' && (
+                    <div className="text-rose-500 font-bold text-sm flex items-center justify-center gap-1">
+                      <X size={16}/> تم رفض الطلب
+                    </div>
+                  )}
+                </div>
               )}
-              <div className="flex-1">
-                <h3 className="font-bold text-sm leading-tight flex items-center gap-1">
-                  {activeChat.otherPersonName || 'مستخدم'}
-                  {activeChat.otherPersonVerified && <ShieldCheck size={14} className="text-blue-200"/>}
-                </h3>
-                {activeChat.tripInfo && activeChat.tripInfo !== 'system' && <span className="text-[10px] text-indigo-200 leading-tight block mt-0.5 truncate">{activeChat.tripInfo}</span>}
+
+              <div className={`flex-1 overflow-y-auto p-4 space-y-4 ${isDarkMode ? 'bg-slate-900/80' : 'bg-slate-100'} bg-[url('data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHdpZHRoPSI0MCIgaGVpZ2h0PSI0MCI+PGRlZnM+PHBhdHRlcm4gaWQ9InBhdHRlcm4iIHdpZHRoPSI0MCIgaGVpZ2h0PSI0MCIgcGF0dGVyblVuaXRzPSJ1c2VyU3BhY2VPblVzZSI+PHBhdGggZD0iTTAgMGg0MHY0MEgweiIgZmlsbD0ibm9uZSIvPjxjaXJjbGUgY3g9IjIwIiBjeT0iMjAiIHI9IjEiIGZpbGw9InJnYmEoMTU2LCAxNjMsIDE3NSwgMC4yKSIvPjwvcGF0dGVybj48L2RlZnM+PHJlY3Qgd2lkdGg9IjEwMCUiIGhlaWdodD0iMTAwJSIgZmlsbD0idXJsKCNwYXR0ZXJuKSIvPjwvc3ZnPg==')]`}>
+                {messages.map(msg => {
+                  const isMe = user && msg.senderId === user.uid;
+                  const isAdminMsg = msg.senderId === 'admin';
+                  const isSystem = msg.isSystem;
+                  
+                  if (isSystem) {
+                    return (
+                      <div key={msg.id} className="flex justify-center my-2">
+                        <span className={`text-[10px] font-bold px-3 py-1 rounded-full ${isDarkMode ? 'bg-slate-800 text-slate-300' : 'bg-slate-200 text-slate-600'}`}>{msg.text}</span>
+                      </div>
+                    );
+                  }
+
+                  return (
+                    <div key={msg.id} className={`flex ${isMe ? 'justify-end' : 'justify-start'}`}>
+                      <div className={`max-w-[85%] p-2.5 rounded-xl text-xs shadow-sm ${isMe ? 'bg-indigo-600 text-white rounded-tl-sm' : (isAdminMsg ? 'bg-rose-100 text-rose-900 border border-rose-200 rounded-tr-sm' : (isDarkMode ? 'bg-slate-800 text-white border border-slate-700 rounded-tr-sm' : 'bg-white border border-slate-200 text-slate-800 rounded-tr-sm'))}`}>
+                        {msg.text}
+                      </div>
+                    </div>
+                  )
+                })}
+                <div ref={messagesEndRef} />
+              </div>
+              <div className={`p-4 border-t ${isDarkMode ? 'bg-slate-800 border-slate-700' : 'bg-white border-slate-200'}`}>
+                {activeChat.otherPersonId === 'admin' ? (
+                  <div className="text-center text-[10px] font-bold text-slate-400">هذه رسالة إدارية رسمية للمعلومية فقط.</div>
+                ) : (
+                  <form onSubmit={handleSendMessage} className="flex gap-2 items-center">
+                    <input type="text" value={newMessage} onChange={(e) => setNewMessage(e.target.value)} placeholder="اكتب رسالة..." className={`flex-1 rounded-xl px-4 py-3 text-[16px] outline-none focus:ring-2 focus:ring-indigo-500 transition-colors ${bgInput}`} />
+                    <button type="submit" disabled={!newMessage.trim()} className="bg-indigo-600 text-white w-12 h-12 flex items-center justify-center rounded-xl hover:bg-indigo-700 disabled:opacity-50 disabled:bg-slate-400 transition-all shadow-md"><Send size={20} className="rtl:rotate-180" /></button>
+                  </form>
+                )}
               </div>
             </div>
-
-            {(() => {
-               try {
-                 const inboxChat = myInbox.find(c => c && c.chatId === activeChat.chatId) || {};
-                 const chatInfo = { ...activeChat, ...inboxChat };
-
-                 if (chatInfo.tripInfo === 'system' || chatInfo.tripInfo?.includes('مهتم بشراء') || chatInfo.tripType === 'market' || !user) return null;
-
-                 const currentTripOwnerId = chatInfo.tripOwnerId;
-                 if (!currentTripOwnerId) return null;
-
-                 const isTripOwner = currentTripOwnerId === user.uid;
-                 const isRequester = currentTripOwnerId !== user.uid;
-                 const reqStatus = chatInfo.requestStatus || 'none';
-                 const hasRated = chatInfo[`rated_${chatInfo.tripId}`];
-
-                 return (
-                   <div className={`p-3 border-b text-center shadow-sm z-10 ${isDarkMode ? 'bg-slate-800 border-slate-700' : 'bg-slate-50 border-slate-200'}`}>
-                     
-                     {reqStatus === 'none' && isRequester && (
-                       <button onClick={() => handleTripAction('request')} className="w-full bg-indigo-600 text-white font-bold py-2 rounded-xl text-sm shadow hover:bg-indigo-700 flex items-center justify-center gap-2">
-                         <Navigation size={16}/> إرسال طلب لصاحب الإعلان
-                       </button>
-                     )}
-                     
-                     {reqStatus === 'pending' && isRequester && (
-                       <div className="flex items-center justify-between gap-2 bg-amber-50 dark:bg-amber-900/20 p-2 rounded-xl border border-amber-200 dark:border-amber-800/50">
-                         <p className="text-xs font-bold text-amber-600 dark:text-amber-400 flex items-center gap-1.5"><Loader2 size={14} className="animate-spin"/> بانتظار الموافقة...</p>
-                         <button onClick={() => handleTripAction('cancel_request')} className="px-3 py-1.5 bg-rose-100 text-rose-600 hover:bg-rose-200 dark:bg-rose-900/50 dark:hover:bg-rose-900/80 rounded-lg text-xs font-bold transition">إلغاء الطلب</button>
-                       </div>
-                     )}
-
-                     {reqStatus === 'pending' && isTripOwner && (
-                       <div className="flex gap-2">
-                         <button onClick={() => handleTripAction('accept')} className="flex-1 bg-emerald-500 text-white font-bold py-2 rounded-xl text-sm shadow hover:bg-emerald-600 flex items-center justify-center gap-1"><CheckCircle2 size={16}/> قبول</button>
-                         <button onClick={() => handleTripAction('reject')} className="flex-1 bg-rose-500 text-white font-bold py-2 rounded-xl text-sm shadow hover:bg-rose-600 flex items-center justify-center gap-1"><X size={16}/> رفض</button>
-                       </div>
-                     )}
-
-                     {isTripOwner && reqStatus === 'accepted' && (
-                        <button onClick={() => handleTripAction('start_moving')} className="w-full bg-indigo-600 text-white font-bold py-2 rounded-xl text-sm shadow hover:bg-indigo-700 flex items-center justify-center gap-1.5"><Navigation size={16}/> تحركت نحو العميل 🚙</button>
-                     )}
-                     {isTripOwner && reqStatus === 'moving' && (
-                        <button onClick={() => handleTripAction('arrive')} className="w-full bg-orange-500 text-white font-bold py-2 rounded-xl text-sm shadow hover:bg-orange-600 flex items-center justify-center gap-1.5"><MapPin size={16}/> إبلاغ بالوصول 📍</button>
-                     )}
-                     {isTripOwner && reqStatus === 'arrived' && (
-                        <button onClick={() => handleTripAction('start_trip')} className="w-full bg-emerald-500 text-white font-bold py-2 rounded-xl text-sm shadow hover:bg-emerald-600 flex items-center justify-center gap-1.5"><Play size={16}/> بدء الرحلة (الراكب صعد) 🛣️</button>
-                     )}
-                     {isTripOwner && reqStatus === 'in_progress_trip' && (
-                        <button onClick={() => handleTripAction('complete')} className="w-full bg-rose-600 text-white font-bold py-2 rounded-xl text-sm shadow hover:bg-rose-700 flex items-center justify-center gap-1.5"><Flag size={16}/> إنهاء الرحلة 🏁</button>
-                     )}
-
-                     {isRequester && ['accepted', 'moving', 'arrived', 'in_progress_trip'].includes(reqStatus) && (
-                       <div className="flex justify-between items-center px-2">
-                         <span className={`text-xs font-bold ${reqStatus === 'arrived' ? 'text-rose-500' : 'text-emerald-500'}`}>
-                           {reqStatus === 'accepted' && 'تمت الموافقة ✅'}
-                           {reqStatus === 'moving' && 'الكابتن في الطريق 🚙'}
-                           {reqStatus === 'arrived' && 'الكابتن بالخارج 📍'}
-                           {reqStatus === 'in_progress_trip' && 'الرحلة جارية 🛣️'}
-                         </span>
-                         <span className="font-mono font-bold text-sm bg-slate-200 dark:bg-slate-700 px-2 py-0.5 rounded">{liveTimer}</span>
-                       </div>
-                     )}
-
-                     {reqStatus === 'completed' && (
-                       <div className="flex flex-col gap-2 animate-fade-in-up">
-                         <div className="text-emerald-600 dark:text-emerald-400 font-bold text-sm flex items-center justify-center gap-1">
-                           <CheckCircle2 size={16}/> تم الإكمال بنجاح
-                         </div>
-                         
-                         {!hasRated ? (
-                           <div className={`p-2 rounded-xl mt-1 ${isDarkMode ? 'bg-slate-700/50' : 'bg-white'}`}>
-                             <p className="text-xs font-bold mb-2">ما تقييمك لـ {chatInfo.otherPersonName} في هذه الرحلة؟</p>
-                             <div className="flex justify-center gap-2" dir="ltr">
-                               {[1, 2, 3, 4, 5].map((star) => (
-                                 <button 
-                                   key={star} 
-                                   onClick={() => submitRating(chatInfo, star)} 
-                                   className="text-slate-300 dark:text-slate-600 hover:text-amber-400 hover:scale-110 transition-all"
-                                 >
-                                   <Star size={28} />
-                                 </button>
-                               ))}
-                             </div>
-                           </div>
-                         ) : (
-                           <div className="text-xs font-bold text-indigo-500 bg-indigo-50 dark:bg-indigo-900/30 p-2 rounded-xl flex items-center justify-center gap-1">
-                             <ThumbsUp size={14}/> شكراً لتقييمك!
-                           </div>
-                         )}
-                       </div>
-                     )}
-                     {reqStatus === 'rejected' && (
-                       <div className="text-rose-500 font-bold text-sm flex items-center justify-center gap-1">
-                         <X size={16}/> تم رفض الطلب
-                       </div>
-                     )}
-                   </div>
-                 );
-               } catch(e) { return null; }
-            })()}
-
-            <div className={`flex-1 overflow-y-auto p-4 space-y-4 ${isDarkMode ? 'bg-slate-900/80' : 'bg-slate-100'} bg-[url('data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHdpZHRoPSI0MCIgaGVpZ2h0PSI0MCI+PGRlZnM+PHBhdHRlcm4gaWQ9InBhdHRlcm4iIHdpZHRoPSI0MCIgaGVpZ2h0PSI0MCIgcGF0dGVyblVuaXRzPSJ1c2VyU3BhY2VPblVzZSI+PHBhdGggZD0iTTAgMGg0MHY0MEgweiIgZmlsbD0ibm9uZSIvPjxjaXJjbGUgY3g9IjIwIiBjeT0iMjAiIHI9IjEiIGZpbGw9InJnYmEoMTU2LCAxNjMsIDE3NSwgMC4yKSIvPjwvcGF0dGVybj48L2RlZnM+PHJlY3Qgd2lkdGg9IjEwMCUiIGhlaWdodD0iMTAwJSIgZmlsbD0idXJsKCNwYXR0ZXJuKSIvPjwvc3ZnPg==')]`}>
-              {messages.map(msg => {
-                const isMe = user && msg.senderId === user.uid;
-                const isAdminMsg = msg.senderId === 'admin';
-                const isSystem = msg.isSystem;
-                
-                if (isSystem) {
-                  return (
-                    <div key={msg.id} className="flex justify-center my-2">
-                      <span className={`text-[10px] font-bold px-3 py-1 rounded-full ${isDarkMode ? 'bg-slate-800 text-slate-300' : 'bg-slate-200 text-slate-600'}`}>{msg.text}</span>
-                    </div>
-                  );
-                }
-
-                return (
-                  <div key={msg.id} className={`flex ${isMe ? 'justify-end' : 'justify-start'}`}>
-                    <div className={`max-w-[85%] p-2.5 rounded-xl text-xs shadow-sm ${isMe ? 'bg-indigo-600 text-white rounded-tl-sm' : (isAdminMsg ? 'bg-rose-100 text-rose-900 border border-rose-200 rounded-tr-sm' : (isDarkMode ? 'bg-slate-800 text-white border border-slate-700 rounded-tr-sm' : 'bg-white border border-slate-200 text-slate-800 rounded-tr-sm'))}`}>
-                      {msg.text}
-                    </div>
-                  </div>
-                )
-              })}
-              <div ref={messagesEndRef} />
-            </div>
-            <div className={`p-4 border-t ${isDarkMode ? 'bg-slate-800 border-slate-700' : 'bg-white border-slate-200'}`}>
-              {activeChat.otherPersonId === 'admin' ? (
-                <div className="text-center text-[10px] font-bold text-slate-400">هذه رسالة إدارية رسمية للمعلومية فقط.</div>
-              ) : (
-                <form onSubmit={handleSendMessage} className="flex gap-2 items-center">
-                  <input type="text" value={newMessage} onChange={(e) => setNewMessage(e.target.value)} placeholder="اكتب رسالة..." className={`flex-1 rounded-xl px-4 py-3 text-[16px] outline-none focus:ring-2 focus:ring-indigo-500 transition-colors ${bgInput}`} />
-                  <button type="submit" disabled={!newMessage.trim()} className="bg-indigo-600 text-white w-12 h-12 flex items-center justify-center rounded-xl hover:bg-indigo-700 disabled:opacity-50 disabled:bg-slate-400 transition-all shadow-md"><Send size={20} className="rtl:rotate-180" /></button>
-                </form>
-              )}
-            </div>
           </div>
-        </div>
-      )}
+         );
+      })()}
 
     </div>
   );
