@@ -1284,7 +1284,7 @@ export default function App() {
                 <button 
                   onClick={() => requireAuth(() => setShowAddModal(true))} 
                   className="inline-flex bg-orange-500 text-white font-black px-6 py-3 rounded-full shadow-lg hover:bg-orange-600 transition-all justify-center items-center gap-2 transform active:scale-95 text-sm w-auto cursor-pointer">
-                    انشر رحلتك أو اطلب دليفري <Car size={18}/>
+                   انشر رحلتك أو اطلب دليفري <Car size={18}/>
                 </button>
               </div>
             </div>
@@ -2025,8 +2025,9 @@ export default function App() {
             </div>
           </div>
          );
-      })}
+      })()}
 
     </div>
   );
 }
+```eof
