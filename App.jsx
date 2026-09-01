@@ -3,7 +3,6 @@ import { initializeApp } from 'firebase/app';
 import { getAuth, createUserWithEmailAndPassword, signInWithEmailAndPassword, signInAnonymously, onAuthStateChanged, updateProfile, signOut, sendPasswordResetEmail } from 'firebase/auth';
 import { getFirestore, collection, onSnapshot, addDoc, deleteDoc, updateDoc, doc, setDoc, getDoc, serverTimestamp } from 'firebase/firestore';
 import { getStorage } from 'firebase/storage';
-import { PushNotifications } from '@capacitor/push-notifications';
 import { MapPin, Navigation, Car, User, MessageCircle, ShieldCheck, X, CheckCircle2, Loader2, Trash2, Send, LogOut, Bell, Phone, Mail, Lock, LogIn, AlertCircle, Settings, Moon, Sun, Info, History, Star, Play, CheckSquare, Megaphone, Clock, ChevronLeft, ChevronDown, Wallet, Sparkles, ArrowRight, Crown, Shield, Image as ImageIcon, Camera, Package, Store, ShoppingBag, Plus, Tag, Map, Flag, ThumbsUp, Save } from 'lucide-react';
 
 const firebaseConfig = {
@@ -154,59 +153,6 @@ export default function App() {
 
   const [carDetails, setCarDetails] = useState({ type: '', color: '', plate: '' });
   const [isEditingProfile, setIsEditingProfile] = useState(false);
-
-  useEffect(() => {
-    // تشغيل الإشعارات للمستخدم المسجل فقط عشان نربط التوكن بحسابه
-    if (!user || isGuest) return;
-
-    const initPushNotifications = async () => {
-      try {
-        // 1. فحص الصلاحية الحالية
-        let permStatus = await PushNotifications.checkPermissions();
-
-        // 2. طلب الصلاحية لو لم تُطلب من قبل
-        if (permStatus.receive === 'prompt') {
-          permStatus = await PushNotifications.requestPermissions();
-        }
-
-        // 3. التأكد من الموافقة
-        if (permStatus.receive !== 'granted') {
-          console.log('User denied push permission');
-          return;
-        }
-
-        // 4. التسجيل في خدمة الإشعارات
-        await PushNotifications.register();
-
-        // 5. استلام التوكن وحفظه في Firebase
-        PushNotifications.addListener('registration', async (token) => {
-          console.log('🔥 Push registration success, token: ' + token.value);
-          
-          try {
-            await updateDoc(doc(db, USERS_COLLECTION, user.uid), { 
-              pushToken: token.value 
-            });
-            console.log('تم حفظ التوكن في قاعدة البيانات بنجاح!');
-          } catch(err) {
-             console.log("خطأ في حفظ التوكن", err);
-          }
-        });
-
-        PushNotifications.addListener('registrationError', (error) => {
-          console.error('Error on registration: ' + JSON.stringify(error));
-        });
-
-        PushNotifications.addListener('pushNotificationReceived', (notification) => {
-          triggerToast(notification.title ? `${notification.title}: ${notification.body}` : 'لديك إشعار جديد!');
-        });
-
-      } catch (e) {
-        console.log('Push notifications not available on web platform');
-      }
-    };
-
-    initPushNotifications();
-  }, [user, isGuest]);
 
   useEffect(() => {
     try {
@@ -1338,7 +1284,7 @@ export default function App() {
                 <button 
                   onClick={() => requireAuth(() => setShowAddModal(true))} 
                   className="inline-flex bg-orange-500 text-white font-black px-6 py-3 rounded-full shadow-lg hover:bg-orange-600 transition-all justify-center items-center gap-2 transform active:scale-95 text-sm w-auto cursor-pointer">
-                   انشر رحلتك أو اطلب دليفري <Car size={18}/>
+                    انشر رحلتك أو اطلب دليفري <Car size={18}/>
                 </button>
               </div>
             </div>
@@ -2079,7 +2025,7 @@ export default function App() {
             </div>
           </div>
          );
-      })()}
+      })}
 
     </div>
   );
