@@ -3,7 +3,8 @@ import { initializeApp } from 'firebase/app';
 import { getAuth, createUserWithEmailAndPassword, signInWithEmailAndPassword, signInAnonymously, onAuthStateChanged, updateProfile, signOut, sendPasswordResetEmail } from 'firebase/auth';
 import { getFirestore, collection, onSnapshot, addDoc, deleteDoc, updateDoc, doc, setDoc, getDoc, serverTimestamp } from 'firebase/firestore';
 import { getStorage } from 'firebase/storage';
-import { MapPin, Navigation, Car, User, MessageCircle, ShieldCheck, X, CheckCircle2, Loader2, Trash2, Send, LogOut, Bell, Phone, Mail, Lock, LogIn, AlertCircle, Settings, Moon, Sun, Info, History, Star, Play, CheckSquare, Megaphone, Clock, ChevronLeft, ChevronDown, Wallet, Sparkles, ArrowRight, Crown, Shield, Image as ImageIcon, Camera, Package, Store, ShoppingBag, Plus, Tag, Map, Flag, ThumbsUp } from 'lucide-react';
+import { PushNotifications } from '@capacitor/push-notifications';
+import { MapPin, Navigation, Car, User, MessageCircle, ShieldCheck, X, CheckCircle2, Loader2, Trash2, Send, LogOut, Bell, Phone, Mail, Lock, LogIn, AlertCircle, Settings, Moon, Sun, Info, History, Star, Play, CheckSquare, Megaphone, Clock, ChevronLeft, ChevronDown, Wallet, Sparkles, ArrowRight, Crown, Shield, Image as ImageIcon, Camera, Package, Store, ShoppingBag, Plus, Tag, Map, Flag, ThumbsUp, Save } from 'lucide-react';
 
 const firebaseConfig = {
   apiKey: "AIzaSyC3JM11miWda_leIk0LPViRNVdSZRCQ8N8",
@@ -23,7 +24,14 @@ const USERS_COLLECTION = 'khodni_maak_users';
 const MARKET_COLLECTION_NAME = 'khodni_maak_market';
 const ADMIN_EMAIL = "bassamwaleed2000@gmail.com".toLowerCase();
 
-const CURRENT_APP_VERSION = "v4.6_splash_screen"; 
+const CURRENT_APP_VERSION = "v5.2_push_final"; 
+
+const EGYPT_CITIES = [
+  "القاهرة", "الجيزة", "الإسكندرية", "القليوبية", "المنوفية", "الغربية", "الدقهلية", 
+  "كفر الشيخ", "البحيرة", "الشرقية", "الإسماعيلية", "بورسعيد", "السويس", "دمياط", 
+  "شمال سيناء", "جنوب سيناء", "البحر الأحمر", "مطروح", "الفيوم", "بني سويف", 
+  "المنيا", "أسيوط", "سوهاج", "قنا", "الأقصر", "أسوان", "الوادي الجديد"
+];
 
 const safeMillis = (timestamp) => {
   if (!timestamp) return 0;
@@ -44,24 +52,14 @@ const resizeAndConvertToBase64 = (file, maxWidth = 1200, maxHeight = 1200, quali
           const canvas = document.createElement('canvas');
           let width = img.width;
           let height = img.height;
-
           if (width > height) {
-            if (width > maxWidth) {
-              height = Math.round((height * maxWidth) / width);
-              width = maxWidth;
-            }
+            if (width > maxWidth) { height = Math.round((height * maxWidth) / width); width = maxWidth; }
           } else {
-            if (height > maxHeight) {
-              width = Math.round((width * maxHeight) / height);
-              height = maxHeight;
-            }
+            if (height > maxHeight) { width = Math.round((width * maxHeight) / height); height = maxHeight; }
           }
-
-          canvas.width = width;
-          canvas.height = height;
+          canvas.width = width; canvas.height = height;
           const ctx = canvas.getContext('2d');
           ctx.drawImage(img, 0, 0, width, height);
-          
           const mimeType = file.type === 'image/png' ? 'image/png' : 'image/jpeg';
           const dataUrl = canvas.toDataURL(mimeType, quality);
           resolve(dataUrl);
@@ -69,9 +67,7 @@ const resizeAndConvertToBase64 = (file, maxWidth = 1200, maxHeight = 1200, quali
         img.onerror = (error) => reject(error);
       };
       reader.onerror = (error) => reject(error);
-    } catch (err) {
-      reject(err);
-    }
+    } catch (err) { reject(err); }
   });
 };
 
@@ -97,12 +93,13 @@ export default function App() {
   const [realTrips, setRealTrips] = useState([]); 
   const [marketItems, setMarketItems] = useState([]); 
   const [filterType, setFilterType] = useState('all');
-  const [searchFrom, setSearchFrom] = useState('');
-  const [searchTo, setSearchTo] = useState('');
+  const [searchFrom, setSearchFrom] = useState('all');
+  const [searchTo, setSearchTo] = useState('all');
   
   const [showAddModal, setShowAddModal] = useState(false);
   const [showAddProductModal, setShowAddProductModal] = useState(false);
   const [showAdminPanel, setShowAdminPanel] = useState(false); 
+  const [showHistoryModal, setShowHistoryModal] = useState(false);
   
   const [showToast, setShowToast] = useState(false);
   const [toastMessage, setToastMessage] = useState('');
@@ -114,12 +111,7 @@ export default function App() {
   const [isUploading, setIsUploading] = useState(false);
   
   const [isDarkMode, setIsDarkMode] = useState(() => {
-    try {
-      const savedTheme = localStorage.getItem('khodnimaak_theme');
-      return savedTheme === 'dark'; 
-    } catch (e) {
-      return false;
-    }
+    try { return localStorage.getItem('khodnimaak_theme') === 'dark'; } catch (e) { return false; }
   });
   
   const [appLogo, setAppLogo] = useState(null); 
@@ -137,6 +129,7 @@ export default function App() {
   const [messages, setMessages] = useState([]);
   const [myInbox, setMyInbox] = useState([]);
   const [newMessage, setNewMessage] = useState('');
+  const [hoveredStar, setHoveredStar] = useState(0);
   const messagesEndRef = useRef(null);
 
   const [newTrip, setNewTrip] = useState({
@@ -157,8 +150,63 @@ export default function App() {
   const notifiedMessages = useRef({});
 
   const [liveTimer, setLiveTimer] = useState('00:00:00');
-  
   const [isLiveTripMinimized, setIsLiveTripMinimized] = useState(false);
+
+  const [carDetails, setCarDetails] = useState({ type: '', color: '', plate: '' });
+  const [isEditingProfile, setIsEditingProfile] = useState(false);
+
+  useEffect(() => {
+    // تشغيل الإشعارات للمستخدم المسجل فقط عشان نربط التوكن بحسابه
+    if (!user || isGuest) return;
+
+    const initPushNotifications = async () => {
+      try {
+        // 1. فحص الصلاحية الحالية
+        let permStatus = await PushNotifications.checkPermissions();
+
+        // 2. طلب الصلاحية لو لم تُطلب من قبل
+        if (permStatus.receive === 'prompt') {
+          permStatus = await PushNotifications.requestPermissions();
+        }
+
+        // 3. التأكد من الموافقة
+        if (permStatus.receive !== 'granted') {
+          console.log('User denied push permission');
+          return;
+        }
+
+        // 4. التسجيل في خدمة الإشعارات
+        await PushNotifications.register();
+
+        // 5. استلام التوكن وحفظه في Firebase
+        PushNotifications.addListener('registration', async (token) => {
+          console.log('🔥 Push registration success, token: ' + token.value);
+          
+          try {
+            await updateDoc(doc(db, USERS_COLLECTION, user.uid), { 
+              pushToken: token.value 
+            });
+            console.log('تم حفظ التوكن في قاعدة البيانات بنجاح!');
+          } catch(err) {
+             console.log("خطأ في حفظ التوكن", err);
+          }
+        });
+
+        PushNotifications.addListener('registrationError', (error) => {
+          console.error('Error on registration: ' + JSON.stringify(error));
+        });
+
+        PushNotifications.addListener('pushNotificationReceived', (notification) => {
+          triggerToast(notification.title ? `${notification.title}: ${notification.body}` : 'لديك إشعار جديد!');
+        });
+
+      } catch (e) {
+        console.log('Push notifications not available on web platform');
+      }
+    };
+
+    initPushNotifications();
+  }, [user, isGuest]);
 
   useEffect(() => {
     try {
@@ -167,38 +215,26 @@ export default function App() {
         localStorage.setItem('khodnimaak_app_version', CURRENT_APP_VERSION);
         window.location.reload();
       }
-    } catch (e) {
-      console.error(e);
-    }
+    } catch (e) {}
   }, []);
 
   useEffect(() => {
-    if (user) {
-      try {
-        window.scrollTo({ top: 0, behavior: 'smooth' });
-      } catch (e) {}
-    }
+    if (user) { try { window.scrollTo({ top: 0, behavior: 'smooth' }); } catch (e) {} }
   }, [user, activeTab]);
 
   useEffect(() => {
     if (!realTrips || !Array.isArray(realTrips)) return;
     try {
       const openTrips = realTrips.filter(t => t?.status === 'open' && t?.userId !== user?.uid);
-      if (openTrips.length === 0) {
-        setShowLiveNotification(false);
-        return;
-      }
+      if (openTrips.length === 0) { setShowLiveNotification(false); return; }
       const notificationCycle = setInterval(() => {
         setNotificationIndex(prev => (prev + 1) % openTrips.length);
         setCurrentNotificationTrip(openTrips[notificationIndex % openTrips.length]);
         setShowLiveNotification(true);
         setTimeout(() => setShowLiveNotification(false), 5000);
       }, 20000); 
-
       return () => clearInterval(notificationCycle);
-    } catch (e) {
-      console.error(e);
-    }
+    } catch (e) {}
   }, [realTrips, user, notificationIndex]);
 
   useEffect(() => {
@@ -210,7 +246,6 @@ export default function App() {
         interval = setInterval(() => {
           const startMillis = safeMillis(activeTrip.tripStartTime);
           const diffSeconds = Math.floor((Date.now() - startMillis) / 1000);
-          
           if (diffSeconds >= 0) {
             const hours = Math.floor(diffSeconds / 3600).toString().padStart(2, '0');
             const minutes = Math.floor((diffSeconds % 3600) / 60).toString().padStart(2, '0');
@@ -219,9 +254,7 @@ export default function App() {
           }
         }, 1000);
       }
-    } catch(e) {
-      console.error(e);
-    }
+    } catch(e) {}
     return () => clearInterval(interval);
   }, [myInbox]);
 
@@ -240,9 +273,7 @@ export default function App() {
               await updateDoc(doc(db, APP_COLLECTION_NAME, trip.id), { status: 'completed' }).catch(()=>{});
             }
           }
-        } catch (e) {
-          console.error(e);
-        }
+        } catch (e) {}
       });
     }, 60000);
     return () => clearInterval(botInterval);
@@ -258,23 +289,19 @@ export default function App() {
           if (data && data.banners && Array.isArray(data.banners)) setBannerImages(data.banners);
           if (data && data.appLogo !== undefined) setAppLogo(data.appLogo); 
         }
-      }, (error) => {
-        console.error(error);
       });
       return () => unsubscribe();
-    } catch (e) {
-      console.error(e);
-    }
+    } catch (e) {}
   }, []);
 
   useEffect(() => {
-    if (!announcements || !Array.isArray(announcements) || announcements.length <= 1) return;
+    if (!announcements || announcements.length <= 1) return;
     const interval = setInterval(() => setCurrentAdIndex((prev) => (prev + 1) % announcements.length), 4000); 
     return () => clearInterval(interval);
   }, [announcements.length]);
 
   useEffect(() => {
-    if (!bannerImages || !Array.isArray(bannerImages) || bannerImages.length <= 1) return;
+    if (!bannerImages || bannerImages.length <= 1) return;
     const interval = setInterval(() => setCurrentBannerIndex((prev) => (prev + 1) % bannerImages.length), 5000); 
     return () => clearInterval(interval);
   }, [bannerImages.length]);
@@ -284,9 +311,7 @@ export default function App() {
       const newTheme = !isDarkMode;
       setIsDarkMode(newTheme);
       localStorage.setItem('khodnimaak_theme', newTheme ? 'dark' : 'light');
-    } catch(e) {
-      console.error(e);
-    }
+    } catch(e) {}
   };
 
   useEffect(() => {
@@ -307,35 +332,28 @@ export default function App() {
             try {
               const userDoc = await getDoc(doc(db, USERS_COLLECTION, currentUser.uid));
               if (userDoc.exists()) {
-                setUserData(userDoc.data());
+                const data = userDoc.data();
+                setUserData(data);
+                if (data.carDetails) setCarDetails(data.carDetails);
               } else {
                 const initialData = { 
                   name: currentUser.displayName || 'مستخدم', 
-                  photoURL: null, 
-                  isVerified: false, 
-                  rating: 0, 
-                  totalRatings: 0, 
+                  photoURL: null, isVerified: false, rating: 0, totalRatings: 0, 
                   email: currentUser.email,
                   phone: currentUser.email && currentUser.email.includes('@khodnimaak.com') ? currentUser.email.split('@')[0] : '',
+                  carDetails: { type: '', color: '', plate: '' },
                   createdAt: Date.now() 
                 };
                 await setDoc(doc(db, USERS_COLLECTION, currentUser.uid), initialData, { merge: true });
                 setUserData(initialData);
               }
-            } catch (e) {
-              console.error("Error user profile", e);
-            }
+            } catch (e) {}
           }
         } else {
-          setUser(null);
-          setUserData(null);
-          setIsGuest(false);
-          setIsAdmin(false);
+          setUser(null); setUserData(null); setIsGuest(false); setIsAdmin(false);
         }
       } catch (e) {
-        console.error(e);
       } finally {
-        // إضافة تأخير بسيط لتجنب وميض شاشة التحميل إذا كان التحميل سريعاً جداً
         setTimeout(() => setLoading(false), 800); 
       }
     });
@@ -350,16 +368,10 @@ export default function App() {
         try {
           const tripsData = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
           setRealTrips(tripsData);
-        } catch(e) {
-          console.error(e);
-        }
-      }, (error) => {
-        console.error(error);
+        } catch(e) {}
       });
       return () => unsubscribe();
-    } catch(e) {
-      console.error(e);
-    }
+    } catch(e) {}
   }, [user]);
 
   useEffect(() => {
@@ -371,16 +383,10 @@ export default function App() {
           const data = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
           data.sort((a, b) => safeMillis(b.createdAt) - safeMillis(a.createdAt));
           setMarketItems(data);
-        } catch(e) {
-          console.error(e);
-        }
-      }, (error) => {
-        console.error(error);
+        } catch(e) {}
       });
       return () => unsubscribe();
-    } catch(e) {
-      console.error(e);
-    }
+    } catch(e) {}
   }, [user]);
 
   useEffect(() => {
@@ -403,9 +409,7 @@ export default function App() {
                 }
               }
             });
-          } else {
-            setTimeout(() => { isInitialInboxLoad.current = false; }, 2000);
-          }
+          } else { setTimeout(() => { isInitialInboxLoad.current = false; }, 2000); }
 
           const inboxData = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
           inboxData.sort((a, b) => safeMillis(b.createdAt) - safeMillis(a.createdAt));
@@ -416,24 +420,16 @@ export default function App() {
              try {
                if (chat.otherPersonId) {
                  const uDoc = await getDoc(doc(db, USERS_COLLECTION, chat.otherPersonId));
-                 if (uDoc.exists()) {
-                   chat.otherPersonVerified = uDoc.data().isVerified || false;
-                 }
+                 if (uDoc.exists()) chat.otherPersonVerified = uDoc.data().isVerified || false;
                }
              } catch(e) {}
              return chat;
           }));
           setMyInbox(enrichedInbox.filter(Boolean));
-        } catch(e) {
-          console.error(e);
-        }
-      }, (error) => {
-        console.error(error);
+        } catch(e) {}
       });
       return () => unsubscribe();
-    } catch(e) {
-      console.error(e);
-    }
+    } catch(e) {}
   }, [user, isGuest]);
 
   useEffect(() => {
@@ -447,21 +443,11 @@ export default function App() {
           const msgsData = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
           msgsData.sort((a, b) => safeMillis(a.createdAt) - safeMillis(b.createdAt));
           setMessages(msgsData);
-          setTimeout(() => {
-            try {
-              messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
-            } catch(e){}
-          }, 100);
-        } catch(e) {
-          console.error(e);
-        }
-      }, (error) => {
-        console.error(error);
+          setTimeout(() => { try { messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' }); } catch(e){} }, 100);
+        } catch(e) {}
       });
       return () => unsubscribe();
-    } catch(e) {
-      console.error(e);
-    }
+    } catch(e) {}
   }, [user, activeChat, isGuest]);
 
   useEffect(() => {
@@ -469,44 +455,41 @@ export default function App() {
     try {
       const usersPath = collection(db, USERS_COLLECTION);
       const unsubscribe = onSnapshot(usersPath, (snapshot) => {
-        try {
-          const uData = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
-          setAllUsers(uData);
-        } catch(e) {
-          console.error(e);
-        }
-      }, (error) => {
-        console.error(error);
+        try { setAllUsers(snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }))); } catch(e) {}
       });
       return () => unsubscribe();
-    } catch(e) {
-      console.error(e);
-    }
+    } catch(e) {}
   }, [user, isAdmin, showAdminPanel]);
 
-  const adminGenerateBotTrip = async () => {
-    const cities = ["القاهرة", "الإسكندرية", "المنصورة", "طنطا", "الزقازيق", "أسيوط", "بورسعيد", "الإسماعيلية"];
-    const names = ["كريم إبراهيم", "منى عبد الله", "إسلام حامد", "هبة عادل", "محمود زكي"];
-    const types = ["offer", "request", "delivery"];
-    
-    const randomFrom = cities[Math.floor(Math.random() * cities.length)];
-    let randomTo = cities[Math.floor(Math.random() * cities.length)];
-    while (randomFrom === randomTo) randomTo = cities[Math.floor(Math.random() * cities.length)];
-    
-    const randomName = names[Math.floor(Math.random() * names.length)];
-    const randomType = types[Math.floor(Math.random() * types.length)];
+  const handleUpdateProfile = async () => {
+    if (!user || isGuest) return;
+    setIsSubmitting(true);
+    try {
+      await updateDoc(doc(db, USERS_COLLECTION, user.uid), { carDetails });
+      setUserData(prev => ({ ...prev, carDetails }));
+      setIsEditingProfile(false);
+      triggerToast('تم تحديث بيانات السيارة بنجاح! 🚗');
+    } catch (e) {
+      setAlertMsg("حدث خطأ أثناء التحديث");
+    } finally {
+      setIsSubmitting(false);
+    }
+  };
 
+  const adminGenerateBotTrip = async () => {
+    const randomFrom = EGYPT_CITIES[Math.floor(Math.random() * EGYPT_CITIES.length)];
+    let randomTo = EGYPT_CITIES[Math.floor(Math.random() * EGYPT_CITIES.length)];
+    while (randomFrom === randomTo) randomTo = EGYPT_CITIES[Math.floor(Math.random() * EGYPT_CITIES.length)];
+    const types = ["offer", "request", "delivery"];
     try {
       await addDoc(collection(db, APP_COLLECTION_NAME), {
-        type: randomType, from: randomFrom, to: randomTo,
+        type: types[Math.floor(Math.random() * types.length)], from: randomFrom, to: randomTo,
         date: new Date().toISOString().split('T')[0], time: new Date().toLocaleTimeString('ar-EG', {hour: '2-digit', minute:'2-digit'}),
-        seats: Math.floor(Math.random() * 3) + 1, cost: "", notes: "", userId: "bot_user_" + Date.now(), userName: randomName, userPhone: "",
+        seats: Math.floor(Math.random() * 3) + 1, cost: "", notes: "", userId: "bot_user_" + Date.now(), userName: "كابتن تجريبي", userPhone: "",
         verified: true, rating: Number((Math.random() * 2 + 3).toFixed(1)), totalRatings: 5, status: "open", isBot: true, createdAt: serverTimestamp()
       });
       triggerToast("تم توليد رحلة عشوائية بنجاح! 🤖");
-    } catch (err) {
-      setAlertMsg("حدث خطأ أثناء توليد الرحلة.");
-    }
+    } catch (err) { setAlertMsg("حدث خطأ أثناء توليد الرحلة."); }
   };
 
   const handleAvatarUpload = async (e) => {
@@ -519,12 +502,7 @@ export default function App() {
       await updateDoc(doc(db, USERS_COLLECTION, user.uid), { photoURL: base64String });
       setUserData(prev => ({...prev, photoURL: base64String}));
       triggerToast('تم تحديث صورتك بنجاح! 📸');
-    } catch (err) {
-      console.error(err);
-      setAlertMsg('عفواً، حدث خطأ، يرجى اختيار صورة أخرى.');
-    } finally {
-      setIsUploading(false);
-    }
+    } catch (err) { setAlertMsg('عفواً، حدث خطأ، يرجى اختيار صورة أخرى.'); } finally { setIsUploading(false); }
   };
 
   const handleProductImageUpload = async (e) => {
@@ -535,9 +513,7 @@ export default function App() {
       const base64String = await resizeAndConvertToBase64(file, 500, 500, 0.7); 
       setNewProduct({...newProduct, image: base64String});
       triggerToast('تمت إضافة الصورة بنجاح!');
-    } catch (err) {
-      setAlertMsg('عفواً، مساحة الصورة كبيرة جداً، حاول بصورة أخرى.');
-    }
+    } catch (err) { setAlertMsg('عفواً، مساحة الصورة كبيرة جداً، حاول بصورة أخرى.'); }
   };
 
   const adminUploadAppLogo = async (e) => {
@@ -548,19 +524,11 @@ export default function App() {
       const base64String = await resizeAndConvertToBase64(file, 200, 200, 0.9); 
       await setDoc(doc(db, 'app_settings', 'announcements'), { appLogo: base64String }, { merge: true });
       triggerToast('تم تحديث لوجو التطبيق بنجاح! 🚀');
-    } catch (err) {
-      console.error(err);
-      setAlertMsg('عفواً، مساحة اللوجو كبيرة جداً، يرجى اختيار صورة أصغر.');
-    }
+    } catch (err) { setAlertMsg('عفواً، مساحة اللوجو كبيرة جداً، يرجى اختيار صورة أصغر.'); }
   };
 
   const adminDeleteAppLogo = async () => {
-    try {
-      await updateDoc(doc(db, 'app_settings', 'announcements'), { appLogo: null });
-      triggerToast('تم حذف اللوجو والعودة للافتراضي.');
-    } catch (e) {
-      setAlertMsg('خطأ في حذف اللوجو.');
-    }
+    try { await updateDoc(doc(db, 'app_settings', 'announcements'), { appLogo: null }); triggerToast('تم حذف اللوجو والعودة للافتراضي.'); } catch (e) {}
   };
 
   const adminUploadBanner = async (e) => {
@@ -572,9 +540,7 @@ export default function App() {
       const newBanners = [...bannerImages, base64String];
       await setDoc(doc(db, 'app_settings', 'announcements'), { banners: newBanners }, { merge: true });
       triggerToast('تمت إضافة صورة البانر بنجاح! 🎨');
-    } catch (err) {
-      setAlertMsg('عفواً، مساحة البانر كبيرة جداً للرفع.');
-    }
+    } catch (err) { setAlertMsg('عفواً، مساحة البانر كبيرة جداً للرفع.'); }
   };
 
   const adminDeleteBanner = async (urlToDelete) => {
@@ -582,9 +548,7 @@ export default function App() {
       const newBanners = bannerImages.filter(b => b !== urlToDelete);
       await setDoc(doc(db, 'app_settings', 'announcements'), { banners: newBanners }, { merge: true });
       triggerToast('تم حذف البانر.');
-    } catch(e) {
-      console.error(e);
-    }
+    } catch(e) {}
   };
 
   const adminAddAnnouncement = async () => {
@@ -592,11 +556,8 @@ export default function App() {
     try {
       const newAdsList = [...announcements, newAdText.trim()];
       await setDoc(doc(db, 'app_settings', 'announcements'), { messages: newAdsList }, { merge: true });
-      setNewAdText('');
-      triggerToast('تمت إضافة الإعلان بنجاح!');
-    } catch(e) {
-      console.error(e);
-    }
+      setNewAdText(''); triggerToast('تمت إضافة الإعلان بنجاح!');
+    } catch(e) {}
   };
 
   const adminDeleteAnnouncement = async (indexToDelete) => {
@@ -605,9 +566,7 @@ export default function App() {
       const newAdsList = announcements.filter((_, i) => i !== indexToDelete);
       await setDoc(doc(db, 'app_settings', 'announcements'), { messages: newAdsList }, { merge: true });
       triggerToast('تم حذف الإعلان.');
-    } catch(e) {
-      console.error(e);
-    }
+    } catch(e) {}
   };
 
   const adminToggleVerification = async (userId, currentStatus) => {
@@ -615,46 +574,28 @@ export default function App() {
       const newStatus = !currentStatus;
       await updateDoc(doc(db, USERS_COLLECTION, userId), { isVerified: newStatus });
       triggerToast(newStatus ? 'تم توثيق الحساب ✅' : 'تم سحب التوثيق ❌');
-
       if (newStatus) {
-        const sysName = "إدارة خدني معاك 👑";
         const chatId = `sys_admin_to_${userId}`;
         const congratsMsg = "مرحباً بك! تم توثيق حسابك بنجاح وحصلت على العلامة الزرقاء. نتمنى لك رحلات آمنة وممتعة! 🎉";
-        await setDoc(doc(db, `inbox_${userId}`, chatId), {
-          chatId: chatId, tripId: 'system', otherPersonId: 'admin', otherPersonName: sysName, lastMessage: congratsMsg, createdAt: serverTimestamp()
-        });
-        await addDoc(collection(db, `chats_${chatId}`), {
-          text: congratsMsg, senderId: 'admin', senderName: sysName, createdAt: serverTimestamp()
-        });
+        await setDoc(doc(db, `inbox_${userId}`, chatId), { chatId: chatId, tripId: 'system', otherPersonId: 'admin', otherPersonName: "إدارة خدني معاك 👑", lastMessage: congratsMsg, createdAt: serverTimestamp() });
+        await addDoc(collection(db, `chats_${chatId}`), { text: congratsMsg, senderId: 'admin', senderName: "إدارة خدني معاك 👑", createdAt: serverTimestamp() });
       }
-    } catch (err) {
-      setAlertMsg("حدث خطأ أثناء تعديل حالة التوثيق");
-    }
+    } catch (err) { setAlertMsg("حدث خطأ أثناء تعديل حالة التوثيق"); }
   };
 
   const adminSendBroadcastMessage = async () => {
     if (!broadcastMsg.trim() || allUsers.length === 0) return;
     setIsSubmitting(true);
     try {
-      const sysName = "إدارة خدني معاك 👑";
       const promises = allUsers.map(async (u) => {
         if(!u || !u.id) return;
         const chatId = `sys_admin_to_${u.id}`; 
-        await setDoc(doc(db, `inbox_${u.id}`, chatId), {
-          chatId: chatId, tripId: 'system', otherPersonId: 'admin', otherPersonName: sysName, lastMessage: broadcastMsg, createdAt: serverTimestamp()
-        });
-        await addDoc(collection(db, `chats_${chatId}`), {
-          text: broadcastMsg, senderId: 'admin', senderName: sysName, createdAt: serverTimestamp()
-        });
+        await setDoc(doc(db, `inbox_${u.id}`, chatId), { chatId: chatId, tripId: 'system', otherPersonId: 'admin', otherPersonName: "إدارة خدني معاك 👑", lastMessage: broadcastMsg, createdAt: serverTimestamp() });
+        await addDoc(collection(db, `chats_${chatId}`), { text: broadcastMsg, senderId: 'admin', senderName: "إدارة خدني معاك 👑", createdAt: serverTimestamp() });
       });
       await Promise.all(promises);
-      setBroadcastMsg('');
-      triggerToast('تم إرسال الإشعار لجميع المستخدمين بنجاح! 🚀');
-    } catch (error) {
-      setAlertMsg('حدث خطأ أثناء إرسال الإشعار.');
-    } finally {
-      setIsSubmitting(false);
-    }
+      setBroadcastMsg(''); triggerToast('تم إرسال الإشعار لجميع المستخدمين بنجاح! 🚀');
+    } catch (error) { setAlertMsg('حدث خطأ أثناء إرسال الإشعار.'); } finally { setIsSubmitting(false); }
   };
 
   const handleAuth = async (e) => {
@@ -662,127 +603,60 @@ export default function App() {
     setAuthLoading(true);
     let identifier = authForm.identifier?.trim() || '';
     let emailForFirebase = identifier.includes('@') ? identifier : `${identifier}@khodnimaak.com`;
-
     try {
-      if (isLoginMode) {
-        await signInWithEmailAndPassword(auth, emailForFirebase, authForm.password);
-      } else {
-        if (!authForm.name || !identifier) {
-          setAuthLoading(false);
-          return setAlertMsg("برجاء إدخال الاسم ورقم الموبايل أو الإيميل");
-        }
+      if (isLoginMode) { await signInWithEmailAndPassword(auth, emailForFirebase, authForm.password); } 
+      else {
+        if (!authForm.name || !identifier) { setAuthLoading(false); return setAlertMsg("برجاء إدخال الاسم ورقم الموبايل أو الإيميل"); }
         const userCred = await createUserWithEmailAndPassword(auth, emailForFirebase, authForm.password);
         await updateProfile(userCred.user, { displayName: authForm.name });
         const phoneToSave = identifier.includes('@') ? '' : identifier;
-        await setDoc(doc(db, USERS_COLLECTION, userCred.user.uid), {
-          phone: phoneToSave, name: authForm.name, email: emailForFirebase, isVerified: false, rating: 0, totalRatings: 0,
-          createdAt: Date.now() 
-        });
+        await setDoc(doc(db, USERS_COLLECTION, userCred.user.uid), { phone: phoneToSave, name: authForm.name, email: emailForFirebase, isVerified: false, rating: 0, totalRatings: 0, carDetails: { type: '', color: '', plate: '' }, createdAt: Date.now() });
       }
-    } catch (error) {
-      setAlertMsg('تأكد من صحة البيانات (الرقم السري 6 أحرف أو أرقام على الأقل).');
-    } finally {
-      setAuthLoading(false);
-    }
+    } catch (error) { setAlertMsg('تأكد من صحة البيانات (الرقم السري 6 أحرف أو أرقام على الأقل).'); } finally { setAuthLoading(false); }
   };
 
   const handleForgotPassword = async (e) => {
     e.preventDefault();
     if (!forgotPassInput?.trim()) return setAlertMsg('برجاء إدخال البريد الإلكتروني أو رقم الموبايل.');
-
     setIsSubmitting(true);
     try {
       if (forgotPassInput.includes('@') && !forgotPassInput.includes('@khodnimaak')) {
         await sendPasswordResetEmail(auth, forgotPassInput.trim());
-        setAlertMsg('تم إرسال رابط استعادة كلمة المرور إلى بريدك الإلكتروني بنجاح.');
-        setShowForgotPass(false);
+        setAlertMsg('تم إرسال رابط استعادة كلمة المرور إلى بريدك الإلكتروني بنجاح.'); setShowForgotPass(false);
       } else {
-        if (!supportPhone?.trim()) {
-           setAlertMsg('برجاء إدخال رقم بديل للتواصل معك واستعادة حسابك.');
-           setIsSubmitting(false);
-           return;
-        }
+        if (!supportPhone?.trim()) { setAlertMsg('برجاء إدخال رقم بديل للتواصل معك واستعادة حسابك.'); setIsSubmitting(false); return; }
         const chatId = `support_${Date.now()}`;
-        const requestMsg = `طلب استعادة حساب لرقم الموبايل: ${forgotPassInput} - الرقم البديل للتواصل: ${supportPhone}`;
-        await setDoc(doc(db, `inbox_admin_support`, chatId), {
-          chatId: chatId, tripId: 'support', otherPersonId: 'system', otherPersonName: 'طلب دعم (استعادة مرور)', lastMessage: requestMsg, createdAt: serverTimestamp()
-        });
-        setAlertMsg('تم إرسال طلب استعادة حسابك للإدارة، سيتم التواصل معك قريباً على الرقم البديل.');
-        setShowForgotPass(false);
+        await setDoc(doc(db, `inbox_admin_support`, chatId), { chatId: chatId, tripId: 'support', otherPersonId: 'system', otherPersonName: 'طلب دعم (استعادة مرور)', lastMessage: `طلب استعادة حساب: ${forgotPassInput} - بديل: ${supportPhone}`, createdAt: serverTimestamp() });
+        setAlertMsg('تم إرسال طلب استعادة حسابك للإدارة، سيتم التواصل معك قريباً.'); setShowForgotPass(false);
       }
-    } catch (error) {
-      setAlertMsg('حدث خطأ، يرجى التأكد من البيانات أو المحاولة لاحقاً.');
-    } finally {
-      setIsSubmitting(false);
-    }
+    } catch (error) { setAlertMsg('حدث خطأ، يرجى التأكد من البيانات أو المحاولة لاحقاً.'); } finally { setIsSubmitting(false); }
   };
 
-  const handleGuestLogin = async () => {
-    setAuthLoading(true);
-    try {
-      await signInAnonymously(auth);
-    } catch (error) {
-      setAlertMsg("حدث خطأ أثناء الدخول كزائر");
-    } finally {
-      setAuthLoading(false);
-    }
-  };
+  const handleGuestLogin = async () => { setAuthLoading(true); try { await signInAnonymously(auth); } catch (error) { setAlertMsg("حدث خطأ"); } finally { setAuthLoading(false); } };
 
-  const handleLogout = async () => {
-    try {
-      await signOut(auth);
-      setActiveTab('trips');
-      setAuthForm({ name: '', identifier: '', password: '' });
-    } catch(e) {
-      console.error(e);
-    }
-  };
+  const handleLogout = async () => { try { await signOut(auth); setActiveTab('trips'); setAuthForm({ name: '', identifier: '', password: '' }); } catch(e) {} };
 
-  const requireAuth = (actionCallback) => {
-    try {
-      if (isGuest || !user) {
-        setShowAuthPrompt(true);
-      } else if (typeof actionCallback === 'function') {
-        actionCallback();
-      }
-    } catch(e) {
-      console.error(e);
-    }
-  };
+  const requireAuth = (actionCallback) => { try { if (isGuest || !user) { setShowAuthPrompt(true); } else if (typeof actionCallback === 'function') { actionCallback(); } } catch(e) {} };
 
-  const triggerToast = (msg) => {
-    setToastMessage(msg);
-    setShowToast(true);
-    setTimeout(() => setShowToast(false), 3000);
-  };
+  const triggerToast = (msg) => { setToastMessage(msg); setShowToast(true); setTimeout(() => setShowToast(false), 3000); };
 
   const handleAddTrip = async (e) => {
     e.preventDefault();
     if (!user) return;
+    if(!newTrip.from || !newTrip.to) return setAlertMsg("برجاء اختيار محافظة التحرك والوصول.");
     setIsSubmitting(true);
     try {
       await addDoc(collection(db, APP_COLLECTION_NAME), {
         ...newTrip,
-        userId: user.uid,
-        userName: userData?.name || user.displayName || 'مستخدم',
-        userPhoto: userData?.photoURL || null,
-        userPhone: userData?.phone || '',
-        verified: userData?.isVerified || false,
-        rating: userData?.rating || 0,
-        totalRatings: userData?.totalRatings || 0,
-        userCreatedAt: userData?.createdAt || Date.now(), 
-        status: 'open', 
-        createdAt: serverTimestamp()
+        userId: user.uid, userName: userData?.name || user.displayName || 'مستخدم', userPhoto: userData?.photoURL || null, userPhone: userData?.phone || '',
+        verified: userData?.isVerified || false, rating: userData?.rating || 0, totalRatings: userData?.totalRatings || 0,
+        carDetails: userData?.carDetails || null,
+        userCreatedAt: userData?.createdAt || Date.now(), status: 'open', createdAt: serverTimestamp()
       });
-      setShowAddModal(false);
-      triggerToast('تم نشر الطلب/الرحلة بنجاح!');
+      setShowAddModal(false); triggerToast('تم نشر الطلب/الرحلة بنجاح!');
       setNewTrip({ type: 'request', from: '', to: '', date: '', time: '', seats: 1, cost: '', notes: '' });
       setActiveTab('trips');
-    } catch (error) {
-      setAlertMsg('حدث خطأ أثناء النشر.');
-    } finally {
-      setIsSubmitting(false);
-    }
+    } catch (error) { setAlertMsg('حدث خطأ أثناء النشر.'); } finally { setIsSubmitting(false); }
   };
 
   const handleAddProduct = async (e) => {
@@ -792,40 +666,39 @@ export default function App() {
     setIsSubmitting(true);
     try {
       await addDoc(collection(db, MARKET_COLLECTION_NAME), {
-        ...newProduct,
-        userId: user.uid,
-        userName: userData?.name || user.displayName || 'مستخدم',
-        userPhoto: userData?.photoURL || null,
-        userPhone: userData?.phone || '',
-        verified: userData?.isVerified || false,
-        status: 'available', 
-        createdAt: serverTimestamp()
+        ...newProduct, userId: user.uid, userName: userData?.name || user.displayName || 'مستخدم', userPhoto: userData?.photoURL || null, userPhone: userData?.phone || '', verified: userData?.isVerified || false, status: 'available', createdAt: serverTimestamp()
       });
-      setShowAddProductModal(false);
-      triggerToast('تم عرض المنتج في السوق بنجاح! 🛒');
-      setNewProduct({ title: '', price: '', desc: '', image: null });
-      setActiveTab('market');
-    } catch (error) {
-      setAlertMsg('حدث خطأ أثناء عرض المنتج.');
-    } finally {
-      setIsSubmitting(false);
-    }
+      setShowAddProductModal(false); triggerToast('تمت إضافة المنتج في السوق بنجاح! 🛒');
+      setNewProduct({ title: '', price: '', desc: '', image: null }); setActiveTab('market');
+    } catch (error) { setAlertMsg('حدث خطأ أثناء عرض المنتج.'); } finally { setIsSubmitting(false); }
   };
 
   const confirmDelete = async () => {
     if(!deleteConfirmId) return;
     try {
-      if(deleteType === 'trip') {
-        await deleteDoc(doc(db, APP_COLLECTION_NAME, deleteConfirmId));
-        triggerToast('تم حذف الرحلة بنجاح.');
-      } else {
-        await deleteDoc(doc(db, MARKET_COLLECTION_NAME, deleteConfirmId));
-        triggerToast('تم حذف المنتج بنجاح.');
+      if(deleteType === 'trip') { await deleteDoc(doc(db, APP_COLLECTION_NAME, deleteConfirmId)); triggerToast('تم حذف الرحلة بنجاح.'); } 
+      else { await deleteDoc(doc(db, MARKET_COLLECTION_NAME, deleteConfirmId)); triggerToast('تم حذف المنتج بنجاح.'); }
+    } catch (error) { setAlertMsg('حدث خطأ أثناء الحذف.'); } finally { setDeleteConfirmId(null); }
+  };
+
+  const handleCancelTripOwner = async (tripId) => {
+    if (!user) return;
+    try {
+      await updateDoc(doc(db, APP_COLLECTION_NAME, tripId), { status: 'cancelled' });
+      const relatedChats = myInbox.filter(c => c.tripId === tripId);
+      for (const chat of relatedChats) {
+        const chatId = chat.chatId;
+        const systemText = 'تنبيه: قام صاحب الإعلان بإلغاء الرحلة لظروف طارئة 🚫';
+        const updateData = { requestStatus: 'cancelled', lastMessage: systemText, lastSenderId: user.uid, lastMessageTime: Date.now() };
+        await setDoc(doc(db, `inbox_${user.uid}`, chatId), updateData, { merge: true });
+        if (chat.otherPersonId) {
+          await setDoc(doc(db, `inbox_${chat.otherPersonId}`, chatId), updateData, { merge: true });
+        }
+        await addDoc(collection(db, `chats_${chatId}`), { text: systemText, senderId: 'system', isSystem: true, createdAt: serverTimestamp() });
       }
-    } catch (error) {
-      setAlertMsg('حدث خطأ أثناء الحذف.');
-    } finally {
-      setDeleteConfirmId(null);
+      triggerToast('تم إلغاء الرحلة وإشعار الركاب.');
+    } catch (e) {
+      setAlertMsg("حدث خطأ أثناء إلغاء الرحلة.");
     }
   };
 
@@ -835,48 +708,19 @@ export default function App() {
     try {
       const chatId = activeChat.chatId;
       if(!chatId) return;
-      
       const currentTime = Date.now();
-      const msgData = {
-        text: newMessage, senderId: user.uid, senderName: userData?.name || user.displayName || 'مستخدم', createdAt: serverTimestamp()
-      };
+      await addDoc(collection(db, `chats_${chatId}`), { text: newMessage, senderId: user.uid, senderName: userData?.name || user.displayName || 'مستخدم', createdAt: serverTimestamp() });
       
-      await addDoc(collection(db, `chats_${chatId}`), msgData);
-      
-      const otherPhoto = activeChat.otherPersonPhoto || null;
-      const myPhoto = userData?.photoURL || null;
-
       const inboxPayload = {
-        chatId, 
-        tripId: activeChat.tripId || '', 
-        tripType: activeChat.tripType || 'offer', 
-        tripOwnerId: activeChat.tripOwnerId || '', 
-        otherPersonId: activeChat.otherPersonId || '', 
-        otherPersonName: activeChat.otherPersonName || 'مستخدم', 
-        otherPersonPhoto: otherPhoto, 
-        otherPersonVerified: activeChat.otherPersonVerified || false, 
-        lastMessage: newMessage, 
-        lastSenderId: user.uid, 
-        lastMessageTime: currentTime, 
-        createdAt: serverTimestamp()
+        chatId, tripId: activeChat.tripId || '', tripType: activeChat.tripType || 'offer', tripOwnerId: activeChat.tripOwnerId || '', otherPersonId: activeChat.otherPersonId || '', otherPersonName: activeChat.otherPersonName || 'مستخدم', otherPersonPhoto: activeChat.otherPersonPhoto || null, otherPersonVerified: activeChat.otherPersonVerified || false, tripInfo: activeChat.tripInfo || '', lastMessage: newMessage, lastSenderId: user.uid, lastMessageTime: currentTime, createdAt: serverTimestamp()
       };
 
       await setDoc(doc(db, `inbox_${user.uid}`, chatId), inboxPayload, { merge: true });
-      
       if (activeChat.otherPersonId) {
-        await setDoc(doc(db, `inbox_${activeChat.otherPersonId}`, chatId), {
-          ...inboxPayload,
-          otherPersonId: user.uid,
-          otherPersonName: userData?.name || user.displayName || 'مستخدم',
-          otherPersonPhoto: myPhoto,
-          otherPersonVerified: userData?.isVerified || false
-        }, { merge: true });
+        await setDoc(doc(db, `inbox_${activeChat.otherPersonId}`, chatId), { ...inboxPayload, otherPersonId: user.uid, otherPersonName: userData?.name || user.displayName || 'مستخدم', otherPersonPhoto: userData?.photoURL || null, otherPersonVerified: userData?.isVerified || false }, { merge: true });
       }
-      
       setNewMessage('');
-    } catch (error) {
-      console.error(error);
-    }
+    } catch (error) {}
   };
 
   const handleTripAction = async (actionType, targetChat = activeChat) => {
@@ -884,94 +728,46 @@ export default function App() {
     try {
       const chatId = targetChat.chatId;
       if(!chatId) return;
-      let newStatus = '';
-      let systemText = '';
+      let newStatus = ''; let systemText = '';
 
-      if (actionType === 'request') {
-        newStatus = 'pending';
-        systemText = 'قام بإرسال طلب انضمام للرحلة 🙋‍♂️';
-      } else if (actionType === 'cancel_request') {
-        newStatus = 'none';
-        systemText = 'قام بإلغاء الطلب 🔙';
-      } else if (actionType === 'accept') {
-        newStatus = 'accepted';
-        systemText = 'تم قبول طلبك! سيتم التواصل معك للتحرك 🚗';
-      } else if (actionType === 'reject') {
-        newStatus = 'rejected';
-        systemText = 'عذراً، تم رفض الطلب ❌';
-      } else if (actionType === 'start_moving') {
-        newStatus = 'moving';
-        systemText = 'تنبيه: الكابتن في الطريق إليك الآن 🚙';
-      } else if (actionType === 'arrive') {
-        newStatus = 'arrived';
-        systemText = 'تنبيه: الكابتن وصل إلى نقطة اللقاء 📍';
-      } else if (actionType === 'start_trip') {
-        newStatus = 'in_progress_trip';
-        systemText = 'بدأت الرحلة.. نتمنى لكم طريقاً آمناً 🛣️';
-      } else if (actionType === 'complete') {
-        newStatus = 'completed';
-        systemText = 'تم إنهاء العملية بنجاح! نتمنى لك يوماً سعيداً ✅';
-        
-        if (targetChat.tripId && targetChat.tripId !== 'system') {
-           try {
-             await updateDoc(doc(db, APP_COLLECTION_NAME, targetChat.tripId), { status: 'completed' });
-           } catch(err) {
-             console.error("خطأ في تحديث الرحلة بالخارج", err);
-           }
-        }
+      if (actionType === 'request') { newStatus = 'pending'; systemText = 'قام بإرسال طلب انضمام للرحلة 🙋‍♂️'; } 
+      else if (actionType === 'cancel_request') { newStatus = 'none'; systemText = 'قام بإلغاء الطلب 🔙'; } 
+      else if (actionType === 'accept') { newStatus = 'accepted'; systemText = 'تم قبول طلبك! سيتم التواصل معك للتحرك 🚗'; } 
+      else if (actionType === 'reject') { newStatus = 'rejected'; systemText = 'عذراً، تم رفض الطلب ❌'; } 
+      else if (actionType === 'start_moving') { newStatus = 'moving'; systemText = 'تنبيه: الكابتن في الطريق إليك الآن 🚙'; } 
+      else if (actionType === 'arrive') { newStatus = 'arrived'; systemText = 'تنبيه: الكابتن وصل إلى نقطة اللقاء 📍'; } 
+      else if (actionType === 'start_trip') { newStatus = 'in_progress_trip'; systemText = 'بدأت الرحلة.. نتمنى لكم طريقاً آمناً 🛣️'; } 
+      else if (actionType === 'complete') {
+        newStatus = 'completed'; systemText = 'تم إنهاء العملية بنجاح! نتمنى لك يوماً سعيداً ✅';
+        if (targetChat.tripId && targetChat.tripId !== 'system') { try { await updateDoc(doc(db, APP_COLLECTION_NAME, targetChat.tripId), { status: 'completed' }); } catch(err) {} }
       }
 
-      const updateData = { 
-        requestStatus: newStatus,
-        lastMessage: systemText,
-        lastSenderId: user.uid,
-        lastMessageTime: Date.now()
-      };
-
-      if (actionType === 'request') {
-        updateData.requestSenderId = user.uid;
-      }
-      if (actionType === 'accept') {
-        updateData.tripStartTime = serverTimestamp(); 
-      }
+      const updateData = { requestStatus: newStatus, lastMessage: systemText, lastSenderId: user.uid, lastMessageTime: Date.now() };
+      if (actionType === 'request') { updateData.requestSenderId = user.uid; }
+      if (actionType === 'accept') { updateData.tripStartTime = serverTimestamp(); }
       
       await setDoc(doc(db, `inbox_${user.uid}`, chatId), updateData, { merge: true });
-      if (targetChat.otherPersonId) {
-        await setDoc(doc(db, `inbox_${targetChat.otherPersonId}`, chatId), updateData, { merge: true });
-      }
-      
-      await addDoc(collection(db, `chats_${chatId}`), {
-        text: systemText, senderId: 'system', isSystem: true, createdAt: serverTimestamp()
-      });
-      
+      if (targetChat.otherPersonId) { await setDoc(doc(db, `inbox_${targetChat.otherPersonId}`, chatId), updateData, { merge: true }); }
+      await addDoc(collection(db, `chats_${chatId}`), { text: systemText, senderId: 'system', isSystem: true, createdAt: serverTimestamp() });
       triggerToast('تم تحديث حالة الرحلة.');
-    } catch (error) {
-      setAlertMsg('حدث خطأ أثناء التحديث.');
-    }
+    } catch (error) { setAlertMsg('حدث خطأ أثناء التحديث.'); }
   };
 
   const submitRating = async (chatInfo, score) => {
     try {
       await setDoc(doc(db, `inbox_${user.uid}`, chatInfo.chatId), { [`rated_${chatInfo.tripId}`]: true }, { merge: true });
-      
       const otherUserRef = doc(db, USERS_COLLECTION, chatInfo.otherPersonId);
       const otherUserSnap = await getDoc(otherUserRef);
       if (otherUserSnap.exists()) {
         const uData = otherUserSnap.data();
-        
         const oldTotal = Number(uData.totalRatings) || 0;
         const oldRating = Number(uData.rating) || 0;
-        
         const newTotal = oldTotal + 1;
         const newRating = Number((((oldRating * oldTotal) + score) / newTotal).toFixed(1));
-        
         await updateDoc(otherUserRef, { rating: newRating, totalRatings: newTotal });
       }
       triggerToast('تم إرسال التقييم بنجاح! شكراً لك ⭐');
-    } catch(e) {
-      console.error(e);
-      setAlertMsg("حدث خطأ أثناء إرسال التقييم.");
-    }
+    } catch(e) { setAlertMsg("حدث خطأ أثناء إرسال التقييم."); }
   };
 
   const openChatFromTrip = async (trip) => {
@@ -982,79 +778,43 @@ export default function App() {
       
       requireAuth(() => {
         if (!user || !user.uid) return;
-        
         const user1 = user.uid < trip.userId ? user.uid : trip.userId;
         const user2 = user.uid < trip.userId ? trip.userId : user.uid;
         const chatId = `${trip.id}_${user1}_${user2}`;
         
-        const chatData = {
-          chatId: chatId, 
-          tripId: trip.id, 
-          tripType: trip.type || 'offer', 
-          tripOwnerId: trip.userId, 
-          otherPersonId: trip.userId, 
-          otherPersonName: trip.userName || 'مستخدم', 
-          otherPersonPhoto: trip.userPhoto || null, 
-          otherPersonVerified: trip.verified || false, 
-          tripInfo: `${trip.from || ''} ➔ ${trip.to || ''}`
-        };
+        const tripRouteName = `${trip.from || ''} ➔ ${trip.to || ''}`;
 
+        const chatData = { chatId: chatId, tripId: trip.id, tripType: trip.type || 'offer', tripOwnerId: trip.userId, otherPersonId: trip.userId, otherPersonName: trip.userName || 'مستخدم', otherPersonPhoto: trip.userPhoto || null, otherPersonVerified: trip.verified || false, tripInfo: tripRouteName };
         setActiveChat(chatData);
         
-        const inboxMe = {
-          chatId: chatId, 
-          tripId: trip.id, 
-          tripType: trip.type || 'offer', 
-          tripOwnerId: trip.userId, 
-          otherPersonId: trip.userId, 
-          otherPersonName: trip.userName || 'مستخدم', 
-          otherPersonPhoto: trip.userPhoto || null, 
-          otherPersonVerified: trip.verified || false, 
-          createdAt: serverTimestamp()
-        };
+        const inboxMe = { ...chatData, createdAt: serverTimestamp() };
+        const inboxOther = { chatId: chatId, tripId: trip.id, tripType: trip.type || 'offer', tripOwnerId: trip.userId, otherPersonId: user.uid, otherPersonName: userData?.name || 'مستخدم', otherPersonPhoto: userData?.photoURL || null, otherPersonVerified: userData?.isVerified || false, tripInfo: tripRouteName, createdAt: serverTimestamp() };
 
-        const inboxOther = {
-          chatId: chatId, 
-          tripId: trip.id, 
-          tripType: trip.type || 'offer', 
-          tripOwnerId: trip.userId, 
-          otherPersonId: user.uid, 
-          otherPersonName: userData?.name || 'مستخدم', 
-          otherPersonPhoto: userData?.photoURL || null, 
-          otherPersonVerified: userData?.isVerified || false, 
-          createdAt: serverTimestamp()
-        };
-
-        setDoc(doc(db, `inbox_${user.uid}`, chatId), inboxMe, { merge: true }).catch(e => console.error(e));
-        setDoc(doc(db, `inbox_${trip.userId}`, chatId), inboxOther, { merge: true }).catch(e => console.error(e));
+        setDoc(doc(db, `inbox_${user.uid}`, chatId), inboxMe, { merge: true }).catch(e => {});
+        setDoc(doc(db, `inbox_${trip.userId}`, chatId), inboxOther, { merge: true }).catch(e => {});
       });
-    } catch (e) {
-      console.error(e);
-    }
+    } catch (e) {}
   };
 
   const openChatFromProduct = async (product) => {
     try {
-      if (!product || !product.userId) return setAlertMsg('حدث خطأ، لا يمكن التواصل مع البائع.');
+      if (!product || !product.userId) return setAlertMsg('حدث خطأ.');
       requireAuth(() => {
         if (!user || !user.uid) return;
-        
         const user1 = user.uid < product.userId ? user.uid : product.userId;
         const user2 = user.uid < product.userId ? product.userId : user.uid;
         const chatId = `${product.id}_${user1}_${user2}`;
-        
-        setActiveChat({
-          chatId: chatId, tripId: product.id, tripType: 'market', tripOwnerId: product.userId, otherPersonId: product.userId, otherPersonName: product.userName || 'مستخدم', otherPersonPhoto: product.userPhoto || null, otherPersonVerified: product.verified || false, tripInfo: `مهتم بشراء: ${product.title || ''}`
-        });
+        setActiveChat({ chatId: chatId, tripId: product.id, tripType: 'market', tripOwnerId: product.userId, otherPersonId: product.userId, otherPersonName: product.userName || 'مستخدم', otherPersonPhoto: product.userPhoto || null, otherPersonVerified: product.verified || false, tripInfo: `مهتم بشراء: ${product.title || ''}` });
       });
-    } catch(e) {
-      console.error(e);
-    }
+    } catch(e) {}
   };
 
-  const filteredTrips = Array.isArray(realTrips) ? realTrips.filter(t => t && (filterType === 'all' || t.type === filterType) && ((t.from || '').includes(searchFrom) && (t.to || '').includes(searchTo))) : [];
+  const filteredTrips = Array.isArray(realTrips) ? realTrips.filter(t => t && (filterType === 'all' || t.type === filterType) && (searchFrom === 'all' || t.from === searchFrom) && (searchTo === 'all' || t.to === searchTo) && t.status !== 'cancelled') : [];
   filteredTrips.sort((a, b) => safeMillis(b.createdAt) - safeMillis(a.createdAt));
   
+  const myHistoryTrips = Array.isArray(realTrips) ? realTrips.filter(t => t && t.userId === user?.uid && (t.status === 'completed' || t.status === 'cancelled')) : [];
+  myHistoryTrips.sort((a, b) => safeMillis(b.createdAt) - safeMillis(a.createdAt));
+
   const priorityLiveTrip = Array.isArray(myInbox) ? (
     myInbox.find(c => c?.requestStatus === 'in_progress_trip') ||
     myInbox.find(c => c?.requestStatus === 'arrived') || 
@@ -1063,19 +823,11 @@ export default function App() {
     myInbox.find(c => c?.requestStatus === 'pending')
   ) : null;
 
-  useEffect(() => {
-    if (!priorityLiveTrip) {
-      setIsLiveTripMinimized(false);
-    }
-  }, [priorityLiveTrip]);
+  useEffect(() => { if (!priorityLiveTrip) setIsLiveTripMinimized(false); }, [priorityLiveTrip]);
 
   const renderStars = (rating = 0, total = 0, userCreatedAtMillis = null) => {
     const isNewUser = total === 0 && (userCreatedAtMillis && (Date.now() - userCreatedAtMillis < 86400000));
-    
-    if (isNewUser) {
-      return <span className="text-[9px] text-slate-400 font-bold bg-slate-100 dark:bg-slate-700 px-1.5 py-0.5 rounded">مستخدم جديد ✨</span>;
-    }
-
+    if (isNewUser) return <span className="text-[9px] text-slate-400 font-bold bg-slate-100 dark:bg-slate-700 px-1.5 py-0.5 rounded">مستخدم جديد ✨</span>;
     const numRating = Number(rating) || 0;
     const fullStars = Math.floor(numRating);
     const hasHalfStar = numRating % 1 !== 0;
@@ -1099,16 +851,11 @@ export default function App() {
   const textPrimary = isDarkMode ? 'text-white' : 'text-slate-800';
   const textSecondary = isDarkMode ? 'text-slate-400' : 'text-slate-500';
 
-  // --- شاشة التحميل (Splash Screen) الجديدة والاحترافية ---
   if (loading) {
     return (
       <div className={`fixed inset-0 flex flex-col items-center justify-center transition-colors duration-500 z-[9999] ${isDarkMode ? 'bg-slate-900' : 'bg-indigo-600'}`}>
         <div className="relative flex flex-col items-center animate-fade-in-up">
-          
-          {/* تأثير النبض للخلفية */}
           <div className="absolute inset-0 bg-white/20 rounded-full blur-2xl animate-pulse w-32 h-32 -z-10"></div>
-          
-          {/* الأيقونة أو اللوجو */}
           {appLogo ? (
             <img src={appLogo} alt="Logo" className="w-24 h-24 object-contain drop-shadow-2xl mb-6 animate-bounce" style={{ animationDuration: '2s' }} />
           ) : (
@@ -1116,31 +863,13 @@ export default function App() {
               <Car size={48} className="transform -rotate-12" />
             </div>
           )}
-          
-          {/* اسم التطبيق */}
-          <h1 className="text-4xl font-black text-white tracking-tight drop-shadow-md mb-2">
-            خدني معاك
-          </h1>
-          
-          {/* شعار أو جملة ترحيبية */}
-          <p className="text-indigo-100/80 font-medium text-sm tracking-wide">
-            رفيق دربك.. أينما كنت
-          </p>
-
-          {/* شريط تحميل صغير */}
+          <h1 className="text-4xl font-black text-white tracking-tight drop-shadow-md mb-2">خدني معاك</h1>
+          <p className="text-indigo-100/80 font-medium text-sm tracking-wide">رفيق دربك.. أينما كنت</p>
           <div className="mt-12 w-32 h-1.5 bg-indigo-900/40 rounded-full overflow-hidden">
             <div className="w-1/2 h-full bg-white rounded-full animate-[ping-pong_1.5s_ease-in-out_infinite]"></div>
           </div>
-          
         </div>
-        
-        {/* ستايل مخصص لحركة شريط التحميل */}
-        <style dangerouslySetInnerHTML={{__html: `
-          @keyframes ping-pong {
-            0% { transform: translateX(-100%); }
-            100% { transform: translateX(200%); }
-          }
-        `}} />
+        <style dangerouslySetInnerHTML={{__html: `@keyframes ping-pong { 0% { transform: translateX(-100%); } 100% { transform: translateX(200%); } }`}} />
       </div>
     );
   }
@@ -1251,7 +980,6 @@ export default function App() {
   return (
     <div dir="rtl" className={`min-h-screen flex flex-col relative transition-colors duration-300 ${bgMain} overflow-x-hidden w-full pb-20`}>
       
-      {/* إشعار الشات الذكي المنبثق */}
       {chatNotification && (!activeChat || activeChat.chatId !== chatNotification.chatId) && (
         <div 
            className="fixed top-20 left-1/2 transform -translate-x-1/2 z-[150] w-11/12 max-w-sm animate-fade-in-down cursor-pointer"
@@ -1383,10 +1111,52 @@ export default function App() {
         <div className="fixed inset-0 bg-slate-900/70 backdrop-blur-sm z-[250] flex justify-center items-center p-4">
           <div className={`${bgModal} rounded-3xl p-6 max-w-sm w-full text-center shadow-2xl`}>
             <div className="bg-rose-100 w-16 h-16 rounded-full flex items-center justify-center mx-auto mb-4"><Trash2 size={30} className="text-rose-600" /></div>
-            <p className="font-bold text-lg mb-6">هل أنت متأكد من الحذف نهائياً؟</p>
+            <p className="font-bold text-lg mb-6">{deleteType === 'trip' ? 'هل أنت متأكد من حذف الرحلة؟' : 'هل أنت متأكد من الحذف؟'}</p>
             <div className="flex gap-3">
               <button onClick={() => setDeleteConfirmId(null)} className={`flex-1 py-3 rounded-xl font-bold ${isDarkMode ? 'bg-slate-700' : 'bg-slate-100'}`}>إلغاء</button>
               <button onClick={confirmDelete} className="flex-1 bg-rose-600 text-white py-3 rounded-xl font-bold hover:bg-rose-700">نعم، احذف</button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {showHistoryModal && (
+        <div className="fixed inset-0 bg-slate-900/80 backdrop-blur-md z-[200] flex justify-center items-center p-4">
+          <div className={`${bgModal} rounded-3xl w-full max-w-md h-[80vh] shadow-2xl border flex flex-col ${isDarkMode ? 'border-slate-700' : 'border-slate-200'} animate-fade-in-up`}>
+            <div className={`p-5 border-b flex justify-between items-center ${isDarkMode ? 'bg-slate-800' : 'bg-slate-50'} rounded-t-3xl`}>
+              <h2 className="text-lg font-black flex items-center gap-2"><History className="text-indigo-500" /> سجل رحلاتي</h2>
+              <button onClick={() => setShowHistoryModal(false)} className="p-1.5 hover:bg-rose-50 hover:text-rose-500 text-slate-400 rounded-full transition-colors"><X size={20} /></button>
+            </div>
+            <div className="flex-1 overflow-y-auto p-4 space-y-3 custom-scrollbar">
+              {myHistoryTrips.length === 0 ? (
+                <div className="text-center py-20 text-slate-400">
+                  <History size={40} className="mx-auto mb-3 opacity-50"/>
+                  <p>لا يوجد رحلات سابقة في سجلك.</p>
+                </div>
+              ) : (
+                myHistoryTrips.map(trip => (
+                  <div key={trip.id} className={`p-4 rounded-2xl border ${trip.status === 'cancelled' ? 'border-rose-200 bg-rose-50 dark:bg-rose-900/20 dark:border-rose-800' : (isDarkMode ? 'bg-slate-700/50 border-slate-600' : 'bg-white border-slate-200')}`}>
+                    <div className="flex justify-between items-center mb-2">
+                      <span className={`text-[10px] font-bold px-2 py-0.5 rounded border ${trip.type === 'offer' ? 'bg-emerald-600 text-white border-emerald-700' : trip.type === 'delivery' ? 'bg-purple-600 text-white' : 'bg-orange-500 text-white'}`}>
+                        {trip.type === 'offer' ? 'سائق' : trip.type === 'delivery' ? 'دليفري' : 'راكب'}
+                      </span>
+                      <span className={`text-[10px] font-bold ${trip.status === 'cancelled' ? 'text-rose-500' : 'text-slate-500'}`}>
+                        {trip.status === 'cancelled' ? 'ملغية 🚫' : 'مكتملة ✅'}
+                      </span>
+                    </div>
+                    <div className="flex items-center gap-2 text-sm font-bold mt-2">
+                      <MapPin size={14} className="text-indigo-500"/> {trip.from}
+                    </div>
+                    <div className="flex items-center gap-2 text-sm font-bold mt-1">
+                      <Navigation size={14} className="text-rose-500"/> {trip.to}
+                    </div>
+                    <div className="text-[10px] text-slate-500 mt-2 flex justify-between">
+                      <span>{trip.date}</span>
+                      <span>{new Date(safeMillis(trip.createdAt)).toLocaleDateString('ar-EG')}</span>
+                    </div>
+                  </div>
+                ))
+              )}
             </div>
           </div>
         </div>
@@ -1400,7 +1170,7 @@ export default function App() {
               <button onClick={() => setShowAdminPanel(false)} className="p-2 hover:bg-white/20 rounded-full transition-colors"><X size={20} /></button>
             </div>
             
-            <div className={`flex-1 overflow-y-auto p-6 space-y-8 ${isDarkMode ? 'bg-slate-900' : 'bg-slate-50'}`}>
+            <div className={`flex-1 overflow-y-auto p-6 space-y-8 ${isDarkMode ? 'bg-slate-900' : 'bg-slate-50'} custom-scrollbar`}>
               <div className={`p-5 rounded-2xl border ${bgCard}`}>
                 <h3 className="font-bold text-lg mb-4 flex items-center gap-2"><ImageIcon size={18} className="text-indigo-500"/> إدارة شعار التطبيق (Logo)</h3>
                 <div className="flex items-center justify-between gap-4 mb-4">
@@ -1425,7 +1195,7 @@ export default function App() {
 
               <div className={`p-5 rounded-2xl border bg-gradient-to-r from-indigo-500/10 to-blue-500/10 border-indigo-500/30`}>
                 <h3 className="font-bold text-lg mb-2 flex items-center gap-2"><Sparkles size={18} className="text-indigo-500"/> بوت تنشيط التطبيق التلقائي</h3>
-                <p className="text-xs text-slate-500 mb-4">اضغط لتوليد رحلة أو طلب دليفري عشوائي يعمل بنظام التوقيتات.</p>
+                <p className="text-xs text-slate-500 mb-4">اضغط لتوليد رحلة عشوائية.</p>
                 <button onClick={adminGenerateBotTrip} className="w-full bg-indigo-600 text-white py-3 rounded-xl font-bold shadow hover:bg-indigo-700 transition">توليد نشاط عشوائي 🤖</button>
               </div>
 
@@ -1449,7 +1219,7 @@ export default function App() {
               </div>
 
               <div className={`p-5 rounded-2xl border ${bgCard}`}>
-                <h3 className="font-bold text-lg mb-4 flex items-center gap-2"><Bell size={18} className="text-rose-500"/> إرسال إشعار للمستخدمين (صندوق الوارد)</h3>
+                <h3 className="font-bold text-lg mb-4 flex items-center gap-2"><Bell size={18} className="text-rose-500"/> إرسال إشعار للمستخدمين</h3>
                 <textarea 
                   value={broadcastMsg} 
                   onChange={(e) => setBroadcastMsg(e.target.value)} 
@@ -1481,32 +1251,6 @@ export default function App() {
                   ))}
                 </div>
               </div>
-
-              <div className={`p-5 rounded-2xl border ${bgCard}`}>
-                <h3 className="font-bold text-lg mb-4 flex items-center gap-2"><Shield size={18} className="text-emerald-500"/> توثيق المستخدمين</h3>
-                <div className="space-y-3">
-                  {allUsers.length === 0 ? <p className="text-sm text-slate-500">جاري تحميل المستخدمين...</p> : 
-                    allUsers.map(u => (
-                      <div key={u.id} className={`flex justify-between items-center p-3 rounded-xl border ${isDarkMode ? 'bg-slate-700 border-slate-600' : 'bg-slate-100 border-slate-200'}`}>
-                        <div className="flex items-center gap-3 overflow-hidden">
-                          {u.photoURL ? <img src={u.photoURL} className="w-10 h-10 rounded-full object-cover border shrink-0" alt="avatar"/> : <div className="w-10 h-10 rounded-full bg-indigo-100 flex items-center justify-center text-indigo-600 font-bold shrink-0">{(u.name || 'م').charAt(0)}</div>}
-                          <div className="overflow-hidden">
-                            <p className="font-bold text-sm flex items-center gap-1 truncate">
-                              {u.name ? u.name.split(' ')[0] : 'مستخدم'}
-                              {u.isVerified && <ShieldCheck size={14} className="text-blue-500 shrink-0"/>}
-                            </p>
-                            <p className="text-xs text-slate-500 truncate">{u.phone || 'بدون رقم'}</p>
-                          </div>
-                        </div>
-                        <button onClick={() => adminToggleVerification(u.id, u.isVerified)} className={`shrink-0 px-3 py-1.5 rounded-lg text-xs font-bold transition-colors ${u.isVerified ? 'bg-rose-100 text-rose-600 hover:bg-rose-200' : 'bg-emerald-100 text-emerald-700 hover:bg-emerald-200'}`}>
-                          {u.isVerified ? 'سحب التوثيق' : 'إعطاء توثيق'}
-                        </button>
-                      </div>
-                    ))
-                  }
-                </div>
-              </div>
-
             </div>
           </div>
         </div>
@@ -1602,11 +1346,17 @@ export default function App() {
             <div className="flex gap-2 mb-6 max-w-2xl mx-auto">
               <div className={`flex-1 flex items-center px-4 py-3 rounded-full shadow-sm border transition-colors ${isDarkMode ? 'bg-slate-800 border-slate-700' : 'bg-white border-slate-200'}`}>
                 <MapPin className="text-indigo-500 ml-2 shrink-0" size={18} />
-                <input type="text" placeholder="من (القاهرة)" value={searchFrom} onChange={(e) => setSearchFrom(e.target.value)} className={`bg-transparent border-none w-full outline-none text-[16px] font-bold transition-colors ${isDarkMode ? 'text-white placeholder-slate-500' : 'text-slate-800 placeholder-slate-400'}`} />
+                <select value={searchFrom} onChange={(e) => setSearchFrom(e.target.value)} className={`bg-transparent border-none w-full outline-none text-[14px] sm:text-[16px] font-bold transition-colors appearance-none cursor-pointer ${isDarkMode ? 'text-white' : 'text-slate-800'}`}>
+                  <option value="all">من (الكل)</option>
+                  {EGYPT_CITIES.map(city => <option key={city} value={city}>{city}</option>)}
+                </select>
               </div>
               <div className={`flex-1 flex items-center px-4 py-3 rounded-full shadow-sm border transition-colors ${isDarkMode ? 'bg-slate-800 border-slate-700' : 'bg-white border-slate-200'}`}>
                 <Navigation className="text-rose-500 ml-2 shrink-0" size={18} />
-                <input type="text" placeholder="إلى (المنصورة)" value={searchTo} onChange={(e) => setSearchTo(e.target.value)} className={`bg-transparent border-none w-full outline-none text-[16px] font-bold transition-colors ${isDarkMode ? 'text-white placeholder-slate-500' : 'text-slate-800 placeholder-slate-400'}`} />
+                <select value={searchTo} onChange={(e) => setSearchTo(e.target.value)} className={`bg-transparent border-none w-full outline-none text-[14px] sm:text-[16px] font-bold transition-colors appearance-none cursor-pointer ${isDarkMode ? 'text-white' : 'text-slate-800'}`}>
+                  <option value="all">إلى (الكل)</option>
+                  {EGYPT_CITIES.map(city => <option key={city} value={city}>{city}</option>)}
+                </select>
               </div>
             </div>
 
@@ -1631,7 +1381,7 @@ export default function App() {
                   const isCompleted = trip.status === 'completed';
                   const isInProgress = trip.status === 'in_progress';
                   const isClosedForPublic = (isInProgress || isCompleted) && !isOwner;
-                  const canDelete = isOwner || isAdmin;
+                  const canDelete = isAdmin;
                   
                   return (
                   <div key={trip.id} className={`rounded-[1.25rem] p-3.5 shadow-sm hover:shadow-md border relative flex flex-col transition-all duration-300 h-fit ${bgCard}`}>
@@ -1656,7 +1406,7 @@ export default function App() {
                         )}
                       </div>
 
-                      {canDelete && !trip.isDummy && (
+                      {canDelete && !trip.isDummy && !isOwner && (
                         <button onClick={() => {setDeleteType('trip'); setDeleteConfirmId(trip.id);}} className="absolute left-0 top-0 p-1.5 bg-rose-50 text-rose-600 rounded-full hover:bg-rose-100 transition-colors shrink-0 z-10">
                           <Trash2 size={14} />
                         </button>
@@ -1694,12 +1444,19 @@ export default function App() {
                        )}
                     </div>
 
+                    {trip.carDetails && trip.carDetails.type && (trip.type === 'offer' || trip.type === 'delivery') && (
+                      <div className={`mb-3 p-2 rounded-xl text-[9px] font-bold border flex flex-col gap-1 ${isDarkMode ? 'bg-slate-800/50 border-slate-600 text-slate-300' : 'bg-slate-50 border-slate-200 text-slate-600'}`}>
+                        <span className="flex items-center gap-1"><Car size={10}/> {trip.carDetails.type} ({trip.carDetails.color})</span>
+                        {trip.carDetails.plate && <span>لوحة: {trip.carDetails.plate}</span>}
+                      </div>
+                    )}
+
                     {!isClosedForPublic && (
                       <div className="mt-auto pt-2">
                         {isOwner ? (
-                          <div className={`w-full py-1.5 rounded-lg font-bold text-center text-[10px] border border-dashed ${isDarkMode ? 'bg-slate-700/50 text-slate-400 border-slate-600' : 'bg-slate-50 text-slate-500 border-slate-200'}`}>
-                            إعلاني 
-                          </div>
+                          <button onClick={() => handleCancelTripOwner(trip.id)} className={`w-full py-1.5 rounded-lg font-bold text-center text-[10px] border border-rose-200 text-rose-600 bg-rose-50 hover:bg-rose-100 dark:bg-rose-900/20 dark:border-rose-800 dark:text-rose-400 dark:hover:bg-rose-900/40 transition-colors`}>
+                            إلغاء الرحلة
+                          </button>
                         ) : (
                           <div className="flex gap-1.5">
                             <button onClick={() => openChatFromTrip(trip)} className="flex-1 py-1.5 rounded-lg font-bold flex justify-center items-center gap-1.5 text-[10px] text-white transition-colors shadow-sm bg-indigo-600 hover:bg-indigo-700">
@@ -1708,13 +1465,8 @@ export default function App() {
                             
                             <a href={trip.userPhone && !trip.isDummy && !trip.isBot ? `tel:${trip.userPhone}` : '#'} 
                                onClick={(e) => {
-                                 if (trip.isDummy || trip.isBot) {
-                                   e.preventDefault();
-                                   setAlertMsg('لا يوجد رقم لهذه الرحلة');
-                                 } else if (!trip.userPhone) {
-                                   e.preventDefault();
-                                   setAlertMsg('صاحب الرحلة لم يقم بإضافة رقم هاتف 📞');
-                                 }
+                                 if (trip.isDummy || trip.isBot) { e.preventDefault(); setAlertMsg('لا يوجد رقم لهذه الرحلة'); } 
+                                 else if (!trip.userPhone) { e.preventDefault(); setAlertMsg('صاحب الرحلة لم يقم بإضافة رقم هاتف 📞'); }
                                }} 
                                className="flex-1 bg-emerald-600 text-white py-1.5 rounded-lg font-bold flex justify-center items-center gap-1.5 text-[10px] hover:bg-emerald-700 transition-colors shadow-sm no-underline text-center">
                               <Phone size={10} /> اتصال
@@ -1734,20 +1486,15 @@ export default function App() {
           </div>
         )}
 
-        {/* --- Tab 2: Market --- */}
         {activeTab === 'market' && (
           <div className="animate-fade-in-up">
             <div className="flex items-center justify-between mb-6 px-2">
-              <h2 className="text-2xl font-black flex items-center gap-2 text-indigo-600 dark:text-indigo-400">
-                <Store size={28}/> سوق المستعمل
-              </h2>
+              <h2 className="text-2xl font-black flex items-center gap-2 text-indigo-600 dark:text-indigo-400"><Store size={28}/> سوق المستعمل</h2>
             </div>
-
             {marketItems.length === 0 ? (
               <div className={`text-center py-20 rounded-[1.5rem] border-2 border-dashed flex flex-col items-center justify-center ${isDarkMode ? 'border-slate-700 bg-slate-800/50' : 'border-slate-200 bg-slate-50/50'}`}>
                 <div className={`w-16 h-16 rounded-full flex items-center justify-center mb-3 ${isDarkMode ? 'bg-slate-700' : 'bg-slate-200'}`}><ShoppingBag size={28} className="text-slate-400"/></div>
                 <h3 className="text-lg font-bold mb-2">السوق خالي حالياً</h3>
-                <p className="text-slate-500 text-sm">كن أول من ينشر منتج للبيع في السوق!</p>
               </div>
             ) : (
               <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-4 relative z-10 pb-6">
@@ -1758,47 +1505,23 @@ export default function App() {
                   return (
                     <div key={product.id} className={`rounded-[20px] overflow-hidden shadow-sm hover:shadow-md border flex flex-col transition-all ${bgCard}`}>
                       <div className="h-32 sm:h-40 relative bg-slate-100 dark:bg-slate-700">
-                        {canDelete && (
-                          <button onClick={() => {setDeleteType('product'); setDeleteConfirmId(product.id);}} className="absolute top-2 right-2 p-1.5 bg-rose-50/80 text-rose-600 rounded-full hover:bg-rose-100 z-10 backdrop-blur-sm">
-                            <Trash2 size={14} />
-                          </button>
-                        )}
-                        {product.image ? (
-                          <img src={product.image} alt={product.title} className="w-full h-full object-cover" />
-                        ) : (
-                          <div className="w-full h-full flex items-center justify-center text-slate-300"><ImageIcon size={40}/></div>
-                        )}
-                        <div className="absolute bottom-2 left-2 bg-emerald-600 text-white font-black text-[10px] px-2 py-1 rounded-lg shadow-md border border-emerald-700">
-                          {product.price} ج
-                        </div>
+                        {canDelete && (<button onClick={() => {setDeleteType('product'); setDeleteConfirmId(product.id);}} className="absolute top-2 right-2 p-1.5 bg-rose-50/80 text-rose-600 rounded-full hover:bg-rose-100 z-10 backdrop-blur-sm"><Trash2 size={14} /></button>)}
+                        {product.image ? (<img src={product.image} alt={product.title} className="w-full h-full object-cover" />) : (<div className="w-full h-full flex items-center justify-center text-slate-300"><ImageIcon size={40}/></div>)}
+                        <div className="absolute bottom-2 left-2 bg-emerald-600 text-white font-black text-[10px] px-2 py-1 rounded-lg shadow-md border border-emerald-700">{product.price} ج</div>
                       </div>
-                      
                       <div className="p-3 flex flex-col flex-1">
                         <h3 className="font-bold text-xs sm:text-sm mb-1 line-clamp-1">{product.title}</h3>
                         <p className={`text-[9px] mb-3 line-clamp-2 ${textSecondary}`}>{product.desc}</p>
-                        
                         <div className="mt-auto pt-2 border-t dark:border-slate-700 flex items-center justify-between gap-1">
                           <div className="flex items-center gap-1.5 overflow-hidden text-right" dir="ltr">
                              <div className="overflow-hidden">
                                <span className="text-[10px] font-bold truncate flex items-center justify-end gap-1">
-                                 {product.verified && <ShieldCheck size={10} className="text-blue-500 shrink-0"/>}
-                                 {product.userName ? product.userName.split(' ')[0] : 'مستخدم'}
+                                 {product.verified && <ShieldCheck size={10} className="text-blue-500 shrink-0"/>} {product.userName ? product.userName.split(' ')[0] : 'مستخدم'}
                                </span>
                              </div>
-                            {product.userPhoto ? (
-                              <img src={product.userPhoto} className="w-6 h-6 rounded-full object-cover border border-slate-200" alt="seller" />
-                            ) : (
-                              <div className="w-6 h-6 rounded-full bg-indigo-100 flex items-center justify-center shrink-0 border border-indigo-200">
-                                <User size={12} className="text-indigo-500"/>
-                              </div>
-                            )}
+                            {product.userPhoto ? (<img src={product.userPhoto} className="w-6 h-6 rounded-full object-cover border border-slate-200" alt="seller" />) : (<div className="w-6 h-6 rounded-full bg-indigo-100 flex items-center justify-center shrink-0 border border-indigo-200"><User size={12} className="text-indigo-500"/></div>)}
                           </div>
-                          
-                          {!isOwner && (
-                            <button onClick={() => openChatFromProduct(product)} className="shrink-0 bg-indigo-100 hover:bg-indigo-200 dark:bg-indigo-900/50 dark:hover:bg-indigo-900/80 text-indigo-700 dark:text-indigo-300 p-1.5 rounded-lg transition-colors">
-                              <MessageCircle size={14} />
-                            </button>
-                          )}
+                          {!isOwner && (<button onClick={() => openChatFromProduct(product)} className="shrink-0 bg-indigo-100 hover:bg-indigo-200 dark:bg-indigo-900/50 dark:hover:bg-indigo-900/80 text-indigo-700 dark:text-indigo-300 p-1.5 rounded-lg transition-colors"><MessageCircle size={14} /></button>)}
                         </div>
                       </div>
                     </div>
@@ -1806,14 +1529,10 @@ export default function App() {
                 })}
               </div>
             )}
-            
-            <button onClick={() => requireAuth(() => setShowAddProductModal(true))} className="fixed bottom-20 left-4 w-14 h-14 bg-indigo-600 text-white rounded-full flex items-center justify-center shadow-lg shadow-indigo-500/40 z-30 hover:bg-indigo-700 transform active:scale-95 transition-all cursor-pointer">
-              <Plus size={28} />
-            </button>
+            <button onClick={() => requireAuth(() => setShowAddProductModal(true))} className="fixed bottom-20 left-4 w-14 h-14 bg-indigo-600 text-white rounded-full flex items-center justify-center shadow-lg shadow-indigo-500/40 z-30 hover:bg-indigo-700 transform active:scale-95 transition-all cursor-pointer"><Plus size={28} /></button>
           </div>
         )}
 
-        {/* --- Tab 3: Inbox --- */}
         {activeTab === 'inbox' && (
           <div className="animate-fade-in-up max-w-2xl mx-auto pb-6">
             <h2 className="text-2xl font-black mb-6 flex items-center gap-2 text-indigo-600 dark:text-indigo-400"><MessageCircle size={28}/> صندوق الرسائل</h2>
@@ -1824,7 +1543,6 @@ export default function App() {
                     <div className="text-center text-slate-500 mt-20 flex flex-col items-center">
                       <MessageCircle size={50} className="text-slate-300 mb-4"/>
                       <h3 className="font-bold text-lg mb-2">لا توجد رسائل حالياً</h3>
-                      <p className="text-sm">تواصل مع الآخرين للاتفاق على الرحلات أو المنتجات.</p>
                     </div>
                   ) : (
                     myInbox.map(chat => {
@@ -1841,13 +1559,19 @@ export default function App() {
                            )}
                            <div className="flex-1 overflow-hidden">
                             <div className="flex justify-between items-center mb-1">
-                              <h4 className={`font-bold text-sm flex items-center gap-1 ${textPrimary}`}>
-                                {chat.otherPersonName || 'مستخدم'}
-                                {chat.otherPersonVerified && <ShieldCheck size={14} className="text-blue-500"/>}
+                              <h4 className={`font-bold text-sm flex flex-col gap-0.5 ${textPrimary}`}>
+                                {chat.tripInfo && chat.tripInfo !== 'system' && !chat.tripInfo.includes('شراء') ? (
+                                  <>
+                                    <span className="truncate text-indigo-600 dark:text-indigo-400">{chat.tripInfo}</span>
+                                    <span className="text-[10px] text-slate-500 flex items-center gap-1">مع: {chat.otherPersonName} {chat.otherPersonVerified && <ShieldCheck size={10} className="text-blue-500"/>}</span>
+                                  </>
+                                ) : (
+                                  <span className="flex items-center gap-1">{chat.otherPersonName || 'مستخدم'} {chat.otherPersonVerified && <ShieldCheck size={14} className="text-blue-500"/>}</span>
+                                )}
                               </h4>
-                              {chat.createdAt && <span className="text-[10px] text-slate-400">{new Date(safeMillis(chat.createdAt)).toLocaleTimeString('ar-EG', {hour:'2-digit', minute:'2-digit'})}</span>}
+                              {chat.createdAt && <span className="text-[10px] text-slate-400 shrink-0">{new Date(safeMillis(chat.createdAt)).toLocaleTimeString('ar-EG', {hour:'2-digit', minute:'2-digit'})}</span>}
                             </div>
-                            <p className={`text-xs line-clamp-1 ${textSecondary}`}>{chat.lastMessage}</p>
+                            <p className={`text-xs line-clamp-1 mt-1 ${textSecondary}`}>{chat.lastMessage}</p>
                            </div>
                         </div>
                       </div>
@@ -1859,15 +1583,13 @@ export default function App() {
                 <div className="flex-1 flex flex-col items-center justify-center p-6 text-center">
                   <Lock size={50} className="text-slate-300 mb-4"/>
                   <h3 className="font-bold text-lg mb-2">يرجى تسجيل الدخول</h3>
-                  <p className="text-slate-500 text-sm mb-6">يجب أن يكون لديك حساب لاستخدام خدمة الرسائل.</p>
-                  <button onClick={() => setShowAuthPrompt(true)} className="bg-indigo-600 text-white px-6 py-3 rounded-full font-bold hover:bg-indigo-700">تسجيل الدخول الآن</button>
+                  <button onClick={() => setShowAuthPrompt(true)} className="bg-indigo-600 text-white px-6 py-3 rounded-full font-bold hover:bg-indigo-700 mt-4">تسجيل الدخول الآن</button>
                 </div>
               )}
             </div>
           </div>
         )}
 
-        {/* --- Tab 4: Profile --- */}
         {activeTab === 'profile' && (
           <div className="animate-fade-in-up max-w-xl mx-auto pb-6">
             <h2 className="text-2xl font-black mb-6 flex items-center gap-2 text-indigo-600 dark:text-indigo-400"><User size={28}/> حسابي والإعدادات</h2>
@@ -1901,9 +1623,52 @@ export default function App() {
                 <div onClick={() => setShowAuthPrompt(true)} className={`cursor-pointer p-6 rounded-3xl flex flex-col items-center justify-center border shadow-sm text-center hover:bg-slate-50 dark:hover:bg-slate-800/50 transition-colors ${bgCard}`}>
                   <div className="w-20 h-20 bg-slate-100 dark:bg-slate-800 rounded-full flex items-center justify-center mb-4"><User size={30} className="text-slate-400"/></div>
                   <h3 className="font-bold text-lg mb-2">حساب زائر</h3>
-                  <p className="text-sm text-slate-500 mb-4">اضغط هنا لإنشاء حساب وتسجيل الدخول.</p>
-                  <button className="bg-indigo-600 text-white px-6 py-2.5 rounded-full font-bold text-sm hover:bg-indigo-700 shadow-md shadow-indigo-500/30">تسجيل حساب</button>
+                  <button className="bg-indigo-600 text-white px-6 py-2.5 rounded-full font-bold text-sm hover:bg-indigo-700 mt-2 shadow-md shadow-indigo-500/30">تسجيل حساب</button>
                 </div>
+              )}
+
+              {!isGuest && (
+                <div className={`p-5 rounded-2xl border shadow-sm transition-all ${isEditingProfile ? 'ring-2 ring-indigo-500' : ''} ${bgCard}`}>
+                  <div className="flex justify-between items-center mb-4">
+                    <h3 className="font-bold text-lg flex items-center gap-2"><Car size={20} className="text-indigo-500"/> بيانات سيارتي (للكباتن)</h3>
+                    <button onClick={() => setIsEditingProfile(!isEditingProfile)} className="text-xs font-bold text-indigo-500 hover:text-indigo-600">{isEditingProfile ? 'إلغاء' : 'تعديل'}</button>
+                  </div>
+                  
+                  {isEditingProfile ? (
+                    <div className="space-y-3 animate-fade-in-up">
+                      <input type="text" placeholder="نوع السيارة (مثال: هيونداي إلنترا)" value={carDetails.type} onChange={e => setCarDetails({...carDetails, type: e.target.value})} className={`w-full border p-3 rounded-xl text-sm font-bold outline-none ${bgInput}`} />
+                      <div className="grid grid-cols-2 gap-3">
+                        <input type="text" placeholder="اللون (مثال: فضي)" value={carDetails.color} onChange={e => setCarDetails({...carDetails, color: e.target.value})} className={`w-full border p-3 rounded-xl text-sm font-bold outline-none ${bgInput}`} />
+                        <input type="text" placeholder="رقم اللوحة (اختياري)" value={carDetails.plate} onChange={e => setCarDetails({...carDetails, plate: e.target.value})} className={`w-full border p-3 rounded-xl text-sm font-bold outline-none ${bgInput}`} />
+                      </div>
+                      <button onClick={handleUpdateProfile} disabled={isSubmitting} className="w-full bg-indigo-600 text-white py-3 rounded-xl font-bold flex justify-center items-center gap-2 hover:bg-indigo-700">
+                        {isSubmitting ? <Loader2 size={18} className="animate-spin"/> : <><Save size={18}/> حفظ البيانات</>}
+                      </button>
+                    </div>
+                  ) : (
+                    <div className="flex flex-wrap gap-2">
+                      {carDetails.type ? (
+                        <>
+                          <span className={`px-3 py-1.5 rounded-lg text-xs font-bold border ${isDarkMode ? 'bg-slate-700 border-slate-600' : 'bg-slate-50 border-slate-200'}`}>النوع: {carDetails.type}</span>
+                          <span className={`px-3 py-1.5 rounded-lg text-xs font-bold border ${isDarkMode ? 'bg-slate-700 border-slate-600' : 'bg-slate-50 border-slate-200'}`}>اللون: {carDetails.color}</span>
+                          {carDetails.plate && <span className={`px-3 py-1.5 rounded-lg text-xs font-bold border ${isDarkMode ? 'bg-slate-700 border-slate-600' : 'bg-slate-50 border-slate-200'}`}>لوحة: {carDetails.plate}</span>}
+                        </>
+                      ) : (
+                        <p className={`text-xs ${textSecondary}`}>لم تقم بإضافة بيانات سيارة بعد. (أضفها لزيادة ثقة الركاب)</p>
+                      )}
+                    </div>
+                  )}
+                </div>
+              )}
+
+              {!isGuest && (
+                 <button onClick={() => setShowHistoryModal(true)} className={`w-full p-4 rounded-2xl flex justify-between items-center border shadow-sm hover:shadow-md transition-all ${bgCard}`}>
+                   <div className="flex items-center gap-3">
+                     <div className="p-2.5 bg-indigo-100 dark:bg-indigo-900/30 rounded-full"><History className="text-indigo-600 dark:text-indigo-400" size={20}/></div>
+                     <span className="font-bold text-lg">سجل رحلاتي السابقة</span>
+                   </div>
+                   <ChevronLeft size={20} className={textSecondary}/>
+                 </button>
               )}
 
               {isAdmin && (
@@ -1931,20 +1696,9 @@ export default function App() {
                     <div className="p-2.5 bg-blue-100 dark:bg-blue-900/30 rounded-full"><ShieldCheck className="text-blue-600 dark:text-blue-400" size={20}/></div>
                     <span className="font-bold">طلب توثيق الحساب</span>
                   </div>
-                  <p className={`text-xs mb-4 mt-2 leading-relaxed ${textSecondary}`}>احصل على العلامة الزرقاء لزيادة ثقة الآخرين في رحلاتك ومنتجاتك.</p>
-                  <button onClick={() => setAlertMsg("تم إرسال طلب التوثيق للإدارة بنجاح! سيتم مراجعته قريباً.")} className={`w-full py-3 font-bold rounded-full text-sm transition-colors ${isDarkMode ? 'bg-slate-700 text-blue-400 hover:bg-slate-600 border border-slate-600' : 'bg-white text-blue-700 hover:bg-blue-50 border border-slate-200'}`}>إرسال الطلب</button>
+                  <button onClick={() => setAlertMsg("تم إرسال طلب التوثيق للإدارة بنجاح! سيتم مراجعته قريباً.")} className={`w-full py-3 mt-3 font-bold rounded-full text-sm transition-colors ${isDarkMode ? 'bg-slate-700 text-blue-400 hover:bg-slate-600 border border-slate-600' : 'bg-white text-blue-700 hover:bg-blue-50 border border-slate-200'}`}>إرسال الطلب</button>
                 </div>
               )}
-
-              <div className={`p-4 rounded-2xl border shadow-sm ${bgCard}`}>
-                <div className="flex items-center gap-3 mb-3">
-                  <div className={`p-2.5 rounded-full ${isDarkMode ? 'bg-slate-700' : 'bg-slate-100'}`}><Info className={isDarkMode ? 'text-slate-300' : 'text-slate-600'} size={20}/></div>
-                  <span className="font-bold">عن التطبيق والسياسات</span>
-                </div>
-                <p className={`text-xs leading-relaxed ${textSecondary}`}>
-                  تطبيق "خدني معاك" يهدف لتسهيل السفر والتنقل ونقل الطرود وتوفير بيئة تجارية آمنة للمستعمل. الإدارة غير مسؤولة عن أي تعاملات مالية خارج نطاق التطبيق، ويرجى توخي الحذر والالتزام بالآداب العامة.
-                </p>
-              </div>
 
               <button onClick={handleLogout} className={`w-full py-4 rounded-full font-bold flex justify-center items-center gap-2 transition-colors border shadow-sm ${isDarkMode ? 'bg-rose-500/10 text-rose-400 border-rose-500/20 hover:bg-rose-500/20' : 'bg-rose-50 text-rose-600 border-rose-100 hover:bg-rose-100'}`}>
                 {isGuest ? <LogIn size={20}/> : <LogOut size={20}/>} {isGuest ? 'تسجيل الدخول / إنشاء حساب' : 'تسجيل الخروج'}
@@ -1955,7 +1709,6 @@ export default function App() {
 
       </main>
 
-      {/* شريط التحكم العائم الذكي (يعتمد الآن على دور السائق الفعلي) */}
       {priorityLiveTrip && !isGuest && (!activeChat || activeChat.chatId !== priorityLiveTrip.chatId) && (() => {
         const isOwner = priorityLiveTrip.tripOwnerId === user.uid;
         const isActualDriver = (priorityLiveTrip.tripType === 'offer' || priorityLiveTrip.tripType === 'delivery') ? isOwner : !isOwner;
@@ -1963,29 +1716,13 @@ export default function App() {
         return (
           <div className={`fixed z-30 transition-all duration-300 animate-fade-in-up ${isLiveTripMinimized ? 'bottom-[80px] left-4 w-auto right-auto' : 'bottom-[76px] left-0 right-0 px-4'}`}>
             {isLiveTripMinimized ? (
-              <button 
-                onClick={() => setIsLiveTripMinimized(false)} 
-                className="bg-indigo-600 text-white px-4 py-2.5 rounded-full shadow-lg shadow-indigo-500/30 font-bold text-xs flex items-center gap-2 hover:bg-indigo-700 transform hover:scale-105 transition-all border border-indigo-400/50"
-              >
+              <button onClick={() => setIsLiveTripMinimized(false)} className="bg-indigo-600 text-white px-4 py-2.5 rounded-full shadow-lg shadow-indigo-500/30 font-bold text-xs flex items-center gap-2 hover:bg-indigo-700 transform hover:scale-105 transition-all border border-indigo-400/50">
                 <Car size={16} className="animate-pulse"/> متابعة الطلب
               </button>
             ) : (
               <div className={`max-w-md mx-auto pointer-events-auto rounded-2xl p-3.5 shadow-2xl border flex flex-col gap-3 transition-colors relative ${isDarkMode ? 'bg-slate-800 border-indigo-500 shadow-indigo-900/30' : 'bg-white border-indigo-300 shadow-indigo-200/50'}`}>
-                
-                <button 
-                  onClick={(e) => { e.stopPropagation(); setIsLiveTripMinimized(true); }} 
-                  className={`absolute -top-3 left-4 p-1 rounded-full shadow-md z-10 border transition-colors ${isDarkMode ? 'bg-slate-700 text-slate-300 border-slate-600 hover:bg-slate-600' : 'bg-slate-100 text-slate-600 border-slate-300 hover:bg-slate-200'}`}
-                >
-                  <ChevronDown size={16} />
-                </button>
-
-                <div 
-                  className="flex justify-between items-center cursor-pointer pt-1"
-                  onClick={() => {
-                    setActiveChat({ chatId: priorityLiveTrip.chatId, tripId: priorityLiveTrip.tripId, tripType: priorityLiveTrip.tripType, tripOwnerId: priorityLiveTrip.tripOwnerId, otherPersonId: priorityLiveTrip.otherPersonId, otherPersonName: priorityLiveTrip.otherPersonName, otherPersonPhoto: priorityLiveTrip.otherPersonPhoto, otherPersonVerified: priorityLiveTrip.otherPersonVerified });
-                    setActiveTab('inbox');
-                  }}
-                >
+                <button onClick={(e) => { e.stopPropagation(); setIsLiveTripMinimized(true); }} className={`absolute -top-3 left-4 p-1 rounded-full shadow-md z-10 border transition-colors ${isDarkMode ? 'bg-slate-700 text-slate-300 border-slate-600 hover:bg-slate-600' : 'bg-slate-100 text-slate-600 border-slate-300 hover:bg-slate-200'}`}><ChevronDown size={16} /></button>
+                <div className="flex justify-between items-center cursor-pointer pt-1" onClick={() => { setActiveChat({ chatId: priorityLiveTrip.chatId, tripId: priorityLiveTrip.tripId, tripType: priorityLiveTrip.tripType, tripOwnerId: priorityLiveTrip.tripOwnerId, otherPersonId: priorityLiveTrip.otherPersonId, otherPersonName: priorityLiveTrip.otherPersonName, otherPersonPhoto: priorityLiveTrip.otherPersonPhoto, otherPersonVerified: priorityLiveTrip.otherPersonVerified, tripInfo: priorityLiveTrip.tripInfo }); setActiveTab('inbox'); }}>
                   <div className="flex items-center gap-3">
                     <div className={`p-2 rounded-full shrink-0 ${priorityLiveTrip.requestStatus === 'arrived' ? 'bg-rose-100 text-rose-600' : 'bg-indigo-100 text-indigo-600'}`}>
                       {priorityLiveTrip.requestStatus === 'arrived' ? <MapPin className="animate-bounce" size={20} /> : <Car className="animate-pulse" size={20} />}
@@ -2002,35 +1739,18 @@ export default function App() {
                     </div>
                   </div>
                   {(['accepted', 'moving', 'arrived', 'in_progress_trip'].includes(priorityLiveTrip.requestStatus)) && (
-                    <div className={`font-mono font-bold text-xs px-2 py-1 rounded-lg border ${isDarkMode ? 'bg-slate-700 border-slate-600 text-indigo-300' : 'bg-slate-100 border-slate-200 text-indigo-700'}`}>
-                      {liveTimer}
-                    </div>
+                    <div className={`font-mono font-bold text-xs px-2 py-1 rounded-lg border ${isDarkMode ? 'bg-slate-700 border-slate-600 text-indigo-300' : 'bg-slate-100 border-slate-200 text-indigo-700'}`}>{liveTimer}</div>
                   )}
                 </div>
-
-                {/* أزرار التحكم للسائق فقط */}
                 <div className="flex gap-2">
                   {priorityLiveTrip.requestStatus === 'pending' && isOwner && (
-                    <>
-                      <button onClick={() => handleTripAction('accept', priorityLiveTrip)} className="flex-1 bg-emerald-500 text-white font-bold py-2.5 rounded-xl text-xs shadow hover:bg-emerald-600 flex items-center justify-center gap-1"><CheckCircle2 size={16}/> قبول الطلب</button>
-                      <button onClick={() => handleTripAction('reject', priorityLiveTrip)} className="flex-1 bg-rose-500 text-white font-bold py-2.5 rounded-xl text-xs shadow hover:bg-rose-600 flex items-center justify-center gap-1"><X size={16}/> رفض</button>
-                    </>
+                    <><button onClick={() => handleTripAction('accept', priorityLiveTrip)} className="flex-1 bg-emerald-500 text-white font-bold py-2.5 rounded-xl text-xs shadow hover:bg-emerald-600 flex items-center justify-center gap-1"><CheckCircle2 size={16}/> قبول الطلب</button><button onClick={() => handleTripAction('reject', priorityLiveTrip)} className="flex-1 bg-rose-500 text-white font-bold py-2.5 rounded-xl text-xs shadow hover:bg-rose-600 flex items-center justify-center gap-1"><X size={16}/> رفض</button></>
                   )}
-                  {priorityLiveTrip.requestStatus === 'pending' && !isOwner && (
-                     <button onClick={() => handleTripAction('cancel_request', priorityLiveTrip)} className="w-full bg-rose-100 text-rose-600 font-bold py-2.5 rounded-xl text-xs hover:bg-rose-200 transition">إلغاء الطلب</button>
-                  )}
-                  {priorityLiveTrip.requestStatus === 'accepted' && isActualDriver && (
-                    <button onClick={() => handleTripAction('start_moving', priorityLiveTrip)} className="w-full bg-indigo-600 text-white font-bold py-2.5 rounded-xl text-xs shadow hover:bg-indigo-700 flex items-center justify-center gap-1"><Navigation size={16}/> تحركت نحو العميل</button>
-                  )}
-                  {priorityLiveTrip.requestStatus === 'moving' && isActualDriver && (
-                    <button onClick={() => handleTripAction('arrive', priorityLiveTrip)} className="w-full bg-orange-500 text-white font-bold py-2.5 rounded-xl text-xs shadow hover:bg-orange-600 flex items-center justify-center gap-1"><MapPin size={16}/> إبلاغ بالوصول</button>
-                  )}
-                  {priorityLiveTrip.requestStatus === 'arrived' && isActualDriver && (
-                    <button onClick={() => handleTripAction('start_trip', priorityLiveTrip)} className="w-full bg-emerald-500 text-white font-bold py-2.5 rounded-xl text-xs shadow hover:bg-emerald-600 flex items-center justify-center gap-1"><Play size={16}/> بدء الرحلة الفعلي</button>
-                  )}
-                  {priorityLiveTrip.requestStatus === 'in_progress_trip' && isActualDriver && (
-                    <button onClick={() => handleTripAction('complete', priorityLiveTrip)} className="w-full bg-rose-600 text-white font-bold py-2.5 rounded-xl text-xs shadow hover:bg-rose-700 flex items-center justify-center gap-1"><Flag size={16}/> إنهاء الرحلة بنجاح</button>
-                  )}
+                  {priorityLiveTrip.requestStatus === 'pending' && !isOwner && (<button onClick={() => handleTripAction('cancel_request', priorityLiveTrip)} className="w-full bg-rose-100 text-rose-600 font-bold py-2.5 rounded-xl text-xs shadow hover:bg-rose-200 transition">إلغاء الطلب</button>)}
+                  {priorityLiveTrip.requestStatus === 'accepted' && isActualDriver && (<button onClick={() => handleTripAction('start_moving', priorityLiveTrip)} className="w-full bg-indigo-600 text-white font-bold py-2.5 rounded-xl text-xs shadow hover:bg-indigo-700 flex items-center justify-center gap-1"><Navigation size={16}/> تحركت نحو العميل</button>)}
+                  {priorityLiveTrip.requestStatus === 'moving' && isActualDriver && (<button onClick={() => handleTripAction('arrive', priorityLiveTrip)} className="w-full bg-orange-500 text-white font-bold py-2.5 rounded-xl text-xs shadow hover:bg-orange-600 flex items-center justify-center gap-1"><MapPin size={16}/> إبلاغ بالوصول</button>)}
+                  {priorityLiveTrip.requestStatus === 'arrived' && isActualDriver && (<button onClick={() => handleTripAction('start_trip', priorityLiveTrip)} className="w-full bg-emerald-500 text-white font-bold py-2.5 rounded-xl text-xs shadow hover:bg-emerald-600 flex items-center justify-center gap-1"><Play size={16}/> بدء الرحلة الفعلي</button>)}
+                  {priorityLiveTrip.requestStatus === 'in_progress_trip' && isActualDriver && (<button onClick={() => handleTripAction('complete', priorityLiveTrip)} className="w-full bg-rose-600 text-white font-bold py-2.5 rounded-xl text-xs shadow hover:bg-rose-700 flex items-center justify-center gap-1"><Flag size={16}/> إنهاء الرحلة بنجاح</button>)}
                 </div>
               </div>
             )}
@@ -2062,7 +1782,6 @@ export default function App() {
         </div>
       </nav>
 
-      {/* المودالز */}
       {showAddModal && !isGuest && (
         <div className="fixed inset-0 bg-slate-900/70 backdrop-blur-sm z-[150] flex justify-center items-center p-4">
           <div className={`${bgModal} rounded-[1.5rem] w-full max-w-lg shadow-2xl border overflow-hidden ${isDarkMode ? 'border-slate-700' : 'border-slate-100'} animate-fade-in-up`}>
@@ -2093,12 +1812,18 @@ export default function App() {
                 <div className="space-y-4">
                   <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                     <div className="relative">
-                      <MapPin size={18} className="absolute right-4 top-3.5 text-slate-400" />
-                      <input type="text" required value={newTrip.from} onChange={(e) => setNewTrip({...newTrip, from: e.target.value})} placeholder={newTrip.type === 'delivery' ? "مكان استلام الطرد" : "نقطة التحرك"} className={`w-full border py-3 pr-10 pl-3 rounded-xl font-bold text-[16px] outline-none focus:ring-2 focus:ring-indigo-500 transition-colors ${bgInput}`} />
+                      <MapPin size={18} className="absolute right-4 top-3.5 text-slate-400 pointer-events-none" />
+                      <select required value={newTrip.from} onChange={(e) => setNewTrip({...newTrip, from: e.target.value})} className={`w-full border py-3 pr-10 pl-3 rounded-xl font-bold text-[16px] outline-none focus:ring-2 focus:ring-indigo-500 transition-colors appearance-none cursor-pointer ${bgInput}`}>
+                        <option value="" disabled>{newTrip.type === 'delivery' ? "مكان استلام الطرد" : "محافظة التحرك"}</option>
+                        {EGYPT_CITIES.map(city => <option key={city} value={city}>{city}</option>)}
+                      </select>
                     </div>
                     <div className="relative">
-                      <Navigation size={18} className="absolute right-4 top-3.5 text-slate-400" />
-                      <input type="text" required value={newTrip.to} onChange={(e) => setNewTrip({...newTrip, to: e.target.value})} placeholder={newTrip.type === 'delivery' ? "مكان تسليم الطرد" : "نقطة الوصول"} className={`w-full border py-3 pr-10 pl-3 rounded-xl font-bold text-[16px] outline-none focus:ring-2 focus:ring-indigo-500 transition-colors ${bgInput}`} />
+                      <Navigation size={18} className="absolute right-4 top-3.5 text-slate-400 pointer-events-none" />
+                      <select required value={newTrip.to} onChange={(e) => setNewTrip({...newTrip, to: e.target.value})} className={`w-full border py-3 pr-10 pl-3 rounded-xl font-bold text-[16px] outline-none focus:ring-2 focus:ring-indigo-500 transition-colors appearance-none cursor-pointer ${bgInput}`}>
+                        <option value="" disabled>{newTrip.type === 'delivery' ? "مكان تسليم الطرد" : "محافظة الوصول"}</option>
+                        {EGYPT_CITIES.map(city => <option key={city} value={city}>{city}</option>)}
+                      </select>
                     </div>
                   </div>
 
@@ -2118,7 +1843,7 @@ export default function App() {
                     </div>
                   </div>
                   
-                  <textarea rows="3" value={newTrip.notes} onChange={(e) => setNewTrip({...newTrip, notes: e.target.value})} placeholder={newTrip.type === 'delivery' ? "تفاصيل الطرد (وزنه، نوعه، قابل للكسر...)" : "تفاصيل إضافية (أماكن الوقوف بالتحديد، حجم الحقائب...)"} className={`w-full border p-3 rounded-xl resize-none font-bold text-[16px] outline-none focus:ring-2 focus:ring-indigo-500 transition-colors leading-relaxed ${bgInput}`}></textarea>
+                  <textarea rows="3" value={newTrip.notes} onChange={(e) => setNewTrip({...newTrip, notes: e.target.value})} placeholder={newTrip.type === 'delivery' ? "تفاصيل الطرد، مناطق التجمع، أو تفاصيل أخرى..." : "تفاصيل إضافية (أماكن الوقوف بالتحديد، نقطة التجمع الدقيقة...)"} className={`w-full border p-3 rounded-xl resize-none font-bold text-[16px] outline-none focus:ring-2 focus:ring-indigo-500 transition-colors leading-relaxed ${bgInput}`}></textarea>
                 </div>
                 
                 <button type="submit" disabled={isSubmitting} className="w-full bg-indigo-600 text-white py-3.5 rounded-xl font-extrabold text-sm hover:bg-indigo-700 shadow-md shadow-indigo-500/30 flex justify-center items-center gap-2 transition-all transform active:scale-[0.98]">
@@ -2173,12 +1898,10 @@ export default function App() {
         </div>
       )}
 
-      {/* شاشة الشات المباشرة مع لوحة التحكم ونظام التقييم */}
       {activeChat && !isGuest && (() => {
          const inboxChat = myInbox.find(c => c && c.chatId === activeChat.chatId) || {};
          const chatInfo = { ...activeChat, ...inboxChat };
          
-         // تحديد من هو السائق الفعلي للتحكم في الأزرار
          let isActualDriver = false;
          let isTripOwner = false;
          let reqStatus = chatInfo.requestStatus || 'none';
@@ -2196,7 +1919,7 @@ export default function App() {
           <div className="fixed inset-0 bg-slate-900/80 backdrop-blur-md z-[250] flex justify-center items-end sm:items-center p-0 sm:p-4">
             <div className={`${bgModal} w-full h-[85vh] sm:h-[600px] sm:max-w-md rounded-t-[2rem] sm:rounded-3xl shadow-2xl flex flex-col overflow-hidden animate-fade-in-up relative`}>
               
-              <div className={`text-white p-4 flex items-center gap-3 ${activeChat.otherPersonId === 'admin' ? 'bg-rose-600' : 'bg-indigo-600'}`}>
+              <div className={`text-white p-4 flex items-center gap-3 shadow-md z-20 ${activeChat.otherPersonId === 'admin' ? 'bg-rose-600' : 'bg-indigo-600'}`}>
                 <button onClick={() => setActiveChat(null)} className={`p-2 rounded-full transition-colors ${activeChat.otherPersonId === 'admin' ? 'hover:bg-rose-700' : 'hover:bg-indigo-700'}`}><ChevronLeft size={24} /></button>
                 {activeChat.otherPersonId === 'admin' ? (
                   <div className="w-10 h-10 bg-white/20 rounded-full flex items-center justify-center shrink-0"><Crown size={20}/></div>
@@ -2205,16 +1928,24 @@ export default function App() {
                 ) : (
                   <div className="w-10 h-10 bg-white/20 rounded-full flex items-center justify-center shrink-0"><User size={20}/></div>
                 )}
-                <div className="flex-1">
-                  <h3 className="font-bold text-sm leading-tight flex items-center gap-1">
-                    {activeChat.otherPersonName || 'مستخدم'}
-                    {activeChat.otherPersonVerified && <ShieldCheck size={14} className="text-blue-200"/>}
+                <div className="flex-1 overflow-hidden">
+                  <h3 className="font-bold text-sm leading-tight flex items-center gap-1 truncate">
+                    {activeChat.tripInfo && activeChat.tripInfo !== 'system' && !activeChat.tripInfo.includes('شراء') ? (
+                       <span className="truncate">{activeChat.tripInfo}</span>
+                    ) : (
+                       <span>{activeChat.otherPersonName || 'مستخدم'} {activeChat.otherPersonVerified && <ShieldCheck size={14} className="text-blue-200 inline"/>}</span>
+                    )}
                   </h3>
-                  {activeChat.tripInfo && activeChat.tripInfo !== 'system' && <span className="text-[10px] text-indigo-200 leading-tight block mt-0.5 truncate">{activeChat.tripInfo}</span>}
+                  {activeChat.tripInfo && activeChat.tripInfo !== 'system' && !activeChat.tripInfo.includes('شراء') ? (
+                    <span className="text-[10px] text-indigo-200 leading-tight block mt-0.5 truncate flex items-center gap-1">
+                      مع: {activeChat.otherPersonName} {activeChat.otherPersonVerified && <ShieldCheck size={10} className="text-blue-200"/>}
+                    </span>
+                  ) : activeChat.tripInfo ? (
+                    <span className="text-[10px] text-indigo-200 leading-tight block mt-0.5 truncate">{activeChat.tripInfo}</span>
+                  ) : null}
                 </div>
               </div>
 
-              {/* لوحة تحكم الشات */}
               {chatInfo.tripInfo !== 'system' && !chatInfo.tripInfo?.includes('مهتم بشراء') && chatInfo.tripType !== 'market' && user && chatInfo.tripOwnerId && (
                 <div className={`p-3 border-b text-center shadow-sm z-10 ${isDarkMode ? 'bg-slate-800 border-slate-700' : 'bg-slate-50 border-slate-200'}`}>
                   
@@ -2238,7 +1969,6 @@ export default function App() {
                     </div>
                   )}
 
-                  {/* أزرار السائق فقط */}
                   {reqStatus === 'accepted' && isActualDriver && (
                      <button onClick={() => handleTripAction('start_moving')} className="w-full bg-indigo-600 text-white font-bold py-2 rounded-xl text-sm shadow hover:bg-indigo-700 flex items-center justify-center gap-1.5"><Navigation size={16}/> تحركت نحو العميل 🚙</button>
                   )}
@@ -2252,7 +1982,6 @@ export default function App() {
                      <button onClick={() => handleTripAction('complete')} className="w-full bg-rose-600 text-white font-bold py-2 rounded-xl text-sm shadow hover:bg-rose-700 flex items-center justify-center gap-1.5"><Flag size={16}/> إنهاء الرحلة 🏁</button>
                   )}
 
-                  {/* نصوص الراكب فقط */}
                   {!isActualDriver && ['accepted', 'moving', 'arrived', 'in_progress_trip'].includes(reqStatus) && (
                     <div className="flex justify-between items-center px-2">
                       <span className={`text-xs font-bold ${reqStatus === 'arrived' ? 'text-rose-500' : 'text-emerald-500'}`}>
@@ -2272,16 +2001,18 @@ export default function App() {
                       </div>
                       
                       {!chatInfo[`rated_${chatInfo.tripId}`] ? (
-                        <div className={`p-2 rounded-xl mt-1 ${isDarkMode ? 'bg-slate-700/50' : 'bg-white'}`}>
-                          <p className="text-xs font-bold mb-2">ما تقييمك لـ {chatInfo.otherPersonName} في هذه الرحلة؟</p>
-                          <div className="flex justify-center gap-2" dir="ltr">
+                        <div className={`p-3 rounded-xl mt-1 shadow-inner border ${isDarkMode ? 'bg-slate-800/80 border-slate-700' : 'bg-slate-50 border-slate-200'}`}>
+                          <p className="text-xs font-bold mb-3 text-center">ما تقييمك لـ {chatInfo.otherPersonName} في هذه الرحلة؟</p>
+                          <div className="flex justify-center gap-1.5" dir="ltr" onMouseLeave={() => setHoveredStar(0)}>
                             {[1, 2, 3, 4, 5].map((star) => (
                               <button 
                                 key={star} 
-                                onClick={() => submitRating(chatInfo, star)} 
-                                className="text-slate-300 dark:text-slate-600 hover:text-amber-400 hover:scale-110 transition-all"
+                                onClick={() => submitRating(chatInfo, star)}
+                                onMouseEnter={() => setHoveredStar(star)}
+                                onTouchStart={() => setHoveredStar(star)}
+                                className={`transition-all duration-200 p-1 rounded-full ${star <= hoveredStar ? 'text-amber-400 scale-110 drop-shadow-md' : 'text-slate-300 dark:text-slate-600 scale-100 hover:text-amber-200'}`}
                               >
-                                <Star size={28} />
+                                <Star size={32} fill={star <= hoveredStar ? "currentColor" : "none"} />
                               </button>
                             ))}
                           </div>
@@ -2293,8 +2024,13 @@ export default function App() {
                       )}
                     </div>
                   )}
+                  {reqStatus === 'cancelled' && (
+                    <div className="text-rose-500 font-bold text-sm flex items-center justify-center gap-1 bg-rose-50 dark:bg-rose-900/20 py-2 rounded-xl border border-rose-200 dark:border-rose-800">
+                      <Trash2 size={16}/> تم إلغاء هذه الرحلة
+                    </div>
+                  )}
                   {reqStatus === 'rejected' && (
-                    <div className="text-rose-500 font-bold text-sm flex items-center justify-center gap-1">
+                    <div className="text-rose-500 font-bold text-sm flex items-center justify-center gap-1 bg-rose-50 dark:bg-rose-900/20 py-2 rounded-xl border border-rose-200 dark:border-rose-800">
                       <X size={16}/> تم رفض الطلب
                     </div>
                   )}
@@ -2310,28 +2046,33 @@ export default function App() {
                   if (isSystem) {
                     return (
                       <div key={msg.id} className="flex justify-center my-2">
-                        <span className={`text-[10px] font-bold px-3 py-1 rounded-full ${isDarkMode ? 'bg-slate-800 text-slate-300' : 'bg-slate-200 text-slate-600'}`}>{msg.text}</span>
+                        <span className={`text-[10px] font-bold px-3 py-1.5 shadow-sm rounded-full ${isDarkMode ? 'bg-slate-800/80 text-slate-300 border border-slate-700' : 'bg-slate-200/80 text-slate-600 border border-slate-300'}`}>{msg.text}</span>
                       </div>
                     );
                   }
 
                   return (
                     <div key={msg.id} className={`flex ${isMe ? 'justify-end' : 'justify-start'}`}>
-                      <div className={`max-w-[85%] p-2.5 rounded-xl text-xs shadow-sm ${isMe ? 'bg-indigo-600 text-white rounded-tl-sm' : (isAdminMsg ? 'bg-rose-100 text-rose-900 border border-rose-200 rounded-tr-sm' : (isDarkMode ? 'bg-slate-800 text-white border border-slate-700 rounded-tr-sm' : 'bg-white border border-slate-200 text-slate-800 rounded-tr-sm'))}`}>
+                      <div className={`max-w-[85%] p-3 rounded-2xl text-xs sm:text-sm shadow-md ${isMe ? 'bg-indigo-600 text-white rounded-tl-sm' : (isAdminMsg ? 'bg-rose-100 text-rose-900 border border-rose-200 rounded-tr-sm font-bold' : (isDarkMode ? 'bg-slate-800 text-white border border-slate-700 rounded-tr-sm' : 'bg-white border border-slate-200 text-slate-800 rounded-tr-sm'))}`}>
                         {msg.text}
+                        <div className={`text-[9px] mt-1 text-right w-full ${isMe ? 'text-indigo-200' : 'text-slate-400'}`}>
+                          {msg.createdAt && new Date(safeMillis(msg.createdAt)).toLocaleTimeString('ar-EG', {hour:'2-digit', minute:'2-digit'})}
+                        </div>
                       </div>
                     </div>
                   )
                 })}
                 <div ref={messagesEndRef} />
               </div>
-              <div className={`p-4 border-t ${isDarkMode ? 'bg-slate-800 border-slate-700' : 'bg-white border-slate-200'}`}>
+              <div className={`p-3 sm:p-4 border-t ${isDarkMode ? 'bg-slate-800 border-slate-700' : 'bg-white border-slate-200'}`}>
                 {activeChat.otherPersonId === 'admin' ? (
-                  <div className="text-center text-[10px] font-bold text-slate-400">هذه رسالة إدارية رسمية للمعلومية فقط.</div>
+                  <div className="text-center text-[10px] font-bold text-slate-400 bg-slate-100 dark:bg-slate-900 py-2 rounded-xl">هذه رسالة إدارية رسمية للمعلومية فقط.</div>
+                ) : reqStatus === 'cancelled' ? (
+                  <div className="text-center text-[11px] font-bold text-rose-500 bg-rose-50 dark:bg-rose-900/20 border border-rose-200 dark:border-rose-800 py-3 rounded-xl">تم قفل المحادثة لإلغاء الرحلة 🚫</div>
                 ) : (
                   <form onSubmit={handleSendMessage} className="flex gap-2 items-center">
-                    <input type="text" value={newMessage} onChange={(e) => setNewMessage(e.target.value)} placeholder="اكتب رسالة..." className={`flex-1 rounded-xl px-4 py-3 text-[16px] outline-none focus:ring-2 focus:ring-indigo-500 transition-colors ${bgInput}`} />
-                    <button type="submit" disabled={!newMessage.trim()} className="bg-indigo-600 text-white w-12 h-12 flex items-center justify-center rounded-xl hover:bg-indigo-700 disabled:opacity-50 disabled:bg-slate-400 transition-all shadow-md"><Send size={20} className="rtl:rotate-180" /></button>
+                    <input type="text" value={newMessage} onChange={(e) => setNewMessage(e.target.value)} placeholder="اكتب رسالتك هنا..." className={`flex-1 rounded-2xl px-4 py-3.5 text-[14px] sm:text-[16px] outline-none focus:ring-2 focus:ring-indigo-500 transition-colors shadow-inner ${bgInput}`} />
+                    <button type="submit" disabled={!newMessage.trim()} className="bg-indigo-600 text-white w-14 h-14 flex items-center justify-center rounded-2xl hover:bg-indigo-700 disabled:opacity-50 disabled:bg-slate-400 transition-all shadow-md transform active:scale-95"><Send size={22} className="rtl:rotate-180" /></button>
                   </form>
                 )}
               </div>
