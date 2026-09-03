@@ -1,9 +1,10 @@
-import React, { useState, useEffect, useRef } from 'react';
+iimport React, { useState, useEffect, useRef } from 'react';
 import { collection, onSnapshot, addDoc, doc, setDoc, updateDoc, serverTimestamp, increment } from 'firebase/firestore';
 import { ChevronLeft, Users, User, Loader2, Send, MapPin, Car, MessageCircle } from 'lucide-react';
-// Assuming firebase and helpers are at the root level for the preview to work
-import { db, APP_COLLECTION_NAME, USERS_COLLECTION } from '../firebase';
-import { safeMillis } from '../utils/helpers';
+
+// المسارات الصحيحة من داخل src/components/
+import { db, APP_COLLECTION_NAME, USERS_COLLECTION } from '../../firebase';
+import { safeMillis } from '../../utils/helpers';
 
 const ChatModal = ({ baseChatData, user, userData, isDarkMode, onClose, triggerToast }) => {
   const [messages, setMessages] = useState([]);
