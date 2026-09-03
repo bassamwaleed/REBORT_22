@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { collection, onSnapshot, addDoc, doc, setDoc, updateDoc, serverTimestamp, increment } from 'firebase/firestore';
-import { ChevronLeft, Users, User, Loader2, Send, MapPin, Car } from 'lucide-react';
+import { ChevronLeft, Users, User, Loader2, Send, MapPin, Car, MessageCircle } from 'lucide-react';
 // Assuming firebase and helpers are at the root level for the preview to work
 import { db, APP_COLLECTION_NAME, USERS_COLLECTION } from '../firebase';
 import { safeMillis } from '../utils/helpers';
