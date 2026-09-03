@@ -1,4 +1,4 @@
-import React from 'react';
+import React from 'react'; 
 import { User, ShieldCheck, Star, Edit2, ShieldAlert, Gift, ChevronLeft, Moon, LogOut, Crown, Camera, Loader2 } from 'lucide-react';
 
 const ProfileScreen = ({
