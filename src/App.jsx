@@ -3,11 +3,11 @@ import { onAuthStateChanged, signInWithEmailAndPassword, createUserWithEmailAndP
 import { collection, onSnapshot, doc, getDoc, setDoc, addDoc, updateDoc, deleteDoc, serverTimestamp, increment, getDocs } from 'firebase/firestore';
 import { Loader2, Car, MessageCircle, User, Home, CheckCircle2, Plus, X, MapPin, Tent, ArrowRight, ShieldCheck, Star, Clock, Calendar, Wallet, Users, Map as MapIcon, Lock, Camera, Edit2, ShieldAlert, Gift, Moon, LogOut, GitPullRequest, BusFront, Bell, Target, Activity } from 'lucide-react';
 
-// استيراد الإعدادات والدوال
+// استيراد الإعدادات والدوال (تأكد من مسار الـ firebase والـ utils حسب موقع App.jsx في src)
 import { auth, db, APP_COLLECTION_NAME, USERS_COLLECTION, STATIONS_COLLECTION, ADMIN_EMAIL } from './firebase';
 import { safeMillis, timeToMinutes, formatTripDateTime, EGYPT_CITIES, CITY_COORDS, resizeAndConvertToBase64 } from './utils/helpers';
 
-// استيراد المكونات والشاشات
+// استيراد المكونات والشاشات داخل مجلد src
 import HomeScreen from './screens/HomeScreen';
 import ChatModal from './components/ChatModal';
 import LiveTrackerBar from './components/LiveTrackerBar';
@@ -455,8 +455,8 @@ export default function App() {
         </div>
       )}
 
-      {/* LIVE TRACKER COMPONENT (ISOLATED) */}
-      {!isGuest && activeTrackers.length > 0 && (!activeChat || activeChat.chatId !== (currentTracker?.type==='normal' ? currentTracker.data.chatId : currentTracker?.data.id)) && (
+      {/* LIVE TRACKER COMPONENT (ISOLATED) - FIXED WITH activeTrackers[0] */}
+      {!isGuest && activeTrackers.length > 0 && (!activeChat || activeChat.chatId !== (activeTrackers[0]?.type === 'normal' ? activeTrackers[0].data.chatId : activeTrackers[0]?.data.id)) && (
         <LiveTrackerBar activeTrackers={activeTrackers} isDarkMode={isDarkMode} setActiveChat={setActiveChat} setSelectedWeekendTrip={setSelectedWeekendTrip} setActiveTab={setActiveTab} setViewMode={setViewMode} />
       )}
 
@@ -472,4 +472,4 @@ export default function App() {
       </nav>
     </div>
   );
-} 
+}
