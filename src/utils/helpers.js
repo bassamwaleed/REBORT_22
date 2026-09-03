@@ -82,3 +82,4 @@ export const resizeAndConvertToBase64 = (file, maxWidth = 800, maxHeight = 800, 
     } catch (err) { reject(err); }
   });
 };
+ 
