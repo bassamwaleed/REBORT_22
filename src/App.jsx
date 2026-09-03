@@ -3,12 +3,13 @@ import { onAuthStateChanged, signInWithEmailAndPassword, createUserWithEmailAndP
 import { collection, onSnapshot, doc, getDoc, setDoc, addDoc, updateDoc, deleteDoc, serverTimestamp, increment, getDocs } from 'firebase/firestore';
 import { Loader2, Car, MessageCircle, User, Home, CheckCircle2, Plus, X, MapPin, Tent, ArrowRight, ShieldCheck, Star, Clock, Calendar, Wallet, Users, Map as MapIcon, Lock, Camera, Edit2, ShieldAlert, Gift, Moon, LogOut, GitPullRequest, BusFront, Bell, Target, Activity } from 'lucide-react';
 
-// استيراد الإعدادات والدوال (تأكد من مسار الـ firebase والـ utils حسب موقع App.jsx في src)
+// استيراد الإعدادات والدوال
 import { auth, db, APP_COLLECTION_NAME, USERS_COLLECTION, STATIONS_COLLECTION, ADMIN_EMAIL } from './firebase';
 import { safeMillis, timeToMinutes, formatTripDateTime, EGYPT_CITIES, CITY_COORDS, resizeAndConvertToBase64 } from './utils/helpers';
 
-// استيراد المكونات والشاشات داخل مجلد src
+// استيراد المكونات والشاشات
 import HomeScreen from './screens/HomeScreen';
+import ProfileScreen from './screens/ProfileScreen';
 import ChatModal from './components/ChatModal';
 import LiveTrackerBar from './components/LiveTrackerBar';
 
@@ -36,7 +37,6 @@ export default function App() {
   const [realTrips, setRealTrips] = useState([]); 
   const [stations, setStations] = useState([]); 
   const [myInbox, setMyInbox] = useState([]);
-  const [appLogo, setAppLogo] = useState(null);
   
   // --- SELECTION STATES ---
   const [selectedStation, setSelectedStation] = useState(null);
@@ -48,12 +48,10 @@ export default function App() {
   const [showMatchModal, setShowMatchModal] = useState(false);
   const [matchedTrips, setMatchedTrips] = useState([]);
   const [matchedTargetType, setMatchedTargetType] = useState('عربيات'); 
-  const [showAlertModal, setShowAlertModal] = useState(false);
-  const [showSuggestStationModal, setShowSuggestStationModal] = useState(false);
-  const [showSuggestModal, setShowSuggestModal] = useState(false);
   const [isUploadingAvatar, setIsUploadingAvatar] = useState(false);
   const [showRewardsModal, setShowRewardsModal] = useState(false);
   const [showVerifyModal, setShowVerifyModal] = useState(false);
+  const [showAdminPanel, setShowAdminPanel] = useState(false);
   
   // --- FORMS & ALERTS ---
   const [isLoginMode, setIsLoginMode] = useState(true);
@@ -152,6 +150,30 @@ export default function App() {
   const handleGuestLogin = async () => { setAuthLoading(true); try { await signInAnonymously(auth); } catch (error) {} finally { setAuthLoading(false); } };
   const toggleTheme = () => { const newTheme = !isDarkMode; setIsDarkMode(newTheme); localStorage.setItem('khodnimaak_theme', newTheme ? 'dark' : 'light'); };
   const handleLogout = async () => { try { await signOut(auth); setUserData(null); setMyInbox([]); setActiveChat(null); setSelectedWeekendTrip(null); setActiveTab('home'); } catch(e) {} };
+
+  const handleEditName = async () => {
+    const newName = prompt('أدخل الاسم الجديد:', userData?.name || '');
+    if (!newName || !newName.trim()) return;
+    try {
+      await updateDoc(doc(db, USERS_COLLECTION, user.uid), { name: newName.trim() });
+      await updateProfile(auth.currentUser, { displayName: newName.trim() });
+      setUserData(prev => ({ ...prev, name: newName.trim() }));
+      triggerToast('تم تحديث الاسم بنجاح');
+    } catch (e) {
+      triggerToast('تعذر تحديث الاسم');
+    }
+  };
+
+  const handleRequestVerification = async () => {
+    try {
+      await updateDoc(doc(db, USERS_COLLECTION, user.uid), { verificationStatus: 'pending' });
+      setUserData(prev => ({ ...prev, verificationStatus: 'pending' }));
+      setShowVerifyModal(false);
+      triggerToast('تم إرسال طلب التوثيق للمراجعة بنجاح ✅');
+    } catch (e) {
+      triggerToast('حدث خطأ أثناء إرسال الطلب');
+    }
+  };
 
   // --- LOGIC ---
   const findMatchingRides = (newPostedTrip) => {
@@ -354,9 +376,70 @@ export default function App() {
         />
       )}
 
+      {activeTab === 'profile' && (
+        <ProfileScreen 
+          user={user}
+          userData={userData}
+          isGuest={isGuest}
+          isAdmin={isAdmin}
+          isDarkMode={isDarkMode}
+          toggleTheme={toggleTheme}
+          handleLogout={handleLogout}
+          isUploadingAvatar={isUploadingAvatar}
+          handleAvatarUpload={handleAvatarUpload}
+          handleEditName={handleEditName}
+          setShowVerifyModal={setShowVerifyModal}
+          setShowRewardsModal={setShowRewardsModal}
+          setShowAdminPanel={setShowAdminPanel}
+          forceSignUpScreen={forceSignUpScreen}
+        />
+      )}
+
       {/* CHAT MODAL INSTANCE */}
       {activeChat && !isGuest && (
         <ChatModal baseChatData={activeChat} user={user} userData={userData} isDarkMode={isDarkMode} onClose={() => setActiveChat(null)} triggerToast={triggerToast} />
+      )}
+
+      {/* REWARDS MODAL */}
+      {showRewardsModal && (
+        <div className="fixed inset-0 bg-slate-900/80 backdrop-blur-sm z-[350] flex justify-center items-center p-4">
+          <div className={`${bgCard} w-full max-w-sm rounded-[2rem] p-6 shadow-2xl border`}>
+            <h3 className="text-lg font-black mb-2 text-indigo-600">🎁 مكافآت السائقين</h3>
+            <p className={`text-sm mb-4 ${textSecondary}`}>لقد أكملت {userData?.completedTripsCount || 0} رحلة بنجاح. استمر في تقديم خدمات ممتازة!</p>
+            <button onClick={() => setShowRewardsModal(false)} className="w-full bg-indigo-600 text-white py-3 rounded-xl font-bold">إغلاق</button>
+          </div>
+        </div>
+      )}
+
+      {/* VERIFY MODAL */}
+      {showVerifyModal && (
+        <div className="fixed inset-0 bg-slate-900/80 backdrop-blur-sm z-[350] flex justify-center items-center p-4">
+          <div className={`${bgCard} w-full max-w-sm rounded-[2rem] p-6 shadow-2xl border`}>
+            <h3 className="text-lg font-black mb-2 text-indigo-600">🛡️ توثيق الحساب</h3>
+            <p className={`text-sm mb-4 ${textSecondary}`}>هل تريد إرسال طلب توثيق الحساب للإدارة؟ سيتم مراجعة بياناتك في أقرب وقت.</p>
+            <div className="flex gap-2">
+              <button onClick={handleRequestVerification} className="flex-1 bg-emerald-600 text-white py-3 rounded-xl font-bold">إرسال الطلب</button>
+              <button onClick={() => setShowVerifyModal(false)} className="flex-1 bg-slate-200 text-slate-700 dark:bg-slate-800 dark:text-slate-300 py-3 rounded-xl font-bold">إلغاء</button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ADMIN PANEL MODAL (عرض مبسط للوحة الأدمن عند الضغط عليها) */}
+      {showAdminPanel && isAdmin && (
+        <div className="fixed inset-0 bg-slate-900/90 backdrop-blur-sm z-[400] flex justify-center items-center p-4">
+          <div className={`${bgCard} w-full max-w-md h-[80vh] rounded-[2rem] p-6 shadow-2xl flex flex-col border`}>
+            <div className="flex justify-between items-center mb-4 border-b pb-3">
+              <h3 className="text-lg font-black text-indigo-600 flex items-center gap-2">👑 لوحة التحكم والإدارة</h3>
+              <button onClick={() => setShowAdminPanel(false)} className="p-2 bg-slate-200 dark:bg-slate-700 rounded-full"><X size={18}/></button>
+            </div>
+            <div className="flex-1 overflow-y-auto space-y-3">
+              <p className="text-xs text-slate-500">أهلاً بك يا مدير النظام. يمكنك هنا متابعة الرحلات والمستخدمين والتحكم في إعدادات التطبيق.</p>
+              {/* محتوى اللوحة يمكن ربطه بالبيانات المتاحة */}
+            </div>
+            <button onClick={() => setShowAdminPanel(false)} className="w-full mt-4 bg-indigo-600 text-white py-3 rounded-xl font-bold">إغلاق اللوحة</button>
+          </div>
+        </div>
       )}
 
       {/* MATCHING MODAL */}
@@ -406,30 +489,6 @@ export default function App() {
         </div>
       )}
 
-      {/* PROFILE TAB */}
-      {activeTab === 'profile' && !isGuest && (
-        <div className="pb-[120px] flex-1 w-full max-w-2xl mx-auto px-4 py-6 mt-4 relative z-10 animate-fade-in-up">
-           <div className={`p-6 rounded-[2rem] border shadow-sm flex flex-col items-center ${bgCard}`}>
-             <div className="relative mb-3 group">
-                <div className="w-24 h-24 rounded-full bg-slate-200 border-4 border-white dark:border-slate-800 overflow-hidden">
-                  {userData?.photoURL ? <img src={userData.photoURL} alt="P" className="w-full h-full object-cover"/> : <User size={40} className="m-auto mt-6 text-slate-400"/>}
-                </div>
-                <label className="absolute bottom-0 right-0 p-2 bg-indigo-600 text-white rounded-full cursor-pointer shadow-lg hover:bg-indigo-700 transition">
-                  {isUploadingAvatar ? <Loader2 size={14} className="animate-spin" /> : <Camera size={14} />}
-                  <input type="file" accept="image/*" className="hidden" onChange={handleAvatarUpload} disabled={isUploadingAvatar} />
-                </label>
-             </div>
-             <h3 className={`font-black text-xl flex items-center gap-1.5 ${textPrimary}`}>{userData?.name || 'مستخدم'} {userData?.isVerified && <ShieldCheck size={20} className="text-emerald-500" title="موثق"/>}</h3>
-             <p className={`text-sm mt-1 font-medium ${textSecondary}`}>{userData?.phone || userData?.email}</p>
-           </div>
-           
-           <div className={`rounded-[1.5rem] border overflow-hidden ${bgCard} mt-6`}>
-             <div className="p-4 border-b dark:border-slate-800 flex justify-between items-center"><div className="flex items-center gap-3"><Moon size={20}/><span className="font-bold text-sm">الوضع الليلي</span></div><button onClick={toggleTheme} className={`w-12 h-6 rounded-full relative transition-colors ${isDarkMode ? 'bg-indigo-500' : 'bg-slate-200'}`}><span className={`absolute top-1 w-4 h-4 bg-white rounded-full transition-all ${isDarkMode ? 'left-1' : 'right-1'}`}></span></button></div>
-             <div onClick={handleLogout} className="p-4 flex justify-between items-center cursor-pointer text-rose-600 hover:bg-rose-50 dark:hover:bg-rose-900/10 transition-colors"><div className="flex items-center gap-3"><LogOut size={20}/><span className="font-bold text-sm">تسجيل الخروج</span></div></div>
-           </div>
-        </div>
-      )}
-
       {/* GUEST AUTH SCREEN */}
       {!user && (
         <div dir="rtl" className={`fixed inset-0 flex items-center justify-center p-4 z-[1000] ${bgMain}`}>
@@ -455,7 +514,7 @@ export default function App() {
         </div>
       )}
 
-      {/* LIVE TRACKER COMPONENT (ISOLATED) - FIXED WITH activeTrackers[0] */}
+      {/* LIVE TRACKER COMPONENT (ISOLATED) */}
       {!isGuest && activeTrackers.length > 0 && (!activeChat || activeChat.chatId !== (activeTrackers[0]?.type === 'normal' ? activeTrackers[0].data.chatId : activeTrackers[0]?.data.id)) && (
         <LiveTrackerBar activeTrackers={activeTrackers} isDarkMode={isDarkMode} setActiveChat={setActiveChat} setSelectedWeekendTrip={setSelectedWeekendTrip} setActiveTab={setActiveTab} setViewMode={setViewMode} />
       )}
