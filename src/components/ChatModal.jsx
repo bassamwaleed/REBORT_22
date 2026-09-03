@@ -2,7 +2,7 @@ import React, { useState, useEffect, useRef } from 'react';
 import { collection, onSnapshot, addDoc, doc, setDoc, updateDoc, serverTimestamp, increment } from 'firebase/firestore';
 import { ChevronLeft, Users, User, Loader2, Send, MapPin, Car, MessageCircle } from 'lucide-react';
 
-import { db, APP_COLLECTION_NAME, USERS_COLLECTION } from '../firebase';
+import { db, APP_COLLECTION_NAME, USERS_COLLECTION } from '../../firebase';
 import { safeMillis } from '../utils/helpers';
 
 const ChatModal = ({ baseChatData, user, userData, isDarkMode, onClose, triggerToast }) => {
