@@ -218,4 +218,4 @@ const ChatModal = ({ baseChatData, user, userData, isDarkMode, onClose, triggerT
   );
 };
 
-export default ChatModal;
+export default ChatModal; 
