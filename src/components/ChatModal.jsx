@@ -1,23 +1,20 @@
-iimport React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { collection, onSnapshot, addDoc, doc, setDoc, updateDoc, serverTimestamp, increment } from 'firebase/firestore';
 import { ChevronLeft, Users, User, Loader2, Send, MapPin, Car, MessageCircle } from 'lucide-react';
 
-// المسارات الصحيحة من داخل src/components/
-import { db, APP_COLLECTION_NAME, USERS_COLLECTION } from '../../firebase';
-import { safeMillis } from '../../utils/helpers';
+import { db, APP_COLLECTION_NAME, USERS_COLLECTION } from '../firebase';
+import { safeMillis } from '../utils/helpers';
 
 const ChatModal = ({ baseChatData, user, userData, isDarkMode, onClose, triggerToast }) => {
   const [messages, setMessages] = useState([]);
   const [newMessage, setNewMessage] = useState('');
   const [isChatLoading, setIsChatLoading] = useState(true);
   
-  // هنا السر! بنعمل State خاصة بالشات ده بس عشان الزراير تتحدث فوراً
   const [liveChatInfo, setLiveChatInfo] = useState(baseChatData); 
   const messagesEndRef = useRef(null);
   
   const bgInput = isDarkMode ? 'bg-slate-800 border-slate-700 text-white placeholder-slate-400 focus:border-indigo-500' : 'bg-white border-slate-200 text-slate-900 focus:border-indigo-500';
 
-  // 1. مستمع لحظي لحالة الطلب (عشان الزراير تتغير بدون تحديث الصفحة)
   useEffect(() => {
     if(!user || !baseChatData?.chatId) return;
     const unsub = onSnapshot(doc(db, `inbox_${user.uid}`, baseChatData.chatId), (docSnap) => {
@@ -28,7 +25,6 @@ const ChatModal = ({ baseChatData, user, userData, isDarkMode, onClose, triggerT
     return () => unsub();
   }, [user, baseChatData?.chatId]);
 
-  // 2. مستمع لحظي للرسائل
   useEffect(() => {
     if (!user || !baseChatData?.chatId) return;
     setIsChatLoading(true);
@@ -42,7 +38,6 @@ const ChatModal = ({ baseChatData, user, userData, isDarkMode, onClose, triggerT
     return () => unsub();
   }, [user, baseChatData?.chatId]);
 
-  // دالة إرسال رسالة
   const handleSendMessage = async (e) => {
     e.preventDefault();
     if (!newMessage?.trim() || !baseChatData?.chatId) return;
@@ -75,7 +70,6 @@ const ChatModal = ({ baseChatData, user, userData, isDarkMode, onClose, triggerT
     }
   };
 
-  // دالة تغيير حالة الطلب (قبول، رفض، بدء رحلة، الخ)
   const handleTripAction = async (actionType) => {
     if (!liveChatInfo || !liveChatInfo.chatId || !user) return;
     try {
@@ -122,7 +116,6 @@ const ChatModal = ({ baseChatData, user, userData, isDarkMode, onClose, triggerT
     }
   };
   
-  // حساب الصلاحيات بناءً على البيانات اللحظية
   const reqStatus = liveChatInfo?.requestStatus || 'none';
   const isTripOwner = liveChatInfo?.tripOwnerId === user?.uid;
   const isActualDriver = (liveChatInfo?.tripType === 'offer' || liveChatInfo?.tripType === 'delivery') ? isTripOwner : !isTripOwner;
@@ -132,7 +125,6 @@ const ChatModal = ({ baseChatData, user, userData, isDarkMode, onClose, triggerT
     <div className="fixed inset-0 bg-slate-900/90 backdrop-blur-sm z-[300] flex justify-center items-end sm:items-center p-0 sm:p-4 pointer-events-auto">
       <div className={`bg-white dark:bg-slate-900 w-full h-[85vh] sm:h-[650px] sm:max-w-md rounded-t-[2rem] sm:rounded-[2rem] shadow-2xl flex flex-col overflow-hidden animate-fade-in-up relative border dark:border-slate-700`}>
         
-        {/* Header */}
         <div className={`text-white p-4 flex items-center gap-3 shadow-md z-20 ${liveChatInfo?.isGroup ? 'bg-purple-600' : 'bg-indigo-600'}`}>
           <button onClick={onClose} className="p-2 rounded-full hover:bg-black/20"><ChevronLeft size={24} /></button>
           <div className="w-10 h-10 bg-white/20 rounded-full flex items-center justify-center shrink-0 font-bold overflow-hidden border border-white/30">
@@ -143,7 +135,6 @@ const ChatModal = ({ baseChatData, user, userData, isDarkMode, onClose, triggerT
           </div>
         </div>
 
-        {/* شريط الأزرار التفاعلي */}
         {!liveChatInfo?.isGroup && liveChatInfo?.tripInfo !== 'system' && (
           <div className={`p-3 border-b text-center shadow-sm z-10 space-y-2 ${isDarkMode ? 'bg-slate-800 border-slate-700' : 'bg-slate-50 border-slate-200'}`}>
             
@@ -180,7 +171,6 @@ const ChatModal = ({ baseChatData, user, userData, isDarkMode, onClose, triggerT
           </div>
         )}
 
-        {/* عرض الرسائل */}
         <div className={`flex-1 overflow-y-auto p-4 space-y-4 ${isDarkMode ? 'bg-slate-900/80' : 'bg-slate-100/50'}`}>
           {isChatLoading ? ( 
             <div className="flex justify-center items-center h-full"><Loader2 className="animate-spin text-indigo-500" size={30}/></div> 
@@ -205,7 +195,6 @@ const ChatModal = ({ baseChatData, user, userData, isDarkMode, onClose, triggerT
           <div ref={messagesEndRef} />
         </div>
         
-        {/* خانة الكتابة */}
         <div className={`p-3 sm:p-4 border-t ${isDarkMode ? 'bg-slate-800 border-slate-700' : 'bg-white border-slate-200'}`}>
             <form onSubmit={handleSendMessage} className="flex gap-2 items-center">
               <input type="text" value={newMessage} onChange={(e) => setNewMessage(e.target.value)} placeholder="اكتب رسالتك..." className={`flex-1 rounded-2xl px-4 py-3.5 text-sm outline-none focus:ring-2 focus:ring-indigo-500 ${bgInput}`} />
@@ -219,4 +208,4 @@ const ChatModal = ({ baseChatData, user, userData, isDarkMode, onClose, triggerT
   );
 };
 
-export default ChatModal; 
+export default ChatModal;
