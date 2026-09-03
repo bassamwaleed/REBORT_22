@@ -42,7 +42,7 @@ const ProfileScreen = ({
       <div className="space-y-4">
         
         {/* زرار الأدمن (يظهر للمدير فقط) */}
-        {isAdmin && ( 
+        {isAdmin && setShowAdminPanel && ( 
           <button onClick={() => setShowAdminPanel(true)} className="w-full p-4 rounded-2xl flex justify-between items-center bg-indigo-900 text-white shadow-md active:scale-95 transition-transform border border-indigo-700">
             <span className="font-black text-base flex items-center gap-2"><Crown size={20} className="text-amber-400"/> لوحة الإدارة (كاملة)</span>
             <ChevronLeft size={20}/>
@@ -76,24 +76,26 @@ const ProfileScreen = ({
         {/* لوحة السائق وميزات التوثيق */}
         <h4 className={`px-2 font-black text-lg mt-6 mb-2 ${textPrimary}`}>لوحة السائق</h4>
         
-        {!userData?.isVerified && (
-          <div className={`p-5 rounded-[1.5rem] border shadow-sm flex items-center justify-between ${userData?.verificationStatus === 'pending' ? 'bg-amber-50 border-amber-200 dark:bg-amber-900/20' : 'bg-slate-50 border-slate-200 dark:bg-slate-800'}`}>
-             <div className="flex items-center gap-4">
-               <div className={`p-3 rounded-2xl ${userData?.verificationStatus === 'pending' ? 'bg-amber-100 text-amber-600' : 'bg-blue-100 text-blue-600'}`}>
-                 <ShieldAlert size={24}/>
-               </div>
-               <div>
-                 <h4 className={`font-black text-sm ${textPrimary}`}>التوثيق (مطلوب)</h4>
-                 <p className={`text-[11px] font-medium mt-1 ${textSecondary}`}>{userData?.verificationStatus === 'pending' ? 'طلبك قيد المراجعة.' : 'وثق حسابك الآن.'}</p>
-               </div>
+        <div className={`p-5 rounded-[1.5rem] border shadow-sm flex items-center justify-between ${userData?.verificationStatus === 'pending' ? 'bg-amber-50 border-amber-200 dark:bg-amber-900/20' : 'bg-slate-50 border-slate-200 dark:bg-slate-800'}`}>
+           <div className="flex items-center gap-4">
+             <div className={`p-3 rounded-2xl ${userData?.isVerified ? 'bg-emerald-100 text-emerald-600' : userData?.verificationStatus === 'pending' ? 'bg-amber-100 text-amber-600' : 'bg-blue-100 text-blue-600'}`}>
+               <ShieldAlert size={24}/>
              </div>
-             {userData?.verificationStatus !== 'pending' && ( 
-               <button onClick={() => setShowVerifyModal && setShowVerifyModal(true)} className="bg-indigo-600 text-white px-4 py-2 rounded-xl text-xs font-black shadow-md hover:bg-indigo-700 transition-colors">
-                 وثق الآن
-               </button> 
-             )}
-          </div>
-        )}
+             <div>
+               <h4 className={`font-black text-sm ${textPrimary}`}>
+                 {userData?.isVerified ? 'الحساب موثق ✅' : 'التوثيق (مطلوب)'}
+               </h4>
+               <p className={`text-[11px] font-medium mt-1 ${textSecondary}`}>
+                 {userData?.isVerified ? 'حسابك موثق بنجاح.' : userData?.verificationStatus === 'pending' ? 'طلبك قيد المراجعة.' : 'وثق حسابك الآن للحصول على مميزات إضافية.'}
+               </p>
+             </div>
+           </div>
+           {!userData?.isVerified && userData?.verificationStatus !== 'pending' && ( 
+             <button onClick={() => setShowVerifyModal && setShowVerifyModal(true)} className="bg-indigo-600 text-white px-4 py-2 rounded-xl text-xs font-black shadow-md hover:bg-indigo-700 transition-colors">
+               وثق الآن
+             </button> 
+           )}
+        </div>
 
         <div onClick={() => setShowRewardsModal && setShowRewardsModal(true)} className={`p-5 rounded-[1.5rem] border shadow-sm flex items-center justify-between cursor-pointer hover:shadow-md transition-shadow ${bgCard}`}>
            <div className="flex items-center gap-4">
@@ -133,4 +135,4 @@ const ProfileScreen = ({
   );
 };
 
-export default ProfileScreen; 
+export default ProfileScreen;
