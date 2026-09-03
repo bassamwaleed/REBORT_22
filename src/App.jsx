@@ -425,7 +425,7 @@ export default function App() {
         </div>
       )}
 
-      {/* ADMIN PANEL MODAL (عرض مبسط للوحة الأدمن عند الضغط عليها) */}
+      {/* ADMIN PANEL MODAL */}
       {showAdminPanel && isAdmin && (
         <div className="fixed inset-0 bg-slate-900/90 backdrop-blur-sm z-[400] flex justify-center items-center p-4">
           <div className={`${bgCard} w-full max-w-md h-[80vh] rounded-[2rem] p-6 shadow-2xl flex flex-col border`}>
@@ -435,7 +435,6 @@ export default function App() {
             </div>
             <div className="flex-1 overflow-y-auto space-y-3">
               <p className="text-xs text-slate-500">أهلاً بك يا مدير النظام. يمكنك هنا متابعة الرحلات والمستخدمين والتحكم في إعدادات التطبيق.</p>
-              {/* محتوى اللوحة يمكن ربطه بالبيانات المتاحة */}
             </div>
             <button onClick={() => setShowAdminPanel(false)} className="w-full mt-4 bg-indigo-600 text-white py-3 rounded-xl font-bold">إغلاق اللوحة</button>
           </div>
