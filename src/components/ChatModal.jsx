@@ -2,7 +2,7 @@ import React, { useState, useEffect, useRef } from 'react';
 import { collection, onSnapshot, addDoc, doc, setDoc, updateDoc, serverTimestamp, increment } from 'firebase/firestore';
 import { ChevronLeft, Users, User, Loader2, Send, MapPin, Car, MessageCircle } from 'lucide-react';
 
-import { db, APP_COLLECTION_NAME, USERS_COLLECTION } from '../../firebase';
+import { db, APP_COLLECTION_NAME, USERS_COLLECTION } from '../firebase';
 import { safeMillis } from '../utils/helpers';
 
 const ChatModal = ({ baseChatData, user, userData, isDarkMode, onClose, triggerToast }) => {
@@ -74,8 +74,7 @@ const ChatModal = ({ baseChatData, user, userData, isDarkMode, onClose, triggerT
     if (!liveChatInfo || !liveChatInfo.chatId || !user) return;
     try {
       const chatId = liveChatInfo.chatId;
-      let newStatus = 'none'; 
-      let systemText = '';
+      let newStatus = ''; let systemText = '';
 
       if (actionType === 'request') { newStatus = 'pending'; systemText = 'قام بإرسال طلب للتنسيق 🙋‍♂️'; } 
       else if (actionType === 'cancel_request') { newStatus = 'none'; systemText = 'قام بإلغاء الطلب 🔙'; } 
@@ -85,8 +84,7 @@ const ChatModal = ({ baseChatData, user, userData, isDarkMode, onClose, triggerT
       else if (actionType === 'arrive') { newStatus = 'arrived'; systemText = 'تنبيه: الكابتن وصل 📍'; } 
       else if (actionType === 'start_trip') { newStatus = 'in_progress_trip'; systemText = 'بدأت الرحلة.. نتمنى لكم طريقاً آمناً 🛣️'; } 
       else if (actionType === 'complete') {
-        newStatus = 'completed'; 
-        systemText = 'تم إنهاء العملية بنجاح! ✅';
+        newStatus = 'completed'; systemText = 'تم إنهاء العملية بنجاح! ✅';
         if (liveChatInfo.tripId && liveChatInfo.tripId !== 'system') { 
            try { 
              await updateDoc(doc(db, APP_COLLECTION_NAME, liveChatInfo.tripId), { status: 'completed' }); 
@@ -97,52 +95,24 @@ const ChatModal = ({ baseChatData, user, userData, isDarkMode, onClose, triggerT
         }
       }
 
-      const updateDataMe = { 
-        requestStatus: newStatus, 
-        lastMessage: systemText, 
-        lastSenderId: user.uid, 
-        lastMessageTime: Date.now() 
-      };
-      
+      const updateDataMe = { requestStatus: newStatus, lastMessage: systemText, lastSenderId: user.uid, lastMessageTime: Date.now() };
       const updateDataOther = { ...updateDataMe };
 
       if (actionType === 'request') { 
-         updateDataMe.requestSenderId = user.uid; 
-         updateDataOther.requestSenderId = user.uid; 
-         updateDataOther.tripId = liveChatInfo.tripId || ''; 
-         updateDataOther.tripType = liveChatInfo.tripType || 'offer'; 
-         updateDataOther.tripOwnerId = liveChatInfo.tripOwnerId || ''; 
-         updateDataOther.tripInfo = liveChatInfo.tripInfo || ''; 
-         updateDataOther.otherPersonId = user.uid; 
-         updateDataOther.otherPersonName = userData?.name || 'مستخدم'; 
-         updateDataOther.otherPersonPhoto = userData?.photoURL || null; 
-         updateDataOther.otherPersonVerified = userData?.isVerified || false;
+         updateDataMe.requestSenderId = user.uid; updateDataOther.requestSenderId = user.uid; 
+         updateDataOther.tripId = liveChatInfo.tripId; updateDataOther.tripType = liveChatInfo.tripType; updateDataOther.tripOwnerId = liveChatInfo.tripOwnerId; updateDataOther.tripInfo = liveChatInfo.tripInfo; updateDataOther.otherPersonId = user.uid; updateDataOther.otherPersonName = userData?.name || 'مستخدم'; updateDataOther.otherPersonPhoto = userData?.photoURL || null; updateDataOther.otherPersonVerified = userData?.isVerified || false;
       }
-      if (actionType === 'cancel_request') { 
-        updateDataMe.requestSenderId = null; 
-        updateDataOther.requestSenderId = null; 
-      }
-      if (actionType === 'accept') { 
-        updateDataMe.tripStartTime = Date.now(); 
-        updateDataOther.tripStartTime = Date.now(); 
-      }
+      if (actionType === 'cancel_request') { updateDataMe.requestSenderId = null; updateDataOther.requestSenderId = null; }
+      if (actionType === 'accept') { updateDataMe.tripStartTime = serverTimestamp(); updateDataOther.tripStartTime = serverTimestamp(); }
       
       await setDoc(doc(db, `inbox_${user.uid}`, chatId), updateDataMe, { merge: true });
       if (liveChatInfo.otherPersonId && !liveChatInfo.isGroup) { 
         await setDoc(doc(db, `inbox_${liveChatInfo.otherPersonId}`, chatId), updateDataOther, { merge: true }); 
       }
-      
-      await addDoc(collection(db, `chats_${chatId}`), { 
-        text: systemText, 
-        senderId: 'system', 
-        isSystem: true, 
-        createdAt: serverTimestamp() 
-      });
-      
+      await addDoc(collection(db, `chats_${chatId}`), { text: systemText, senderId: 'system', isSystem: true, createdAt: serverTimestamp() });
       triggerToast('تم تحديث الحالة.');
     } catch (error) { 
-      console.error(error);
-      triggerToast('حدث خطأ أثناء تنفيذ الإجراء.'); 
+      triggerToast('حدث خطأ.'); 
     }
   };
   
