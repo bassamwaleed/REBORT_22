@@ -1,9 +1,8 @@
 import React from 'react';
 import ReactDOM from 'react-dom/client';
-import App from './App.jsx';
+import App from './src/App.jsx'; // التعديل هنا: ضفنا /src
 
-// تأكد من وجود ملف index.css في نفس المجلد (src)
-import './index.css'; 
+import './src/index.css'; // التعديل هنا: ضفنا /src
 
 ReactDOM.createRoot(document.getElementById('root')).render(
   <React.StrictMode>
