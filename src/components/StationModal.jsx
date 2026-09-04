@@ -3,7 +3,7 @@ import { doc, getDoc, updateDoc } from 'firebase/firestore';
 import { X, MapPinned, Route, Plus, Loader2, BusFront, CheckCircle2 } from 'lucide-react';
 import { db, STATIONS_COLLECTION } from '../firebase';
 import { EGYPT_CITIES } from '../utils/helpers';
- 
+
 const StationModal = ({ station, user, isAdmin, isGuest, isDarkMode, onClose, triggerToast }) => {
   const [isAddingRoute, setIsAddingRoute] = useState(false);
   const [newRouteDest, setNewRouteDest] = useState('');
@@ -140,7 +140,6 @@ const StationModal = ({ station, user, isAdmin, isGuest, isDarkMode, onClose, tr
               </div>
             ) : (
               station.routes.map((route, index) => {
-                // إخفاء الخطوط قيد المراجعة عن المستخدم العادي (إلا لو هو اللي ضايفها)
                 if (!isAdmin && route.status === 'pending' && !route.addedBy?.includes(user?.uid)) return null;
                 
                 return (
