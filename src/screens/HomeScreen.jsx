@@ -1,5 +1,5 @@
-import React, { useState, useEffect } from 'react';
-import { Bell, BusFront, MapPinned, List, X, ChevronRight, ChevronLeft } from 'lucide-react';
+import React from 'react';
+import { Bell, BusFront, MapPinned, List, X, Plus, Route } from 'lucide-react';
 import TripCard from '../components/TripCard';
 import { EGYPT_CITIES } from '../utils/helpers';
 
@@ -7,24 +7,12 @@ const HomeScreen = ({
   user, isAdmin, isDarkMode, realTrips, stations, isGuest,
   homeCategory, setHomeCategory, viewMode, setViewMode, filterType, setFilterType,
   filterFrom, setFilterFrom, filterTo, setFilterTo, openChatFromTrip,
-  setSelectedStation, triggerToast, appSettings
+  setSelectedStation, setShowSuggestStationModal, triggerToast, appSettings
 }) => {
   
-  // Slider Logic
-  const [currentSlide, setCurrentSlide] = useState(0);
-  const banners = Array.isArray(appSettings?.banners) ? appSettings.banners : (appSettings?.banner ? [appSettings.banner] : []);
-
-  useEffect(() => {
-    if (banners.length <= 1) return;
-    const interval = setInterval(() => {
-      setCurrentSlide((prev) => (prev + 1) % banners.length);
-    }, 3500); // يغير الصورة كل 3.5 ثانية
-    return () => clearInterval(interval);
-  }, [banners.length]);
-
+  // 1. فلترة الرحلات (مع إزالة الأفواج تماماً)
   const visibleTrips = (realTrips || []).filter(t => {
     if (!t || t.status === 'cancelled') return false; 
-    // شيلنا شرط الـ weekend من الفلترة نهائياً
     if (homeCategory === 'travel') {
        return t.category === 'travel' && t.type === filterType && (!filterFrom || t.from === filterFrom) && (!filterTo || t.to === filterTo);
     }
@@ -34,9 +22,27 @@ const HomeScreen = ({
     return false;
   });
 
+  // 2. فلترة المواقف (إظهار المعتمد فقط للمستخدمين، وإظهار الكل للأدمن)
+  const visibleStations = (stations || []).filter(s => {
+    if (isAdmin) return true; // الأدمن بيشوف كل حاجة
+    return s.status === 'approved' || !s.status; // المستخدم العادي بيشوف المعتمد بس (أو القديم اللي ملوش حالة)
+  });
+
   const bgInput = isDarkMode ? 'bg-slate-800 border-slate-700 text-white placeholder-slate-400 focus:border-indigo-500' : 'bg-white border-slate-200 text-slate-900 focus:border-indigo-500';
   const textPrimary = isDarkMode ? 'text-white' : 'text-slate-900';
   const bgCard = isDarkMode ? 'bg-slate-900 border-slate-800' : 'bg-white border-slate-200';
+
+  // Slider Logic للبانرات
+  const [currentSlide, setCurrentSlide] = React.useState(0);
+  const banners = Array.isArray(appSettings?.banners) ? appSettings.banners : (appSettings?.banner ? [appSettings.banner] : []);
+
+  React.useEffect(() => {
+    if (banners.length <= 1) return;
+    const interval = setInterval(() => {
+      setCurrentSlide((prev) => (prev + 1) % banners.length);
+    }, 3500); 
+    return () => clearInterval(interval);
+  }, [banners.length]);
 
   return (
     <main className="flex-1 w-full max-w-2xl mx-auto px-4 py-6 relative z-10 pb-[100px]">
@@ -44,12 +50,16 @@ const HomeScreen = ({
       {/* 0. النص الترحيبي والبانر المتحرك */}
       {viewMode === 'list' && (
         <div className="mb-6">
+          {/* النص بين الشريط العلوي والبانر */}
           {appSettings?.bannerText && (
-            <h2 className={`font-black text-lg mb-3 px-1 ${textPrimary} leading-relaxed`}>
-              {appSettings.bannerText}
-            </h2>
+            <div className={`mb-4 px-2 border-r-4 border-indigo-500`}>
+              <h2 className={`font-black text-lg ${textPrimary} leading-relaxed`}>
+                {appSettings.bannerText}
+              </h2>
+            </div>
           )}
           
+          {/* البانر المتحرك (Slider) */}
           {banners.length > 0 && (
             <div className="relative w-full h-40 sm:h-48 rounded-[2rem] overflow-hidden shadow-sm border dark:border-slate-800 bg-slate-100 dark:bg-slate-800">
                {banners.map((imgUrl, idx) => (
@@ -61,11 +71,11 @@ const HomeScreen = ({
                  />
                ))}
                
-               {/* نقط التبديل (Dots) أسفل البانر */}
+               {/* نقط التبديل */}
                {banners.length > 1 && (
                  <div className="absolute bottom-3 left-0 right-0 flex justify-center gap-2 z-20">
                    {banners.map((_, idx) => (
-                     <span key={idx} className={`h-2 rounded-full transition-all duration-300 ${idx === currentSlide ? 'w-6 bg-indigo-600' : 'w-2 bg-white/60'}`}></span>
+                     <span key={idx} className={`h-2 rounded-full transition-all duration-300 shadow-sm ${idx === currentSlide ? 'w-6 bg-indigo-600' : 'w-2 bg-white/80'}`}></span>
                    ))}
                  </div>
                )}
@@ -114,21 +124,62 @@ const HomeScreen = ({
 
           <div className="space-y-4">
              {homeCategory === 'stations' ? (
-               stations.length === 0 ? (
-                 <div className={`text-center py-20 rounded-[2rem] border-2 border-dashed ${isDarkMode ? 'border-slate-800 bg-slate-900/50' : 'border-slate-200 bg-slate-50'}`}><BusFront size={40} className="mx-auto text-slate-300 mb-3"/><h3 className="font-bold text-slate-500">جاري تحميل المواقف...</h3></div>
-               ) : (
-                 stations.map(station => (
-                    <div key={station.id} onClick={() => setSelectedStation(station)} className={`p-4 rounded-[1.5rem] border shadow-sm hover:shadow-md cursor-pointer mb-4 ${bgCard}`}>
-                      <div className="flex items-center gap-3">
-                        <div className="p-3 bg-indigo-100 dark:bg-indigo-900/30 text-indigo-600 dark:text-indigo-400 rounded-2xl"><BusFront size={24}/></div>
-                        <div><h3 className={`font-black text-base ${textPrimary}`}>{station.name}</h3><p className="text-[10px] font-bold text-slate-500 mt-0.5">{station.location}</p></div>
+               <>
+                 {/* زر إضافة موقف أو خط سير */}
+                 {!isGuest && (
+                   <button 
+                     onClick={() => setShowSuggestStationModal && setShowSuggestStationModal(true)} 
+                     className="w-full flex items-center justify-center gap-2 bg-indigo-50 text-indigo-700 dark:bg-indigo-900/30 dark:text-indigo-400 py-3 rounded-2xl font-bold border border-indigo-200 dark:border-indigo-800 hover:bg-indigo-100 transition-colors mb-4"
+                   >
+                     <Plus size={18}/> إضافة خط سير أو موقف جديد
+                   </button>
+                 )}
+
+                 {visibleStations.length === 0 ? (
+                   <div className={`text-center py-20 rounded-[2rem] border-2 border-dashed ${isDarkMode ? 'border-slate-800 bg-slate-900/50' : 'border-slate-200 bg-slate-50'}`}>
+                     <BusFront size={40} className="mx-auto text-slate-300 mb-3"/>
+                     <h3 className="font-bold text-slate-500">لا توجد مواقف مضافة حالياً.</h3>
+                   </div>
+                 ) : (
+                   visibleStations.map(station => (
+                      <div key={station.id} onClick={() => setSelectedStation(station)} className={`p-4 rounded-[1.5rem] border shadow-sm hover:shadow-md cursor-pointer mb-3 transition-all ${bgCard}`}>
+                        <div className="flex items-start gap-3">
+                          <div className="p-3 bg-indigo-100 dark:bg-indigo-900/30 text-indigo-600 dark:text-indigo-400 rounded-2xl shrink-0"><BusFront size={24}/></div>
+                          <div className="flex-1">
+                            <div className="flex justify-between items-start">
+                              <h3 className={`font-black text-base ${textPrimary}`}>{station.name}</h3>
+                              {station.status === 'pending' && <span className="bg-amber-100 text-amber-600 text-[9px] px-2 py-1 rounded-full font-bold">قيد المراجعة</span>}
+                            </div>
+                            <p className="text-xs font-bold text-slate-500 mt-1 flex items-center gap-1"><MapPinned size={12}/> {station.location}</p>
+                            
+                            {/* عرض عدد خطوط السير */}
+                            {station.routes && station.routes.length > 0 && (
+                              <div className="mt-3 flex flex-wrap gap-1.5">
+                                {station.routes.slice(0, 3).map((route, i) => (
+                                  <span key={i} className="bg-slate-100 dark:bg-slate-800 text-[10px] px-2 py-1 rounded-md text-slate-600 dark:text-slate-300 flex items-center gap-1">
+                                    <Route size={10}/> {route.destination}
+                                  </span>
+                                ))}
+                                {station.routes.length > 3 && (
+                                  <span className="bg-slate-100 dark:bg-slate-800 text-[10px] px-2 py-1 rounded-md text-slate-600 dark:text-slate-300">
+                                    +{station.routes.length - 3} خطوط
+                                  </span>
+                                )}
+                              </div>
+                            )}
+                          </div>
+                        </div>
                       </div>
-                    </div>
-                 ))
-               )
+                   ))
+                 )}
+               </>
              ) : (
                visibleTrips.length === 0 ? (
-                 <div className={`text-center py-16 rounded-[2rem] border-2 border-dashed ${isDarkMode ? 'border-slate-800 bg-slate-900/50' : 'border-slate-200 bg-slate-50'}`}><Bell size={48} className="mx-auto text-indigo-400 mb-4 opacity-50"/><h3 className="font-bold text-lg text-slate-700 dark:text-slate-300 mb-2">لا توجد إعلانات في هذا المسار</h3><p className="text-xs text-slate-500 mb-6">لم يقم أي شخص بنشر رحلة مطابقة لبحثك حتى الآن.</p></div>
+                 <div className={`text-center py-16 rounded-[2rem] border-2 border-dashed ${isDarkMode ? 'border-slate-800 bg-slate-900/50' : 'border-slate-200 bg-slate-50'}`}>
+                   <Bell size={48} className="mx-auto text-indigo-400 mb-4 opacity-50"/>
+                   <h3 className="font-bold text-lg text-slate-700 dark:text-slate-300 mb-2">لا توجد إعلانات في هذا المسار</h3>
+                   <p className="text-xs text-slate-500 mb-6">لم يقم أي شخص بنشر رحلة مطابقة لبحثك حتى الآن.</p>
+                 </div>
                ) : (
                  visibleTrips.map(trip => <TripCard key={trip.id} trip={trip} user={user} isAdmin={isAdmin} isDarkMode={isDarkMode} openChatFromTrip={openChatFromTrip} triggerToast={triggerToast} />)
                )
