@@ -1,16 +1,16 @@
 import React, { useState, useEffect } from 'react';
-import { collection, query, where, getDocs, doc, updateDoc, setDoc } from 'firebase/firestore';
-import { X, ShieldAlert, Check, XCircle, ImageIcon, Loader2, LayoutTemplate, Save } from 'lucide-react';
+import { collection, getDocs, doc, updateDoc, setDoc } from 'firebase/firestore';
+import { X, ShieldAlert, Check, XCircle, ImageIcon, Loader2, LayoutTemplate, Save, Type } from 'lucide-react';
 import { db, USERS_COLLECTION } from '../firebase';
 import { resizeAndConvertToBase64 } from '../utils/helpers';
 
-const AdminPanel = ({ isDarkMode, onClose, triggerToast }) => {
+const AdminPanel = ({ isDarkMode, onClose, triggerToast, appSettings }) => {
   const [activeTab, setActiveTab] = useState('verifications'); // 'verifications' | 'settings'
   const [pendingRequests, setPendingRequests] = useState([]);
   const [isLoading, setIsLoading] = useState(true);
   
-  // إعدادات التطبيق (اللوجو والبانر)
-  const [appSettings, setAppSettings] = useState({ logo: null, banner: null });
+  // إعدادات التطبيق (اللوجو، البانر، والنص)
+  const [localSettings, setLocalSettings] = useState({ logo: null, banner: null, bannerText: '' });
   const [isSavingSettings, setIsSavingSettings] = useState(false);
 
   const bgCard = isDarkMode ? 'bg-slate-900 border-slate-800' : 'bg-white border-slate-200';
@@ -19,17 +19,29 @@ const AdminPanel = ({ isDarkMode, onClose, triggerToast }) => {
 
   useEffect(() => {
     fetchPendingRequests();
-    // هنا ممكن تضيف كود لجلب الإعدادات الحالية للوجو والبانر لو مخزنها في قاعدة البيانات
   }, []);
 
+  useEffect(() => {
+    if(appSettings) {
+      setLocalSettings(appSettings);
+    }
+  }, [appSettings]);
+
+  // حل مشكلة الشاشة البيضاء: بنجيب كل المستخدمين ونفلترهم عشان متضربش من غير Index
   const fetchPendingRequests = async () => {
     setIsLoading(true);
     try {
-      const q = query(collection(db, USERS_COLLECTION), where("verificationStatus", "==", "pending"));
-      const snapshot = await getDocs(q);
-      const requests = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+      const snapshot = await getDocs(collection(db, USERS_COLLECTION));
+      const requests = [];
+      snapshot.forEach(doc => {
+        const data = doc.data();
+        if (data.verificationStatus === 'pending') {
+          requests.push({ id: doc.id, ...data });
+        }
+      });
       setPendingRequests(requests);
     } catch (error) {
+      console.error(error);
       triggerToast('تعذر جلب طلبات التوثيق');
     } finally {
       setIsLoading(false);
@@ -40,7 +52,7 @@ const AdminPanel = ({ isDarkMode, onClose, triggerToast }) => {
     try {
       const updateData = action === 'approve' 
         ? { isVerified: true, verificationStatus: 'approved' }
-        : { isVerified: false, verificationStatus: 'rejected', idFront: null, idBack: null }; // مسح الصور في حالة الرفض
+        : { isVerified: false, verificationStatus: 'rejected', idFront: null, idBack: null };
 
       await updateDoc(doc(db, USERS_COLLECTION, userId), updateData);
       
@@ -55,12 +67,11 @@ const AdminPanel = ({ isDarkMode, onClose, triggerToast }) => {
     const file = e.target.files[0];
     if (!file) return;
     try {
-      // مقاسات مختلفة للوجو والبانر
       const width = type === 'logo' ? 400 : 1200;
       const height = type === 'logo' ? 400 : 600;
       const base64 = await resizeAndConvertToBase64(file, width, height, 0.8);
       
-      setAppSettings(prev => ({ ...prev, [type]: base64 }));
+      setLocalSettings(prev => ({ ...prev, [type]: base64 }));
     } catch (error) {
       triggerToast('حدث خطأ أثناء رفع الصورة');
     }
@@ -69,8 +80,7 @@ const AdminPanel = ({ isDarkMode, onClose, triggerToast }) => {
   const saveSettings = async () => {
     setIsSavingSettings(true);
     try {
-      // حفظ الإعدادات في ملف مخصص في الفايربيس
-      await setDoc(doc(db, 'system', 'settings'), appSettings, { merge: true });
+      await setDoc(doc(db, 'system', 'settings'), localSettings, { merge: true });
       triggerToast('تم حفظ إعدادات التطبيق بنجاح!');
     } catch (error) {
       triggerToast('تعذر حفظ الإعدادات');
@@ -164,12 +174,24 @@ const AdminPanel = ({ isDarkMode, onClose, triggerToast }) => {
           {activeTab === 'settings' && (
             <div className="space-y-6">
               
+              {/* النص التعريفي على البانر */}
+              <div className={`p-5 rounded-[1.5rem] border shadow-sm ${bgCard}`}>
+                <h3 className={`font-black text-lg mb-4 ${textPrimary} flex items-center gap-2`}><Type size={20}/> نص ترحيبي فوق البانر</h3>
+                <input 
+                  type="text" 
+                  value={localSettings.bannerText} 
+                  onChange={(e) => setLocalSettings({...localSettings, bannerText: e.target.value})} 
+                  placeholder="مثال: أهلاً بك في طريقنا، رحلتك أسهل معنا!"
+                  className="w-full p-4 rounded-xl border font-bold text-sm outline-none bg-slate-50 dark:bg-slate-800 dark:border-slate-700 dark:text-white focus:border-indigo-500"
+                />
+              </div>
+
               {/* اللوجو */}
               <div className={`p-5 rounded-[1.5rem] border shadow-sm ${bgCard}`}>
                 <h3 className={`font-black text-lg mb-4 ${textPrimary}`}>تغيير لوجو التطبيق</h3>
                 <div className="flex items-center gap-4">
                   <div className="w-24 h-24 rounded-2xl border-2 border-dashed border-indigo-300 dark:border-slate-700 flex items-center justify-center overflow-hidden bg-slate-50 dark:bg-slate-800">
-                    {appSettings.logo ? <img src={appSettings.logo} className="w-full h-full object-cover"/> : <ImageIcon size={30} className="text-slate-300"/>}
+                    {localSettings.logo ? <img src={localSettings.logo} className="w-full h-full object-cover"/> : <ImageIcon size={30} className="text-slate-300"/>}
                   </div>
                   <div>
                     <label className="bg-indigo-50 text-indigo-600 dark:bg-indigo-900/30 dark:text-indigo-400 px-4 py-2 rounded-xl text-sm font-bold cursor-pointer hover:bg-indigo-100 transition-colors inline-block">
@@ -185,8 +207,8 @@ const AdminPanel = ({ isDarkMode, onClose, triggerToast }) => {
               <div className={`p-5 rounded-[1.5rem] border shadow-sm ${bgCard}`}>
                 <h3 className={`font-black text-lg mb-4 ${textPrimary}`}>تغيير البانر الإعلاني (الرئيسية)</h3>
                 <div className="w-full h-40 rounded-2xl border-2 border-dashed border-indigo-300 dark:border-slate-700 flex items-center justify-center overflow-hidden bg-slate-50 dark:bg-slate-800 relative group mb-4">
-                  {appSettings.banner ? (
-                    <img src={appSettings.banner} className="w-full h-full object-cover"/>
+                  {localSettings.banner ? (
+                    <img src={localSettings.banner} className="w-full h-full object-cover"/>
                   ) : (
                     <div className="text-center text-slate-400">
                       <LayoutTemplate size={40} className="mx-auto mb-2 opacity-50"/>
@@ -203,7 +225,7 @@ const AdminPanel = ({ isDarkMode, onClose, triggerToast }) => {
               </div>
 
               <button onClick={saveSettings} disabled={isSavingSettings} className="w-full bg-indigo-600 text-white py-4 rounded-2xl font-black shadow-lg hover:bg-indigo-700 active:scale-95 transition-transform flex justify-center items-center gap-2">
-                 {isSavingSettings ? <Loader2 className="animate-spin" size={20}/> : <><Save size={20}/> حفظ التغييرات</>}
+                 {isSavingSettings ? <Loader2 className="animate-spin" size={20}/> : <><Save size={20}/> حفظ الإعدادات</>}
               </button>
 
             </div>
