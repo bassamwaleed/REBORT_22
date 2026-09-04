@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { collection, getDocs, doc, updateDoc, setDoc } from 'firebase/firestore';
-import { X, ShieldAlert, Check, XCircle, ImageIcon, Loader2, LayoutTemplate, Save, Type } from 'lucide-react';
+// تم إضافة ShieldCheck هنا عشان الـ Error يختفي 👇
+import { X, ShieldAlert, ShieldCheck, Check, XCircle, ImageIcon, Loader2, LayoutTemplate, Save, Type } from 'lucide-react';
 import { db, USERS_COLLECTION } from '../firebase';
 import { resizeAndConvertToBase64 } from '../utils/helpers';
 
