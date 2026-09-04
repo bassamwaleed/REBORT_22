@@ -12,6 +12,8 @@ import HomeScreen from './screens/HomeScreen';
 import ProfileScreen from './screens/ProfileScreen';
 import ChatModal from './components/ChatModal';
 import LiveTrackerBar from './components/LiveTrackerBar';
+import VerifyModal from './components/VerifyModal'; // المكون الجديد
+import AdminPanel from './components/AdminPanel';   // المكون الجديد
 
 export default function App() {
   // --- AUTH STATES ---
@@ -161,17 +163,6 @@ export default function App() {
       triggerToast('تم تحديث الاسم بنجاح');
     } catch (e) {
       triggerToast('تعذر تحديث الاسم');
-    }
-  };
-
-  const handleRequestVerification = async () => {
-    try {
-      await updateDoc(doc(db, USERS_COLLECTION, user.uid), { verificationStatus: 'pending' });
-      setUserData(prev => ({ ...prev, verificationStatus: 'pending' }));
-      setShowVerifyModal(false);
-      triggerToast('تم إرسال طلب التوثيق للمراجعة بنجاح ✅');
-    } catch (e) {
-      triggerToast('حدث خطأ أثناء إرسال الطلب');
     }
   };
 
@@ -411,34 +402,24 @@ export default function App() {
         </div>
       )}
 
-      {/* VERIFY MODAL */}
+      {/* VERIFY MODAL INSTANCE (المكون الجديد) */}
       {showVerifyModal && (
-        <div className="fixed inset-0 bg-slate-900/80 backdrop-blur-sm z-[350] flex justify-center items-center p-4">
-          <div className={`${bgCard} w-full max-w-sm rounded-[2rem] p-6 shadow-2xl border`}>
-            <h3 className="text-lg font-black mb-2 text-indigo-600">🛡️ توثيق الحساب</h3>
-            <p className={`text-sm mb-4 ${textSecondary}`}>هل تريد إرسال طلب توثيق الحساب للإدارة؟ سيتم مراجعة بياناتك في أقرب وقت.</p>
-            <div className="flex gap-2">
-              <button onClick={handleRequestVerification} className="flex-1 bg-emerald-600 text-white py-3 rounded-xl font-bold">إرسال الطلب</button>
-              <button onClick={() => setShowVerifyModal(false)} className="flex-1 bg-slate-200 text-slate-700 dark:bg-slate-800 dark:text-slate-300 py-3 rounded-xl font-bold">إلغاء</button>
-            </div>
-          </div>
-        </div>
+        <VerifyModal 
+          user={user} 
+          isDarkMode={isDarkMode} 
+          onClose={() => setShowVerifyModal(false)} 
+          triggerToast={triggerToast} 
+          setUserData={setUserData} 
+        />
       )}
 
-      {/* ADMIN PANEL MODAL */}
+      {/* ADMIN PANEL INSTANCE (المكون الجديد) */}
       {showAdminPanel && isAdmin && (
-        <div className="fixed inset-0 bg-slate-900/90 backdrop-blur-sm z-[400] flex justify-center items-center p-4">
-          <div className={`${bgCard} w-full max-w-md h-[80vh] rounded-[2rem] p-6 shadow-2xl flex flex-col border`}>
-            <div className="flex justify-between items-center mb-4 border-b pb-3">
-              <h3 className="text-lg font-black text-indigo-600 flex items-center gap-2">👑 لوحة التحكم والإدارة</h3>
-              <button onClick={() => setShowAdminPanel(false)} className="p-2 bg-slate-200 dark:bg-slate-700 rounded-full"><X size={18}/></button>
-            </div>
-            <div className="flex-1 overflow-y-auto space-y-3">
-              <p className="text-xs text-slate-500">أهلاً بك يا مدير النظام. يمكنك هنا متابعة الرحلات والمستخدمين والتحكم في إعدادات التطبيق.</p>
-            </div>
-            <button onClick={() => setShowAdminPanel(false)} className="w-full mt-4 bg-indigo-600 text-white py-3 rounded-xl font-bold">إغلاق اللوحة</button>
-          </div>
-        </div>
+        <AdminPanel 
+          isDarkMode={isDarkMode} 
+          onClose={() => setShowAdminPanel(false)} 
+          triggerToast={triggerToast} 
+        />
       )}
 
       {/* MATCHING MODAL */}
