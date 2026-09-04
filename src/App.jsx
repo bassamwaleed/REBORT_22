@@ -12,8 +12,8 @@ import HomeScreen from './screens/HomeScreen';
 import ProfileScreen from './screens/ProfileScreen';
 import ChatModal from './components/ChatModal';
 import LiveTrackerBar from './components/LiveTrackerBar';
-import VerifyModal from './components/VerifyModal'; // المكون الجديد
-import AdminPanel from './components/AdminPanel';   // المكون الجديد
+import VerifyModal from './components/VerifyModal'; 
+import AdminPanel from './components/AdminPanel';   
 
 export default function App() {
   // --- AUTH STATES ---
@@ -39,6 +39,7 @@ export default function App() {
   const [realTrips, setRealTrips] = useState([]); 
   const [stations, setStations] = useState([]); 
   const [myInbox, setMyInbox] = useState([]);
+  const [appSettings, setAppSettings] = useState({ logo: null, banner: null, bannerText: '' }); // الإعدادات العامة (اللوجو والبانر)
   
   // --- SELECTION STATES ---
   const [selectedStation, setSelectedStation] = useState(null);
@@ -90,6 +91,16 @@ export default function App() {
       } catch (e) {} finally { setLoading(false); }
     });
     return () => unsubscribe();
+  }, []);
+
+  // جلب إعدادات التطبيق (اللوجو والبانر)
+  useEffect(() => {
+    const unsub = onSnapshot(doc(db, 'system', 'settings'), (docSnap) => {
+      if(docSnap.exists()) {
+        setAppSettings(docSnap.data());
+      }
+    });
+    return () => unsub();
   }, []);
 
   useEffect(() => {
@@ -286,7 +297,11 @@ export default function App() {
           </div>
           <div className="flex items-center gap-2 cursor-pointer" onClick={() => {setActiveTab('home'); setViewMode('list');}}>
             <span className="font-black text-xl text-indigo-600 dark:text-indigo-400">طريقنا</span>
-            <div className="bg-indigo-600 text-white p-1.5 rounded-lg"><Car size={20}/></div>
+            {appSettings?.logo ? (
+              <img src={appSettings.logo} className="w-8 h-8 object-contain rounded-md" alt="Logo"/>
+            ) : (
+              <div className="bg-indigo-600 text-white p-1.5 rounded-lg"><Car size={20}/></div>
+            )}
           </div>
         </div>
       </header>
@@ -364,6 +379,7 @@ export default function App() {
           homeCategory={homeCategory} setHomeCategory={setHomeCategory} viewMode={viewMode} setViewMode={setViewMode} filterType={filterType} setFilterType={setFilterType}
           filterFrom={filterFrom} setFilterFrom={setFilterFrom} filterTo={filterTo} setFilterTo={setFilterTo} openChatFromTrip={openChatFromTrip}
           setSelectedWeekendTrip={setSelectedWeekendTrip} setSelectedStation={setSelectedStation} triggerToast={triggerToast}
+          appSettings={appSettings} // إرسال الإعدادات للرئيسية عشان البانر
         />
       )}
 
@@ -402,7 +418,7 @@ export default function App() {
         </div>
       )}
 
-      {/* VERIFY MODAL INSTANCE (المكون الجديد) */}
+      {/* VERIFY MODAL INSTANCE */}
       {showVerifyModal && (
         <VerifyModal 
           user={user} 
@@ -413,12 +429,13 @@ export default function App() {
         />
       )}
 
-      {/* ADMIN PANEL INSTANCE (المكون الجديد) */}
+      {/* ADMIN PANEL INSTANCE */}
       {showAdminPanel && isAdmin && (
         <AdminPanel 
           isDarkMode={isDarkMode} 
           onClose={() => setShowAdminPanel(false)} 
           triggerToast={triggerToast} 
+          appSettings={appSettings} // إرسال الإعدادات للأدمن للتعديل
         />
       )}
 
@@ -494,7 +511,7 @@ export default function App() {
         </div>
       )}
 
-      {/* LIVE TRACKER COMPONENT (ISOLATED) */}
+      {/* LIVE TRACKER COMPONENT */}
       {!isGuest && activeTrackers.length > 0 && (!activeChat || activeChat.chatId !== (activeTrackers[0]?.type === 'normal' ? activeTrackers[0].data.chatId : activeTrackers[0]?.data.id)) && (
         <LiveTrackerBar activeTrackers={activeTrackers} isDarkMode={isDarkMode} setActiveChat={setActiveChat} setSelectedWeekendTrip={setSelectedWeekendTrip} setActiveTab={setActiveTab} setViewMode={setViewMode} />
       )}
