@@ -1,6 +1,5 @@
 import React, { useState, useEffect } from 'react';
 import { collection, getDocs, doc, updateDoc, setDoc } from 'firebase/firestore';
-// 👇 تم إضافة Edit3 هنا عشان الخطأ يختفي
 import { X, ShieldAlert, ShieldCheck, Check, XCircle, ImageIcon, Loader2, LayoutTemplate, Save, Type, Trash2, Plus, BusFront, Route, Edit3 } from 'lucide-react';
 import { db, USERS_COLLECTION, STATIONS_COLLECTION } from '../firebase';
 import { resizeAndConvertToBase64 } from '../utils/helpers';
@@ -158,7 +157,6 @@ const AdminPanel = ({ isDarkMode, onClose, triggerToast, appSettings }) => {
 
         <div className="flex-1 overflow-y-auto p-4 sm:p-6 custom-scrollbar bg-slate-100 dark:bg-slate-950">
           
-          {/* التوثيقات */}
           {activeTab === 'verifications' && (
             <div className="space-y-4">
               {isLoading ? ( <div className="flex justify-center py-20"><Loader2 className="animate-spin text-indigo-500" size={40}/></div> ) : pendingRequests.length === 0 ? ( <div className="text-center py-20 bg-white dark:bg-slate-900 rounded-[2rem] border dark:border-slate-800"><ShieldCheck size={48} className="mx-auto mb-4 text-slate-300"/><h3 className={`font-bold text-lg ${textPrimary}`}>لا يوجد طلبات توثيق</h3></div> ) : (
@@ -169,8 +167,8 @@ const AdminPanel = ({ isDarkMode, onClose, triggerToast, appSettings }) => {
                       <span className="text-xs font-bold bg-amber-100 text-amber-600 px-3 py-1 rounded-full">قيد المراجعة</span>
                     </div>
                     <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                      <div><p className="text-xs font-bold mb-2">الوجه الأمامي:</p><img src={req.idFront} className="w-full h-40 object-cover rounded-xl border" /></div>
-                      <div><p className="text-xs font-bold mb-2">الوجه الخلفي:</p><img src={req.idBack} className="w-full h-40 object-cover rounded-xl border" /></div>
+                      <div><p className="text-xs font-bold mb-2">الوجه الأمامي:</p><img src={req.idFront} alt="الوجه الأمامي" className="w-full h-40 object-cover rounded-xl border" /></div>
+                      <div><p className="text-xs font-bold mb-2">الوجه الخلفي:</p><img src={req.idBack} alt="الوجه الخلفي" className="w-full h-40 object-cover rounded-xl border" /></div>
                     </div>
                     <div className="flex gap-2 mt-2">
                       <button onClick={() => handleVerificationAction(req.id, 'approve')} className="flex-1 bg-emerald-500 text-white py-3 rounded-xl font-bold flex items-center justify-center gap-2"><Check size={18}/> قبول</button>
@@ -182,7 +180,6 @@ const AdminPanel = ({ isDarkMode, onClose, triggerToast, appSettings }) => {
             </div>
           )}
 
-          {/* تبويب طلبات المواقف المعقدة */}
           {activeTab === 'stations' && (
             <div className="space-y-4">
               {isLoading ? ( <div className="flex justify-center py-20"><Loader2 className="animate-spin text-indigo-500" size={40}/></div> ) : pendingStationsData.length === 0 ? ( <div className="text-center py-20 bg-white dark:bg-slate-900 rounded-[2rem] border dark:border-slate-800"><BusFront size={48} className="mx-auto mb-4 text-slate-300"/><h3 className={`font-bold text-lg ${textPrimary}`}>لا يوجد طلبات أو تعديلات جديدة للمواقف</h3></div> ) : (
@@ -206,6 +203,7 @@ const AdminPanel = ({ isDarkMode, onClose, triggerToast, appSettings }) => {
                              <div key={rIndex} className="flex justify-between items-center bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-800 p-3 rounded-xl">
                                <div>
                                  <p className="text-sm font-bold text-amber-700 dark:text-amber-400 flex items-center gap-1"><Route size={14}/> إضافة خط سير لـ: {route.destination}</p>
+                                 {route.destinationDetails && <p className="text-[10px] text-amber-600/80 mt-0.5">{route.destinationDetails}</p>}
                                  <p className="text-xs text-amber-600 dark:text-amber-500 mt-1">الأجرة المقترحة: {route.fare} ج</p>
                                </div>
                                <div className="flex gap-2">
@@ -240,7 +238,6 @@ const AdminPanel = ({ isDarkMode, onClose, triggerToast, appSettings }) => {
             </div>
           )}
 
-          {/* الإعدادات */}
           {activeTab === 'settings' && (
             <div className="space-y-6">
               <div className={`p-5 rounded-[1.5rem] border shadow-sm ${bgCard}`}>
