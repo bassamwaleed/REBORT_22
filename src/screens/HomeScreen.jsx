@@ -25,7 +25,7 @@ const HomeScreen = ({
   setSelectedWeekendTrip,
   setSelectedStation,
   triggerToast,
-  appSettings // <-- تم استقبال الإعدادات هنا
+  appSettings
 }) => {
   // --- منطق التصفية (البرمجة الدفاعية) ---
   const visibleTrips = (realTrips || []).filter(t => {
