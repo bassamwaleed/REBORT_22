@@ -1,10 +1,10 @@
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect } from 'react';
 import { onAuthStateChanged, signInWithEmailAndPassword, createUserWithEmailAndPassword, signInAnonymously, updateProfile, signOut } from 'firebase/auth';
-import { collection, onSnapshot, doc, getDoc, setDoc, addDoc, updateDoc, deleteDoc, serverTimestamp, increment, getDocs } from 'firebase/firestore';
-import { Loader2, Car, MessageCircle, User, Home, CheckCircle2, Plus, X, MapPin, ShieldAlert, Gift, Moon, LogOut, BusFront, Target, Lock, Camera, Edit2 } from 'lucide-react';
+import { collection, onSnapshot, doc, getDoc, setDoc, addDoc, updateDoc, serverTimestamp } from 'firebase/firestore';
+import { Loader2, Car, MessageCircle, User, Home, CheckCircle2, Plus, X, Lock, Target } from 'lucide-react';
 
 import { auth, db, APP_COLLECTION_NAME, USERS_COLLECTION, STATIONS_COLLECTION, ADMIN_EMAIL } from './firebase';
-import { safeMillis, timeToMinutes, EGYPT_CITIES, resizeAndConvertToBase64 } from './utils/helpers';
+import { safeMillis, timeToMinutes, resizeAndConvertToBase64, EGYPT_CITIES } from './utils/helpers';
 
 import HomeScreen from './screens/HomeScreen';
 import ProfileScreen from './screens/ProfileScreen';
@@ -12,7 +12,7 @@ import ChatModal from './components/ChatModal';
 import LiveTrackerBar from './components/LiveTrackerBar';
 import VerifyModal from './components/VerifyModal'; 
 import AdminPanel from './components/AdminPanel';   
-import StationModal from './components/StationModal'; // <-- المكون الجديد هنا!
+import StationModal from './components/StationModal'; 
 
 export default function App() {
   const [user, setUser] = useState(null);
@@ -146,6 +146,39 @@ export default function App() {
   const toggleTheme = () => { const newTheme = !isDarkMode; setIsDarkMode(newTheme); localStorage.setItem('khodnimaak_theme', newTheme ? 'dark' : 'light'); };
   const handleLogout = async () => { try { await signOut(auth); setUserData(null); setMyInbox([]); setActiveChat(null); setActiveTab('home'); } catch(e) {} };
 
+  const handleEditName = async () => {
+    const newName = prompt('أدخل الاسم الجديد:', userData?.name || '');
+    if (!newName || !newName.trim()) return;
+    try {
+      await updateDoc(doc(db, USERS_COLLECTION, user.uid), { name: newName.trim() });
+      await updateProfile(auth.currentUser, { displayName: newName.trim() });
+      setUserData(prev => ({ ...prev, name: newName.trim() }));
+      triggerToast('تم تحديث الاسم بنجاح');
+    } catch (e) { triggerToast('تعذر تحديث الاسم'); }
+  };
+
+  const findMatchingRides = (newPostedTrip) => {
+    if(!newPostedTrip) return; 
+    const matches = (realTrips || []).filter(t => {
+      if(!t || t.status === 'cancelled' || t.status === 'completed') return false;
+      if(t.userId === user?.uid) return false; 
+      let isMatch = false;
+      if (newPostedTrip.category === 'travel' && t.category === 'travel') {
+         isMatch = (newPostedTrip.type === 'offer' && t.type === 'request') || (newPostedTrip.type === 'request' && t.type === 'offer');
+      } else if (newPostedTrip.category === 'parcel' && t.category === 'parcel') { isMatch = true; }
+      if (!isMatch) return false;
+      if (t.from !== newPostedTrip.from || t.to !== newPostedTrip.to || t.date !== newPostedTrip.date) return false;
+      if (Math.abs(timeToMinutes(newPostedTrip.time) - timeToMinutes(t.time)) <= 120) return true; 
+      return false;
+    });
+
+    if (matches.length > 0) {
+       setMatchedTrips(matches);
+       setMatchedTargetType(newPostedTrip.type === 'offer' ? 'ركاب' : 'عربيات');
+       setShowMatchModal(true);
+    }
+  };
+
   const handleAddTrip = async (e) => {
     e.preventDefault();
     if (!user || isGuest) return forceSignUpScreen();
@@ -159,6 +192,7 @@ export default function App() {
       await addDoc(collection(db, APP_COLLECTION_NAME), tripData);
       setShowAddModal(false); triggerToast('تم النشر بنجاح!');
       setActiveTab('home'); setHomeCategory(newTrip.category);
+      findMatchingRides(tripData); 
       setNewTrip({ type: 'offer', category: 'travel', from: '', fromDetails: '', fromCoords: null, to: '', toDetails: '', toCoords: null, date: '', time: '', seats: 1, cost: '', notes: '' });
     } catch (error) { triggerToast('حدث خطأ.'); } finally { setIsSubmitting(false); }
   };
@@ -179,6 +213,21 @@ export default function App() {
     setActiveChat(chatDataMe); 
     await setDoc(doc(db, `inbox_${user.uid}`, chatId), { ...chatDataMe, createdAt: serverTimestamp(), requestStatus: 'none' }, { merge: true });
     await setDoc(doc(db, `inbox_${trip.userId}`, chatId), { ...chatDataOther, createdAt: serverTimestamp(), requestStatus: 'none' }, { merge: true });
+  };
+
+  const handleConnectMatched = (trip) => { setShowMatchModal(false); openChatFromTrip(trip); };
+
+  const handleAvatarUpload = async (e) => {
+    const file = e.target.files[0];
+    if (!file || !user) return;
+    setIsUploadingAvatar(true);
+    try {
+      const base64 = await resizeAndConvertToBase64(file, 400, 400, 0.8);
+      await updateDoc(doc(db, USERS_COLLECTION, user.uid), { photoURL: base64 });
+      await updateProfile(auth.currentUser, { photoURL: base64 });
+      setUserData(prev => ({...prev, photoURL: base64}));
+      triggerToast('تم تحديث الصورة بنجاح');
+    } catch(err) { triggerToast('حدث خطأ أثناء رفع الصورة'); } finally { setIsUploadingAvatar(false); }
   };
 
   const getActiveTrackersList = () => {
@@ -299,6 +348,23 @@ export default function App() {
       {showVerifyModal && ( <VerifyModal user={user} isDarkMode={isDarkMode} onClose={() => setShowVerifyModal(false)} triggerToast={triggerToast} setUserData={setUserData} /> )}
       {showAdminPanel && isAdmin && ( <AdminPanel isDarkMode={isDarkMode} onClose={() => setShowAdminPanel(false)} triggerToast={triggerToast} appSettings={appSettings} /> )}
 
+      {showMatchModal && !isGuest && (
+         <div className="fixed inset-0 bg-slate-900/80 backdrop-blur-md z-[400] flex justify-center items-end sm:items-center p-0 sm:p-4">
+            <div className={`bg-slate-50 dark:bg-slate-900 w-full sm:max-w-md rounded-t-[2rem] sm:rounded-[2rem] p-6 shadow-2xl animate-fade-in-up border`}>
+               <h2 className="text-xl font-black text-indigo-600 mb-4 flex items-center gap-2"><Target size={24}/> 🎯 لقينا لك {matchedTargetType}!</h2>
+               <div className="space-y-4 overflow-y-auto max-h-[60vh] custom-scrollbar flex-1 pb-4">
+                 {matchedTrips.map(trip => (
+                   <div key={trip.id} className="p-4 rounded-2xl bg-white dark:bg-slate-800 border shadow-sm flex flex-col gap-3">
+                     <div className="flex justify-between items-center"><span className="font-bold text-sm dark:text-white">{trip?.userName}</span><span className="font-black text-emerald-500">{trip.cost} ج</span></div>
+                     <button onClick={() => handleConnectMatched(trip)} className="bg-indigo-600 text-white py-2 rounded-xl text-xs font-black">تواصل الآن</button>
+                   </div>
+                 ))}
+               </div>
+               <button onClick={() => setShowMatchModal(false)} className="w-full py-3 mt-4 rounded-xl text-xs font-bold text-slate-500 bg-slate-200">تخطي</button>
+            </div>
+         </div>
+      )}
+
       {activeTab === 'inbox' && (
         <div className="pb-[100px] flex-1 w-full max-w-2xl mx-auto px-4 py-6 mt-4 relative z-10 animate-fade-in-up">
           <div className={`rounded-[2rem] shadow-sm border min-h-[500px] flex flex-col ${bgCard}`}>
@@ -323,7 +389,6 @@ export default function App() {
         </div>
       )}
 
-      {/* GUEST AUTH SCREEN */}
       {!user && (
         <div dir="rtl" className={`fixed inset-0 flex items-center justify-center p-4 z-[1000] ${bgMain}`}>
           <div className={`${bgCard} p-8 rounded-[2rem] shadow-xl max-w-sm w-full border relative`}>
@@ -348,12 +413,10 @@ export default function App() {
         </div>
       )}
 
-      {/* LIVE TRACKER COMPONENT */}
       {!isGuest && activeTrackers.length > 0 && (!activeChat || activeChat.chatId !== (activeTrackers[0]?.type === 'normal' ? activeTrackers[0].data.chatId : activeTrackers[0]?.data.id)) && (
         <LiveTrackerBar activeTrackers={activeTrackers} isDarkMode={isDarkMode} setActiveChat={setActiveChat} setActiveTab={setActiveTab} setViewMode={setViewMode} />
       )}
 
-      {/* BOTTOM NAV */}
       <nav className={`fixed bottom-0 w-full z-[100] border-t ${isDarkMode ? 'bg-slate-950 border-slate-800' : 'bg-white border-slate-100'} pointer-events-auto`}>
         <div className="flex justify-around items-center h-[70px] w-full max-w-md mx-auto px-2 pb-2">
           <button onClick={() => setActiveTab('home')} className={`flex flex-col items-center justify-center gap-1 w-20 transition-colors ${activeTab === 'home' ? 'text-indigo-600 dark:text-indigo-400' : textSecondary}`}><Home size={22} /><span className="text-[10px] font-bold">الرئيسية</span></button>
