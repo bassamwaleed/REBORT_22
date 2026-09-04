@@ -2,7 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { Bell, BusFront, MapPinned, List, X, ChevronRight, ChevronLeft, Route } from 'lucide-react';
 import TripCard from '../components/TripCard';
 import { EGYPT_CITIES } from '../utils/helpers';
- 
+
 const HomeScreen = ({
   user, isAdmin, isDarkMode, realTrips, stations, isGuest,
   homeCategory, setHomeCategory, viewMode, setViewMode, filterType, setFilterType,
@@ -10,7 +10,7 @@ const HomeScreen = ({
   setSelectedStation, triggerToast, appSettings
 }) => {
   
-  // --- فلترة الرحلات ---
+  // --- فلترة الرحلات (بدون الأفواج) ---
   const visibleTrips = (realTrips || []).filter(t => {
     if (!t || t.status === 'cancelled') return false; 
     if (homeCategory === 'travel') {
@@ -30,7 +30,6 @@ const HomeScreen = ({
   const [touchEnd, setTouchEnd] = useState(null);
   const banners = Array.isArray(appSettings?.banners) ? appSettings.banners : (appSettings?.banner ? [appSettings.banner] : []);
 
-  // Auto-play
   useEffect(() => {
     if (banners.length <= 1) return;
     const interval = setInterval(() => {
@@ -42,7 +41,6 @@ const HomeScreen = ({
   const nextSlide = () => setCurrentSlide((prev) => (prev + 1) % banners.length);
   const prevSlide = () => setCurrentSlide((prev) => (prev === 0 ? banners.length - 1 : prev - 1));
 
-  // Touch Handlers for Mobile Swiping (RTL Support)
   const onTouchStart = (e) => {
     setTouchEnd(null);
     setTouchStart(e.targetTouches[0].clientX);
@@ -52,8 +50,8 @@ const HomeScreen = ({
     if (!touchStart || !touchEnd) return;
     const distance = touchStart - touchEnd;
     const minSwipeDistance = 50;
-    if (distance > minSwipeDistance) nextSlide(); // Swipe Left (in RTL means Next)
-    if (distance < -minSwipeDistance) prevSlide(); // Swipe Right (in RTL means Prev)
+    if (distance > minSwipeDistance) nextSlide(); 
+    if (distance < -minSwipeDistance) prevSlide(); 
   };
 
   const bgInput = isDarkMode ? 'bg-slate-800 border-slate-700 text-white placeholder-slate-400 focus:border-indigo-500' : 'bg-white border-slate-200 text-slate-900 focus:border-indigo-500';
