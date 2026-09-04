@@ -1,13 +1,13 @@
 import React, { useState, useEffect } from 'react';
 import { collection, getDocs, doc, updateDoc, setDoc } from 'firebase/firestore';
-import { X, ShieldAlert, ShieldCheck, Check, XCircle, ImageIcon, Loader2, LayoutTemplate, Save, Type, Trash2, Plus, BusFront } from 'lucide-react';
+import { X, ShieldAlert, ShieldCheck, Check, XCircle, ImageIcon, Loader2, LayoutTemplate, Save, Type, Trash2, Plus, BusFront, Route } from 'lucide-react';
 import { db, USERS_COLLECTION, STATIONS_COLLECTION } from '../firebase';
 import { resizeAndConvertToBase64 } from '../utils/helpers';
 
 const AdminPanel = ({ isDarkMode, onClose, triggerToast, appSettings }) => {
-  const [activeTab, setActiveTab] = useState('verifications'); // 'verifications' | 'stations' | 'settings'
+  const [activeTab, setActiveTab] = useState('verifications'); 
   const [pendingRequests, setPendingRequests] = useState([]);
-  const [pendingStations, setPendingStations] = useState([]);
+  const [pendingStationsData, setPendingStationsData] = useState([]);
   const [isLoading, setIsLoading] = useState(true);
   
   const [localSettings, setLocalSettings] = useState({ logo: null, banners: [], bannerText: '' });
@@ -31,7 +31,6 @@ const AdminPanel = ({ isDarkMode, onClose, triggerToast, appSettings }) => {
   const fetchAdminData = async () => {
     setIsLoading(true);
     try {
-      // 1. جلب التوثيقات
       const usersSnap = await getDocs(collection(db, USERS_COLLECTION));
       const reqs = [];
       usersSnap.forEach(doc => {
@@ -40,14 +39,20 @@ const AdminPanel = ({ isDarkMode, onClose, triggerToast, appSettings }) => {
       });
       setPendingRequests(reqs);
 
-      // 2. جلب المواقف اللي قيد المراجعة
+      // جلب بيانات المواقف اللي فيها أي حاجة "قيد المراجعة"
       const statSnap = await getDocs(collection(db, STATIONS_COLLECTION));
       const pStats = [];
       statSnap.forEach(doc => {
         const data = doc.data();
-        if (data.status === 'pending') pStats.push({ id: doc.id, ...data });
+        const hasPendingStation = data.status === 'pending';
+        const hasPendingRoutes = data.routes?.some(r => r.status === 'pending');
+        const hasEditRequests = data.routes?.some(r => r.editRequest);
+        
+        if (hasPendingStation || hasPendingRoutes || hasEditRequests) {
+          pStats.push({ id: doc.id, ...data });
+        }
       });
-      setPendingStations(pStats);
+      setPendingStationsData(pStats);
 
     } catch (error) {
       triggerToast('تعذر جلب البيانات');
@@ -58,28 +63,58 @@ const AdminPanel = ({ isDarkMode, onClose, triggerToast, appSettings }) => {
 
   const handleVerificationAction = async (userId, action) => {
     try {
-      const updateData = action === 'approve' 
-        ? { isVerified: true, verificationStatus: 'approved' }
-        : { isVerified: false, verificationStatus: 'rejected', idFront: null, idBack: null };
+      const updateData = action === 'approve' ? { isVerified: true, verificationStatus: 'approved' } : { isVerified: false, verificationStatus: 'rejected', idFront: null, idBack: null };
       await updateDoc(doc(db, USERS_COLLECTION, userId), updateData);
       triggerToast(action === 'approve' ? 'تم قبول التوثيق ✅' : 'تم رفض التوثيق ❌');
       setPendingRequests(prev => prev.filter(req => req.id !== userId));
     } catch (error) { triggerToast('حدث خطأ'); }
   };
 
-  const handleStationAction = async (stationId, action) => {
+  // --- دوال الموافقة/الرفض للمواقف وخطوط السير ---
+  const handleApproveStation = async (stationId) => {
     try {
-      if (action === 'approve') {
-        await updateDoc(doc(db, STATIONS_COLLECTION, stationId), { status: 'approved' });
-        triggerToast('تم اعتماد الموقف ✅');
-      } else {
-        await updateDoc(doc(db, STATIONS_COLLECTION, stationId), { status: 'rejected' });
-        triggerToast('تم رفض الموقف ❌');
-      }
-      setPendingStations(prev => prev.filter(s => s.id !== stationId));
-    } catch (error) { triggerToast('حدث خطأ'); }
+      await updateDoc(doc(db, STATIONS_COLLECTION, stationId), { status: 'approved' });
+      triggerToast('تم اعتماد الموقف بنجاح ✅');
+      fetchAdminData(); // ريفرش الداتا
+    } catch (error) {}
   };
 
+  const handleApproveRoute = async (stationId, routeIndex, stationRoutes) => {
+    try {
+      const updatedRoutes = [...stationRoutes];
+      updatedRoutes[routeIndex].status = 'approved';
+      await updateDoc(doc(db, STATIONS_COLLECTION, stationId), { routes: updatedRoutes });
+      triggerToast('تم اعتماد خط السير بنجاح ✅');
+      fetchAdminData();
+    } catch (error) {}
+  };
+
+  const handleApproveFareEdit = async (stationId, routeIndex, stationRoutes, newFare) => {
+    try {
+      const updatedRoutes = [...stationRoutes];
+      updatedRoutes[routeIndex].fare = newFare;
+      updatedRoutes[routeIndex].editRequest = null;
+      await updateDoc(doc(db, STATIONS_COLLECTION, stationId), { routes: updatedRoutes });
+      triggerToast('تم تعديل وتحديث الأجرة بنجاح ✅');
+      fetchAdminData();
+    } catch (error) {}
+  };
+
+  const handleRejectRouteOrEdit = async (stationId, routeIndex, stationRoutes, isEditOnly) => {
+    try {
+      const updatedRoutes = [...stationRoutes];
+      if (isEditOnly) {
+        updatedRoutes[routeIndex].editRequest = null; // مسح طلب التعديل بس
+      } else {
+        updatedRoutes.splice(routeIndex, 1); // مسح الخط الجديد المرفوض
+      }
+      await updateDoc(doc(db, STATIONS_COLLECTION, stationId), { routes: updatedRoutes });
+      triggerToast('تم رفض الطلب ❌');
+      fetchAdminData();
+    } catch(e){}
+  }
+
+  // --- إعدادات الواجهة ---
   const handleImageUpload = async (e, type) => {
     const file = e.target.files[0];
     if (!file) return;
@@ -87,10 +122,9 @@ const AdminPanel = ({ isDarkMode, onClose, triggerToast, appSettings }) => {
       const width = type === 'logo' ? 400 : 1200;
       const height = type === 'logo' ? 400 : 600;
       const base64 = await resizeAndConvertToBase64(file, width, height, 0.8);
-      
       if (type === 'logo') setLocalSettings(prev => ({ ...prev, logo: base64 }));
       else if (type === 'banner') setLocalSettings(prev => ({ ...prev, banners: [...(prev.banners || []), base64] }));
-    } catch (error) { triggerToast('حدث خطأ أثناء رفع الصورة'); }
+    } catch (error) {}
   };
 
   const handleRemoveBanner = (index) => setLocalSettings(prev => ({...prev, banners: prev.banners.filter((_, i) => i !== index)}));
@@ -117,7 +151,7 @@ const AdminPanel = ({ isDarkMode, onClose, triggerToast, appSettings }) => {
             <div className="relative"><ShieldAlert size={18}/>{pendingRequests.length > 0 && <span className="absolute -top-2 -right-2 bg-rose-500 text-white text-[10px] w-4 h-4 rounded-full flex items-center justify-center">{pendingRequests.length}</span>}</div> التوثيق
           </button>
           <button onClick={() => setActiveTab('stations')} className={`flex-1 py-4 text-sm font-bold flex flex-col items-center justify-center gap-1 transition-colors ${activeTab === 'stations' ? 'border-b-2 border-indigo-600 text-indigo-600 dark:text-indigo-400' : textSecondary}`}>
-            <div className="relative"><BusFront size={18}/>{pendingStations.length > 0 && <span className="absolute -top-2 -right-2 bg-amber-500 text-white text-[10px] w-4 h-4 rounded-full flex items-center justify-center">{pendingStations.length}</span>}</div> المواقف
+            <div className="relative"><BusFront size={18}/>{pendingStationsData.length > 0 && <span className="absolute -top-2 -right-2 bg-amber-500 text-white text-[10px] w-4 h-4 rounded-full flex items-center justify-center">{pendingStationsData.length}</span>}</div> المواقف
           </button>
           <button onClick={() => setActiveTab('settings')} className={`flex-1 py-4 text-sm font-bold flex flex-col items-center justify-center gap-1 transition-colors ${activeTab === 'settings' ? 'border-b-2 border-indigo-600 text-indigo-600 dark:text-indigo-400' : textSecondary}`}>
             <LayoutTemplate size={18}/> الإعدادات
@@ -150,20 +184,61 @@ const AdminPanel = ({ isDarkMode, onClose, triggerToast, appSettings }) => {
             </div>
           )}
 
-          {/* المواقف الجديدة */}
+          {/* تبويب طلبات المواقف المعقدة */}
           {activeTab === 'stations' && (
             <div className="space-y-4">
-              {isLoading ? ( <div className="flex justify-center py-20"><Loader2 className="animate-spin text-indigo-500" size={40}/></div> ) : pendingStations.length === 0 ? ( <div className="text-center py-20 bg-white dark:bg-slate-900 rounded-[2rem] border dark:border-slate-800"><BusFront size={48} className="mx-auto mb-4 text-slate-300"/><h3 className={`font-bold text-lg ${textPrimary}`}>لا يوجد مواقف جديدة</h3></div> ) : (
-                pendingStations.map(station => (
-                  <div key={station.id} className={`p-4 rounded-[1.5rem] border shadow-sm ${bgCard} flex items-center justify-between`}>
-                    <div>
-                      <h4 className={`font-black text-lg ${textPrimary}`}>{station.name}</h4>
-                      <p className={`text-sm ${textSecondary} mt-1`}>{station.location}</p>
+              {isLoading ? ( <div className="flex justify-center py-20"><Loader2 className="animate-spin text-indigo-500" size={40}/></div> ) : pendingStationsData.length === 0 ? ( <div className="text-center py-20 bg-white dark:bg-slate-900 rounded-[2rem] border dark:border-slate-800"><BusFront size={48} className="mx-auto mb-4 text-slate-300"/><h3 className={`font-bold text-lg ${textPrimary}`}>لا يوجد طلبات أو تعديلات جديدة للمواقف</h3></div> ) : (
+                pendingStationsData.map(station => (
+                  <div key={station.id} className={`p-4 rounded-[1.5rem] border shadow-sm ${bgCard} flex flex-col gap-3`}>
+                    
+                    {/* رأس الموقف: لو الموقف نفسه جديد */}
+                    <div className="flex items-center justify-between border-b dark:border-slate-800 pb-3">
+                      <div>
+                        <h4 className={`font-black text-lg ${textPrimary}`}>{station.name} <span className="text-sm font-normal text-slate-500">({station.location})</span></h4>
+                        {station.status === 'pending' && <span className="text-[10px] bg-indigo-100 text-indigo-600 px-2 py-1 rounded font-bold mt-1 inline-block">موقف جديد بالكامل</span>}
+                      </div>
+                      {station.status === 'pending' && (
+                        <button onClick={() => handleApproveStation(station.id)} className="bg-emerald-500 text-white px-3 py-1.5 rounded-lg text-xs font-bold hover:bg-emerald-600">قبول الموقف</button>
+                      )}
                     </div>
-                    <div className="flex gap-2">
-                      <button onClick={() => handleStationAction(station.id, 'approve')} className="w-10 h-10 bg-emerald-100 text-emerald-600 rounded-xl flex items-center justify-center hover:bg-emerald-200"><Check size={20}/></button>
-                      <button onClick={() => handleStationAction(station.id, 'reject')} className="w-10 h-10 bg-rose-100 text-rose-600 rounded-xl flex items-center justify-center hover:bg-rose-200"><X size={20}/></button>
+
+                    {/* تفاصيل خطوط السير جوه الموقف ده */}
+                    <div className="space-y-2 pt-2">
+                      {station.routes?.map((route, rIndex) => {
+                        // هنعرض الخطوط اللي مستنية اعتماد خط جديد أو اعتماد أجرة جديدة بس
+                        if (route.status === 'pending') {
+                           return (
+                             <div key={rIndex} className="flex justify-between items-center bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-800 p-3 rounded-xl">
+                               <div>
+                                 <p className="text-sm font-bold text-amber-700 dark:text-amber-400 flex items-center gap-1"><Route size={14}/> إضافة خط سير لـ: {route.destination}</p>
+                                 <p className="text-xs text-amber-600 dark:text-amber-500 mt-1">الأجرة المقترحة: {route.fare} ج</p>
+                               </div>
+                               <div className="flex gap-2">
+                                 <button onClick={() => handleApproveRoute(station.id, rIndex, station.routes)} className="w-8 h-8 bg-emerald-500 text-white rounded flex justify-center items-center"><Check size={16}/></button>
+                                 <button onClick={() => handleRejectRouteOrEdit(station.id, rIndex, station.routes, false)} className="w-8 h-8 bg-rose-500 text-white rounded flex justify-center items-center"><X size={16}/></button>
+                               </div>
+                             </div>
+                           )
+                        }
+                        
+                        if (route.editRequest) {
+                           return (
+                             <div key={rIndex} className="flex justify-between items-center bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-800 p-3 rounded-xl">
+                               <div>
+                                 <p className="text-sm font-bold text-blue-700 dark:text-blue-400 flex items-center gap-1"><Edit3 size={14}/> تعديل أجرة خط: {route.destination}</p>
+                                 <p className="text-xs text-blue-600 dark:text-blue-500 mt-1">الأجرة الحالية: <span className="line-through opacity-70">{route.fare}ج</span> ➔ التعديل: <span className="font-black text-sm">{route.editRequest.proposedFare}ج</span></p>
+                               </div>
+                               <div className="flex gap-2">
+                                 <button onClick={() => handleApproveFareEdit(station.id, rIndex, station.routes, route.editRequest.proposedFare)} className="w-8 h-8 bg-emerald-500 text-white rounded flex justify-center items-center"><Check size={16}/></button>
+                                 <button onClick={() => handleRejectRouteOrEdit(station.id, rIndex, station.routes, true)} className="w-8 h-8 bg-rose-500 text-white rounded flex justify-center items-center"><X size={16}/></button>
+                               </div>
+                             </div>
+                           )
+                        }
+                        return null;
+                      })}
                     </div>
+
                   </div>
                 ))
               )}
