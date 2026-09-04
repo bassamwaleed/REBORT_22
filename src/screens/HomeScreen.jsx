@@ -4,13 +4,12 @@ import TripCard from '../components/TripCard';
 import { EGYPT_CITIES } from '../utils/helpers';
 
 const HomeScreen = ({
-  user, isAdmin, isDarkMode, realTrips, stations, isGuest,
+  user, isAdmin, isDarkMode, realTrips, stations,
   homeCategory, setHomeCategory, viewMode, setViewMode, filterType, setFilterType,
   filterFrom, setFilterFrom, filterTo, setFilterTo, openChatFromTrip,
   setSelectedStation, triggerToast, appSettings
 }) => {
   
-  // --- فلترة الرحلات (بدون الأفواج) ---
   const visibleTrips = (realTrips || []).filter(t => {
     if (!t || t.status === 'cancelled') return false; 
     if (homeCategory === 'travel') {
@@ -24,7 +23,6 @@ const HomeScreen = ({
 
   const visibleStations = (stations || []).filter(s => isAdmin ? true : (s.status === 'approved' || !s.status));
 
-  // --- Slider Logic (Touch & Buttons) ---
   const [currentSlide, setCurrentSlide] = useState(0);
   const [touchStart, setTouchStart] = useState(null);
   const [touchEnd, setTouchEnd] = useState(null);
@@ -61,7 +59,6 @@ const HomeScreen = ({
   return (
     <main className="flex-1 w-full max-w-2xl mx-auto px-4 py-6 relative z-10 pb-[100px]">
       
-      {/* 0. النص الترحيبي والبانر المتحرك المطور */}
       {viewMode === 'list' && (
         <div className="mb-6">
           {appSettings?.bannerText && (
@@ -79,7 +76,6 @@ const HomeScreen = ({
                  <img key={idx} src={imgUrl} alt={`Banner ${idx}`} className={`absolute inset-0 w-full h-full object-cover transition-opacity duration-500 ease-in-out ${idx === currentSlide ? 'opacity-100 z-10' : 'opacity-0 z-0'}`} />
                ))}
                
-               {/* أزرار التنقل (تظهر عند تمرير الماوس أو دائماً على الموبايل) */}
                {banners.length > 1 && (
                  <>
                    <button onClick={prevSlide} className="absolute right-2 top-1/2 -translate-y-1/2 z-20 bg-black/30 hover:bg-black/50 text-white p-2 rounded-full backdrop-blur-sm transition-all md:opacity-0 group-hover:opacity-100"><ChevronRight size={20}/></button>
@@ -97,7 +93,6 @@ const HomeScreen = ({
         </div>
       )}
 
-      {/* 1. التبويبات العلوية وأزرار العرض */}
       <div className="flex justify-between items-center mb-6 pointer-events-auto relative z-10">
          <div className={`flex p-1 rounded-xl shadow-sm border ${isDarkMode ? 'bg-slate-900 border-slate-800' : 'bg-white/80 border-slate-200/60'}`}>
             <button onClick={() => setViewMode('list')} className={`p-2 rounded-lg transition-all flex items-center justify-center ${viewMode === 'list' ? 'bg-indigo-50 text-indigo-600 shadow-sm dark:bg-slate-800 dark:text-white' : 'text-slate-500'}`}><List size={18}/></button>
@@ -112,7 +107,6 @@ const HomeScreen = ({
          )}
       </div>
 
-      {/* 2. منطقة العرض */}
       {viewMode === 'list' && (
         <div className="animate-fade-in-up">
           {(homeCategory === 'travel' || homeCategory === 'parcel') && (
@@ -151,7 +145,6 @@ const HomeScreen = ({
                           </div>
                           <p className="text-xs font-bold text-slate-500 mt-1 flex items-center gap-1"><MapPinned size={12}/> {station.location}</p>
                           
-                          {/* عرض خطوط السير كـ Tags */}
                           {station.routes && station.routes.length > 0 && (
                             <div className="mt-3 flex flex-wrap gap-1.5">
                               {station.routes.slice(0, 3).map((route, i) => (
