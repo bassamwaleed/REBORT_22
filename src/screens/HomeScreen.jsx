@@ -1,10 +1,12 @@
 import React, { useState, useEffect } from 'react';
-import { Bell, BusFront, MapPinned, List, X, ChevronRight, ChevronLeft, Route } from 'lucide-react';
+import { Bell, BusFront, MapPinned, List, X, ChevronRight, ChevronLeft, Route, Plus, Loader2 } from 'lucide-react';
 import TripCard from '../components/TripCard';
 import { EGYPT_CITIES } from '../utils/helpers';
- 
+import { collection, addDoc } from 'firebase/firestore';
+import { db, STATIONS_COLLECTION } from '../firebase';
+
 const HomeScreen = ({
-  user, isAdmin, isDarkMode, realTrips, stations,
+  user, isAdmin, isDarkMode, realTrips, stations, isGuest,
   homeCategory, setHomeCategory, viewMode, setViewMode, filterType, setFilterType,
   filterFrom, setFilterFrom, filterTo, setFilterTo, openChatFromTrip,
   setSelectedStation, triggerToast, appSettings
@@ -28,6 +30,12 @@ const HomeScreen = ({
   const [touchEnd, setTouchEnd] = useState(null);
   const banners = Array.isArray(appSettings?.banners) ? appSettings.banners : (appSettings?.banner ? [appSettings.banner] : []);
 
+  // --- حالات إضافة موقف جديد ---
+  const [showAddStation, setShowAddStation] = useState(false);
+  const [newStationName, setNewStationName] = useState('');
+  const [newStationLoc, setNewStationLoc] = useState('');
+  const [isSubmittingStation, setIsSubmittingStation] = useState(false);
+
   useEffect(() => {
     if (banners.length <= 1) return;
     const interval = setInterval(() => {
@@ -39,17 +47,38 @@ const HomeScreen = ({
   const nextSlide = () => setCurrentSlide((prev) => (prev + 1) % banners.length);
   const prevSlide = () => setCurrentSlide((prev) => (prev === 0 ? banners.length - 1 : prev - 1));
 
-  const onTouchStart = (e) => {
-    setTouchEnd(null);
-    setTouchStart(e.targetTouches[0].clientX);
-  };
+  const onTouchStart = (e) => { setTouchEnd(null); setTouchStart(e.targetTouches[0].clientX); };
   const onTouchMove = (e) => setTouchEnd(e.targetTouches[0].clientX);
   const onTouchEndHandler = () => {
     if (!touchStart || !touchEnd) return;
     const distance = touchStart - touchEnd;
-    const minSwipeDistance = 50;
-    if (distance > minSwipeDistance) nextSlide(); 
-    if (distance < -minSwipeDistance) prevSlide(); 
+    if (distance > 50) nextSlide(); 
+    if (distance < -50) prevSlide(); 
+  };
+
+  const handleAddStation = async (e) => {
+    e.preventDefault();
+    if (isGuest || !user) return triggerToast('يجب تسجيل الدخول أولاً');
+    if (!newStationName.trim() || !newStationLoc.trim()) return triggerToast('أدخل البيانات كاملة');
+    
+    setIsSubmittingStation(true);
+    try {
+      await addDoc(collection(db, STATIONS_COLLECTION), {
+        name: newStationName,
+        location: newStationLoc,
+        status: isAdmin ? 'approved' : 'pending',
+        addedBy: user.uid,
+        routes: []
+      });
+      triggerToast(isAdmin ? 'تمت إضافة الموقف بنجاح ✅' : 'تم إرسال الموقف للمراجعة ⏳');
+      setShowAddStation(false);
+      setNewStationName('');
+      setNewStationLoc('');
+    } catch (err) {
+      triggerToast('حدث خطأ أثناء الإضافة');
+    } finally {
+      setIsSubmittingStation(false);
+    }
   };
 
   const bgInput = isDarkMode ? 'bg-slate-800 border-slate-700 text-white placeholder-slate-400 focus:border-indigo-500' : 'bg-white border-slate-200 text-slate-900 focus:border-indigo-500';
@@ -131,35 +160,44 @@ const HomeScreen = ({
 
           <div className="space-y-4">
              {homeCategory === 'stations' ? (
-               visibleStations.length === 0 ? (
-                 <div className={`text-center py-20 rounded-[2rem] border-2 border-dashed ${isDarkMode ? 'border-slate-800 bg-slate-900/50' : 'border-slate-200 bg-slate-50'}`}><BusFront size={40} className="mx-auto text-slate-300 mb-3"/><h3 className="font-bold text-slate-500">جاري تحميل المواقف...</h3></div>
-               ) : (
-                 visibleStations.map(station => (
-                    <div key={station.id} onClick={() => setSelectedStation(station)} className={`p-4 rounded-[1.5rem] border shadow-sm hover:shadow-md cursor-pointer mb-3 transition-all ${bgCard}`}>
-                      <div className="flex items-start gap-3">
-                        <div className="p-3 bg-indigo-100 dark:bg-indigo-900/30 text-indigo-600 dark:text-indigo-400 rounded-2xl shrink-0"><BusFront size={24}/></div>
-                        <div className="flex-1">
-                          <div className="flex justify-between items-start">
-                            <h3 className={`font-black text-base ${textPrimary}`}>{station.name}</h3>
-                            {station.status === 'pending' && <span className="bg-amber-100 text-amber-600 text-[9px] px-2 py-1 rounded-full font-bold">قيد المراجعة</span>}
-                          </div>
-                          <p className="text-xs font-bold text-slate-500 mt-1 flex items-center gap-1"><MapPinned size={12}/> {station.location}</p>
-                          
-                          {station.routes && station.routes.length > 0 && (
-                            <div className="mt-3 flex flex-wrap gap-1.5">
-                              {station.routes.slice(0, 3).map((route, i) => (
-                                <span key={i} className="bg-slate-100 dark:bg-slate-800 text-[10px] px-2 py-1 rounded-md text-slate-600 dark:text-slate-300 flex items-center gap-1 border dark:border-slate-700">
-                                  <Route size={10}/> {route.destination}
-                                </span>
-                              ))}
-                              {station.routes.length > 3 && <span className="bg-slate-100 dark:bg-slate-800 text-[10px] px-2 py-1 rounded-md text-slate-600 dark:text-slate-300">+{station.routes.length - 3}</span>}
+               <>
+                 {/* زر إضافة موقف جديد */}
+                 {!isGuest && (
+                   <button onClick={() => setShowAddStation(true)} className="w-full flex justify-center items-center gap-2 py-3 bg-indigo-50 text-indigo-700 dark:bg-indigo-900/30 dark:text-indigo-400 border border-indigo-200 dark:border-indigo-800 rounded-2xl font-bold hover:bg-indigo-100 transition-colors mb-4">
+                     <Plus size={18}/> إضافة موقف جديد
+                   </button>
+                 )}
+
+                 {visibleStations.length === 0 ? (
+                   <div className={`text-center py-20 rounded-[2rem] border-2 border-dashed ${isDarkMode ? 'border-slate-800 bg-slate-900/50' : 'border-slate-200 bg-slate-50'}`}><BusFront size={40} className="mx-auto text-slate-300 mb-3"/><h3 className="font-bold text-slate-500">جاري تحميل المواقف...</h3></div>
+                 ) : (
+                   visibleStations.map(station => (
+                      <div key={station.id} onClick={() => setSelectedStation(station)} className={`p-4 rounded-[1.5rem] border shadow-sm hover:shadow-md cursor-pointer mb-3 transition-all ${bgCard}`}>
+                        <div className="flex items-start gap-3">
+                          <div className="p-3 bg-indigo-100 dark:bg-indigo-900/30 text-indigo-600 dark:text-indigo-400 rounded-2xl shrink-0"><BusFront size={24}/></div>
+                          <div className="flex-1">
+                            <div className="flex justify-between items-start">
+                              <h3 className={`font-black text-base ${textPrimary}`}>{station.name}</h3>
+                              {station.status === 'pending' && <span className="bg-amber-100 text-amber-600 text-[9px] px-2 py-1 rounded-full font-bold">قيد المراجعة</span>}
                             </div>
-                          )}
+                            <p className="text-xs font-bold text-slate-500 mt-1 flex items-center gap-1"><MapPinned size={12}/> {station.location}</p>
+                            
+                            {station.routes && station.routes.length > 0 && (
+                              <div className="mt-3 flex flex-wrap gap-1.5">
+                                {station.routes.slice(0, 3).map((route, i) => (
+                                  <span key={i} className="bg-slate-100 dark:bg-slate-800 text-[10px] px-2 py-1 rounded-md text-slate-600 dark:text-slate-300 flex items-center gap-1 border dark:border-slate-700">
+                                    <Route size={10}/> {route.destination}
+                                  </span>
+                                ))}
+                                {station.routes.length > 3 && <span className="bg-slate-100 dark:bg-slate-800 text-[10px] px-2 py-1 rounded-md text-slate-600 dark:text-slate-300">+{station.routes.length - 3}</span>}
+                              </div>
+                            )}
+                          </div>
                         </div>
                       </div>
-                    </div>
-                 ))
-               )
+                   ))
+                 )}
+               </>
              ) : (
                visibleTrips.length === 0 ? (
                  <div className={`text-center py-16 rounded-[2rem] border-2 border-dashed ${isDarkMode ? 'border-slate-800 bg-slate-900/50' : 'border-slate-200 bg-slate-50'}`}><Bell size={48} className="mx-auto text-indigo-400 mb-4 opacity-50"/><h3 className="font-bold text-lg text-slate-700 dark:text-slate-300 mb-2">لا توجد إعلانات في هذا المسار</h3><p className="text-xs text-slate-500 mb-6">لم يقم أي شخص بنشر رحلة مطابقة لبحثك حتى الآن.</p></div>
@@ -173,6 +211,28 @@ const HomeScreen = ({
 
       {viewMode === 'map' && (
          <div className={`text-center py-20 rounded-[2rem] border-2 border-dashed mt-10 ${isDarkMode ? 'border-slate-800 bg-slate-900/50' : 'border-slate-200 bg-slate-50'}`}><MapPinned size={48} className="mx-auto text-slate-400 mb-4 opacity-50"/><h3 className="font-bold text-lg text-slate-700 dark:text-slate-300">الخريطة قيد التطوير...</h3></div>
+      )}
+
+      {/* مودال إضافة موقف جديد */}
+      {showAddStation && (
+        <div className="fixed inset-0 bg-slate-900/90 backdrop-blur-sm z-[300] flex justify-center items-center p-4 pointer-events-auto">
+          <div className={`${bgCard} w-full max-w-sm rounded-[2rem] p-6 shadow-2xl flex flex-col border animate-fade-in-up dark:border-slate-700`}>
+             <div className="flex justify-between items-center mb-4">
+               <h3 className={`font-black text-lg ${textPrimary}`}>إضافة موقف جديد</h3>
+               <button onClick={() => setShowAddStation(false)} className="p-1 bg-slate-100 dark:bg-slate-800 rounded-full"><X size={18}/></button>
+             </div>
+             <form onSubmit={handleAddStation} className="space-y-4">
+                <input type="text" required placeholder="اسم الموقف (مثال: موقف عبود)" value={newStationName} onChange={e => setNewStationName(e.target.value)} className={`w-full p-3 rounded-xl border text-sm font-bold outline-none ${bgInput}`}/>
+                <select required value={newStationLoc} onChange={e => setNewStationLoc(e.target.value)} className={`w-full p-3 rounded-xl border text-sm font-bold outline-none ${bgInput}`}>
+                  <option value="" disabled>المحافظة</option>
+                  {EGYPT_CITIES.map(c => <option key={c} value={c}>{c}</option>)}
+                </select>
+                <button type="submit" disabled={isSubmittingStation} className="w-full bg-indigo-600 text-white py-3 rounded-xl font-bold flex justify-center items-center gap-2 mt-2">
+                  {isSubmittingStation ? <Loader2 size={18} className="animate-spin"/> : 'إضافة الموقف'}
+                </button>
+             </form>
+          </div>
+        </div>
       )}
 
     </main>
