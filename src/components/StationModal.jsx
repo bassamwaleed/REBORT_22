@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
-import { doc, getDoc, updateDoc } from 'firebase/firestore';
-import { X, MapPinned, Route, Plus, Loader2, BusFront, CheckCircle2, Edit3, Check, AlertCircle } from 'lucide-react';
+import { doc, getDoc, updateDoc, deleteDoc } from 'firebase/firestore';
+import { X, MapPinned, Route, Plus, Loader2, BusFront, CheckCircle2, Edit3, Check, AlertCircle, Trash2 } from 'lucide-react';
 import { db, STATIONS_COLLECTION } from '../firebase';
 import { EGYPT_CITIES } from '../utils/helpers';
 
@@ -10,7 +10,6 @@ const StationModal = ({ station, user, isAdmin, isGuest, isDarkMode, onClose, tr
   const [newRouteFare, setNewRouteFare] = useState('');
   const [isSubmitting, setIsSubmitting] = useState(false);
 
-  // حالات تعديل الأجرة لخط موجود
   const [editingIndex, setEditingIndex] = useState(-1);
   const [editFareValue, setEditFareValue] = useState('');
 
@@ -18,6 +17,27 @@ const StationModal = ({ station, user, isAdmin, isGuest, isDarkMode, onClose, tr
   const textPrimary = isDarkMode ? 'text-white' : 'text-slate-900';
   const textSecondary = isDarkMode ? 'text-slate-400' : 'text-slate-500';
   const bgInput = isDarkMode ? 'bg-slate-800 border-slate-700 text-white focus:border-indigo-500' : 'bg-white border-slate-200 text-slate-900 focus:border-indigo-500';
+
+  const handleDeleteStation = async () => {
+    if(!window.confirm('هل أنت متأكد من حذف هذا الموقف بالكامل؟ لا يمكن التراجع عن هذا الإجراء.')) return;
+    try {
+      await deleteDoc(doc(db, STATIONS_COLLECTION, station.id));
+      triggerToast('تم حذف الموقف بنجاح');
+      onClose();
+    } catch(e) { triggerToast('حدث خطأ أثناء الحذف'); }
+  };
+
+  const handleDeleteRoute = async (index) => {
+    if(!window.confirm('هل أنت متأكد من حذف هذا الخط نهائياً؟')) return;
+    try {
+      const stationRef = doc(db, STATIONS_COLLECTION, station.id);
+      const stationSnap = await getDoc(stationRef);
+      const currentRoutes = stationSnap.data().routes || [];
+      currentRoutes.splice(index, 1);
+      await updateDoc(stationRef, { routes: currentRoutes });
+      triggerToast('تم حذف الخط بنجاح');
+    } catch(e) { triggerToast('حدث خطأ أثناء الحذف'); }
+  };
 
   const handleAddRoute = async (e) => {
     e.preventDefault();
@@ -63,25 +83,17 @@ const StationModal = ({ station, user, isAdmin, isGuest, isDarkMode, onClose, tr
       const currentRoutes = stationSnap.data().routes || [];
       
       if (isAdmin) {
-        // الأدمن يعدل فوراً
         currentRoutes[index].fare = editFareValue;
-        currentRoutes[index].editRequest = null; // مسح أي طلبات تعديل لو موجودة
+        currentRoutes[index].editRequest = null; 
         triggerToast('تم تعديل الأجرة بنجاح ✅');
       } else {
-        // الراكب يقترح التعديل
-        currentRoutes[index].editRequest = {
-          proposedFare: editFareValue,
-          suggestedBy: user.uid
-        };
+        currentRoutes[index].editRequest = { proposedFare: editFareValue, suggestedBy: user.uid };
         triggerToast('تم إرسال اقتراح التعديل للإدارة ⏳');
       }
-
       await updateDoc(stationRef, { routes: currentRoutes });
       setEditingIndex(-1);
       setEditFareValue('');
-    } catch (e) {
-      triggerToast('حدث خطأ أثناء التعديل');
-    }
+    } catch (e) { triggerToast('حدث خطأ أثناء التعديل'); }
   };
 
   return (
@@ -96,7 +108,10 @@ const StationModal = ({ station, user, isAdmin, isGuest, isDarkMode, onClose, tr
               <p className={`text-[10px] font-bold mt-0.5 flex items-center gap-1 ${textSecondary}`}><MapPinned size={10}/> {station.location}</p>
             </div>
           </div>
-          <button onClick={onClose} className="p-2 bg-white dark:bg-slate-700 rounded-full hover:bg-slate-200 transition-colors shadow-sm"><X size={20}/></button>
+          <div className="flex items-center gap-2">
+            {isAdmin && <button onClick={handleDeleteStation} className="p-2 bg-rose-100 text-rose-600 rounded-full hover:bg-rose-200 transition-colors shadow-sm"><Trash2 size={16}/></button>}
+            <button onClick={onClose} className="p-2 bg-white dark:bg-slate-700 rounded-full hover:bg-slate-200 transition-colors shadow-sm"><X size={20}/></button>
+          </div>
         </div>
 
         <div className="flex-1 overflow-y-auto p-5 custom-scrollbar">
@@ -110,7 +125,6 @@ const StationModal = ({ station, user, isAdmin, isGuest, isDarkMode, onClose, tr
             )}
           </div>
 
-          {/* Form إضافة خط */}
           {isAddingRoute && (
             <form onSubmit={handleAddRoute} className="mb-6 p-4 bg-slate-50 dark:bg-slate-800/50 rounded-2xl border dark:border-slate-700 animate-fade-in-up">
               <div className="space-y-3">
@@ -129,7 +143,6 @@ const StationModal = ({ station, user, isAdmin, isGuest, isDarkMode, onClose, tr
             </form>
           )}
 
-          {/* عرض الخطوط الحالية */}
           <div className="space-y-3">
             {(!station.routes || station.routes.length === 0) ? (
               <div className="text-center py-10 opacity-50">
@@ -138,7 +151,6 @@ const StationModal = ({ station, user, isAdmin, isGuest, isDarkMode, onClose, tr
               </div>
             ) : (
               station.routes.map((route, index) => {
-                // إخفاء الخطوط المقترحة عن المستخدمين العاديين (تظهر للأدمن وللي اقترحها بس)
                 if (!isAdmin && route.status === 'pending' && route.addedBy !== user?.uid) return null;
                 
                 return (
@@ -167,6 +179,9 @@ const StationModal = ({ station, user, isAdmin, isGuest, isDarkMode, onClose, tr
                         </div>
                       ) : (
                         <div className="flex items-center gap-2">
+                          {isAdmin && (
+                            <button onClick={() => handleDeleteRoute(index)} className="text-rose-400 hover:text-rose-600 bg-rose-50 dark:bg-rose-900/30 p-1.5 rounded-lg"><Trash2 size={14}/></button>
+                          )}
                           {!isGuest && (
                             <button onClick={() => {setEditingIndex(index); setEditFareValue(route.fare);}} className="text-slate-400 hover:text-indigo-500 bg-slate-100 dark:bg-slate-800 p-1.5 rounded-lg"><Edit3 size={14}/></button>
                           )}
@@ -174,7 +189,6 @@ const StationModal = ({ station, user, isAdmin, isGuest, isDarkMode, onClose, tr
                             <span className="font-black text-indigo-600 dark:text-indigo-400 text-lg bg-indigo-50 dark:bg-indigo-900/30 px-3 py-1 rounded-lg">
                               {route.fare} ج
                             </span>
-                            {/* لو المستخدم هو اللي اقترح التعديل يظهرله تنبيه إنه لسه بيتراجع */}
                             {route.editRequest?.suggestedBy === user?.uid && !isAdmin && (
                               <span className="text-[9px] text-amber-500 font-bold mt-1">اقتراحك ({route.editRequest.proposedFare}ج) يُراجع</span>
                             )}
