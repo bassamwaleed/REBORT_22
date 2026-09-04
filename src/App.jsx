@@ -1,13 +1,11 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { onAuthStateChanged, signInWithEmailAndPassword, createUserWithEmailAndPassword, signInAnonymously, updateProfile, signOut } from 'firebase/auth';
-import { collection, onSnapshot, doc, getDoc, setDoc, addDoc, updateDoc, deleteDoc, serverTimestamp, increment, getDocs } from 'firebase/firestore';
-import { Loader2, Car, MessageCircle, User, Home, CheckCircle2, Plus, X, MapPin, Tent, ArrowRight, ShieldCheck, Star, Clock, Calendar, Wallet, Users, Map as MapIcon, Lock, Camera, Edit2, ShieldAlert, Gift, Moon, LogOut, GitPullRequest, BusFront, Bell, Target, Activity } from 'lucide-react';
+import { collection, onSnapshot, doc, getDoc, setDoc, addDoc, updateDoc, serverTimestamp, getDocs } from 'firebase/firestore';
+import { Loader2, Car, MessageCircle, User, Home, CheckCircle2, Plus, X, MapPin, Lock, Camera, Edit2, ShieldAlert, Gift, Moon, LogOut, BusFront, Bell, Target } from 'lucide-react';
 
-// استيراد الإعدادات والدوال
 import { auth, db, APP_COLLECTION_NAME, USERS_COLLECTION, STATIONS_COLLECTION, ADMIN_EMAIL } from './firebase';
-import { safeMillis, timeToMinutes, formatTripDateTime, EGYPT_CITIES, CITY_COORDS, resizeAndConvertToBase64 } from './utils/helpers';
+import { safeMillis, timeToMinutes, formatTripDateTime, EGYPT_CITIES, resizeAndConvertToBase64 } from './utils/helpers';
 
-// استيراد المكونات والشاشات
 import HomeScreen from './screens/HomeScreen';
 import ProfileScreen from './screens/ProfileScreen';
 import ChatModal from './components/ChatModal';
@@ -16,14 +14,12 @@ import VerifyModal from './components/VerifyModal';
 import AdminPanel from './components/AdminPanel';   
 
 export default function App() {
-  // --- AUTH STATES ---
   const [user, setUser] = useState(null);
   const [userData, setUserData] = useState(null);
   const [isGuest, setIsGuest] = useState(false);
   const [isAdmin, setIsAdmin] = useState(false);
   const [loading, setLoading] = useState(true);
   
-  // --- GLOBAL UI STATES ---
   const [activeTab, setActiveTab] = useState('home'); 
   const [homeCategory, setHomeCategory] = useState('travel'); 
   const [viewMode, setViewMode] = useState('list'); 
@@ -35,18 +31,15 @@ export default function App() {
     try { const stored = localStorage.getItem('khodnimaak_theme'); return stored !== 'light'; } catch (e) { return true; }
   });
 
-  // --- DATA STATES ---
   const [realTrips, setRealTrips] = useState([]); 
   const [stations, setStations] = useState([]); 
   const [myInbox, setMyInbox] = useState([]);
-  const [appSettings, setAppSettings] = useState({ logo: null, banner: null, bannerText: '' }); // الإعدادات العامة (اللوجو والبانر)
+  const [appSettings, setAppSettings] = useState({ logo: null, banner: null, bannerText: '' });
   
-  // --- SELECTION STATES ---
   const [selectedStation, setSelectedStation] = useState(null);
   const [selectedWeekendTrip, setSelectedWeekendTrip] = useState(null);
   const [activeChat, setActiveChat] = useState(null);
   
-  // --- MODAL STATES ---
   const [showAddModal, setShowAddModal] = useState(false);
   const [showMatchModal, setShowMatchModal] = useState(false);
   const [matchedTrips, setMatchedTrips] = useState([]);
@@ -56,7 +49,6 @@ export default function App() {
   const [showVerifyModal, setShowVerifyModal] = useState(false);
   const [showAdminPanel, setShowAdminPanel] = useState(false);
   
-  // --- FORMS & ALERTS ---
   const [isLoginMode, setIsLoginMode] = useState(true);
   const [authLoading, setAuthLoading] = useState(false);
   const [authForm, setAuthForm] = useState({ name: '', identifier: '', password: '' });
@@ -67,7 +59,6 @@ export default function App() {
   
   const triggerToast = (msg) => { setToastMsg(msg); setTimeout(() => setToastMsg(''), 3500); };
 
-  // --- DATA FETCHING (EFFECTS) ---
   useEffect(() => {
     const unsubscribe = onAuthStateChanged(auth, async (currentUser) => {
       try {
@@ -93,12 +84,9 @@ export default function App() {
     return () => unsubscribe();
   }, []);
 
-  // جلب إعدادات التطبيق (اللوجو والبانر)
   useEffect(() => {
     const unsub = onSnapshot(doc(db, 'system', 'settings'), (docSnap) => {
-      if(docSnap.exists()) {
-        setAppSettings(docSnap.data());
-      }
+      if(docSnap.exists()) { setAppSettings(docSnap.data()); }
     });
     return () => unsub();
   }, []);
@@ -115,7 +103,6 @@ export default function App() {
       });
       tripsData.sort((a, b) => safeMillis(b.createdAt) - safeMillis(a.createdAt));
       setRealTrips(tripsData);
-      
       if (selectedWeekendTrip) {
         const updatedTrip = tripsData.find(t => t.id === selectedWeekendTrip.id);
         if (updatedTrip) setSelectedWeekendTrip(updatedTrip);
@@ -144,7 +131,6 @@ export default function App() {
     return () => unsubscribe();
   }, [user, isGuest]);
 
-  // --- ACTIONS ---
   const handleAuth = async (e) => {
     e.preventDefault(); setAuthLoading(true); setAlertMsg('');
     let identifier = authForm.identifier?.trim() || ''; let emailForFirebase = identifier.includes('@') ? identifier : `${identifier}@khodnimaak.com`;
@@ -172,24 +158,18 @@ export default function App() {
       await updateProfile(auth.currentUser, { displayName: newName.trim() });
       setUserData(prev => ({ ...prev, name: newName.trim() }));
       triggerToast('تم تحديث الاسم بنجاح');
-    } catch (e) {
-      triggerToast('تعذر تحديث الاسم');
-    }
+    } catch (e) { triggerToast('تعذر تحديث الاسم'); }
   };
 
-  // --- LOGIC ---
   const findMatchingRides = (newPostedTrip) => {
     if(!newPostedTrip || newPostedTrip.category === 'weekend' || newPostedTrip.squadTags) return; 
     const matches = (realTrips || []).filter(t => {
       if(!t || t.status === 'cancelled' || t.status === 'completed') return false;
       if(t.userId === user?.uid) return false; 
-      
       let isMatch = false;
       if (newPostedTrip.category === 'travel' && t.category === 'travel') {
          isMatch = (newPostedTrip.type === 'offer' && t.type === 'request') || (newPostedTrip.type === 'request' && t.type === 'offer');
-      } else if (newPostedTrip.category === 'parcel' && t.category === 'parcel') {
-         isMatch = true; 
-      }
+      } else if (newPostedTrip.category === 'parcel' && t.category === 'parcel') { isMatch = true; }
       if (!isMatch) return false;
       if (t.from !== newPostedTrip.from || t.to !== newPostedTrip.to || t.date !== newPostedTrip.date) return false;
       if (Math.abs(timeToMinutes(newPostedTrip.time) - timeToMinutes(t.time)) <= 120) return true; 
@@ -239,10 +219,7 @@ export default function App() {
     await setDoc(doc(db, `inbox_${trip.userId}`, chatId), { ...chatDataOther, createdAt: serverTimestamp(), requestStatus: 'none' }, { merge: true });
   };
 
-  const handleConnectMatched = (trip) => {
-    setShowMatchModal(false);
-    openChatFromTrip(trip);
-  };
+  const handleConnectMatched = (trip) => { setShowMatchModal(false); openChatFromTrip(trip); };
 
   const handleAvatarUpload = async (e) => {
     const file = e.target.files[0];
@@ -254,11 +231,7 @@ export default function App() {
       await updateProfile(auth.currentUser, { photoURL: base64 });
       setUserData(prev => ({...prev, photoURL: base64}));
       triggerToast('تم تحديث الصورة بنجاح');
-    } catch(err) {
-      triggerToast('حدث خطأ أثناء رفع الصورة');
-    } finally {
-      setIsUploadingAvatar(false);
-    }
+    } catch(err) { triggerToast('حدث خطأ أثناء رفع الصورة'); } finally { setIsUploadingAvatar(false); }
   };
 
   const getActiveTrackersList = () => {
@@ -272,7 +245,6 @@ export default function App() {
   };
   const activeTrackers = getActiveTrackersList();
 
-  // --- STYLING VARS ---
   const bgMain = isDarkMode ? 'bg-slate-950 text-slate-100' : 'bg-slate-50 text-slate-800';
   const bgCard = isDarkMode ? 'bg-slate-900 border-slate-800' : 'bg-white border-slate-200';
   const bgInput = isDarkMode ? 'bg-slate-800 border-slate-700 text-white placeholder-slate-400 focus:border-indigo-500' : 'bg-white border-slate-200 text-slate-900 focus:border-indigo-500';
@@ -308,9 +280,7 @@ export default function App() {
 
       {/* FLOATING ADD BUTTON */}
       {activeTab === 'home' && !selectedStation && !selectedWeekendTrip && !isGuest && (
-        <button onClick={() => setShowAddModal(true)} className="fixed bottom-[90px] right-5 bg-indigo-600 text-white w-14 h-14 rounded-full shadow-lg flex items-center justify-center z-50 hover:bg-indigo-700 transition-transform">
-          <Plus size={28} />
-        </button>
+        <button onClick={() => setShowAddModal(true)} className="fixed bottom-[90px] right-5 bg-indigo-600 text-white w-14 h-14 rounded-full shadow-lg flex items-center justify-center z-50 hover:bg-indigo-700 transition-transform"><Plus size={28} /></button>
       )}
 
       {/* ADD TRIP MODAL */}
@@ -321,38 +291,26 @@ export default function App() {
               <h2 className="text-lg font-black flex items-center gap-2"><Car className="text-indigo-500"/> إضافة إعلان</h2>
               <button onClick={() => setShowAddModal(false)} className="p-2 bg-slate-200 dark:bg-slate-700 rounded-full"><X size={20}/></button>
             </div>
-            
             <div className="flex-1 overflow-y-auto p-5 custom-scrollbar">
               <div className="flex bg-slate-100 dark:bg-slate-800 p-1 rounded-2xl mb-6">
                  <button onClick={() => setNewTrip({...newTrip, category: 'travel'})} className={`flex-1 py-2.5 rounded-xl text-xs font-bold transition-all ${newTrip.category === 'travel' ? 'bg-white text-indigo-600 shadow-sm dark:bg-slate-700 dark:text-white' : 'text-slate-500'}`}>سفر</button>
                  <button onClick={() => setNewTrip({...newTrip, category: 'parcel'})} className={`flex-1 py-2.5 rounded-xl text-xs font-bold transition-all ${newTrip.category === 'parcel' ? 'bg-white text-indigo-600 shadow-sm dark:bg-slate-700 dark:text-white' : 'text-slate-500'}`}>أمانات</button>
                  <button onClick={() => setNewTrip({...newTrip, category: 'weekend'})} className={`flex-1 py-2.5 rounded-xl text-xs font-bold transition-all ${newTrip.category === 'weekend' ? 'bg-white text-indigo-600 shadow-sm dark:bg-slate-700 dark:text-white' : 'text-slate-500'}`}>أفواج</button>
               </div>
-
               <form id="addTripForm" onSubmit={handleAddTrip} className="space-y-4">
                 {newTrip.category === 'travel' && (
                   <div className="flex gap-3 mb-2">
                     <label className={`flex-1 flex items-center gap-2 p-3 rounded-xl border cursor-pointer ${newTrip.type === 'offer' ? 'bg-indigo-50 border-indigo-500 text-indigo-700' : 'bg-transparent border-slate-200 dark:border-slate-700'}`}>
-                      <input type="radio" name="tripType" value="offer" checked={newTrip.type === 'offer'} onChange={() => setNewTrip({...newTrip, type: 'offer'})} className="hidden"/>
-                      <Car size={18}/> <span className="text-sm font-bold">سائق (متاح)</span>
+                      <input type="radio" name="tripType" value="offer" checked={newTrip.type === 'offer'} onChange={() => setNewTrip({...newTrip, type: 'offer'})} className="hidden"/><Car size={18}/> <span className="text-sm font-bold">سائق (متاح)</span>
                     </label>
                     <label className={`flex-1 flex items-center gap-2 p-3 rounded-xl border cursor-pointer ${newTrip.type === 'request' ? 'bg-indigo-50 border-indigo-500 text-indigo-700' : 'bg-transparent border-slate-200 dark:border-slate-700'}`}>
-                      <input type="radio" name="tripType" value="request" checked={newTrip.type === 'request'} onChange={() => setNewTrip({...newTrip, type: 'request'})} className="hidden"/>
-                      <User size={18}/> <span className="text-sm font-bold">راكب (مطلوب)</span>
+                      <input type="radio" name="tripType" value="request" checked={newTrip.type === 'request'} onChange={() => setNewTrip({...newTrip, type: 'request'})} className="hidden"/><User size={18}/> <span className="text-sm font-bold">راكب (مطلوب)</span>
                     </label>
                   </div>
                 )}
-                
                 {newTrip.category === 'weekend' && ( <input type="text" required placeholder="عنوان الرحلة (مثال: سفاري وادي الريان)" value={newTrip.tripTitle} onChange={e => setNewTrip({...newTrip, tripTitle: e.target.value})} className={`w-full p-4 rounded-2xl border font-bold text-sm outline-none ${bgInput}`}/> )}
-                
-                <select required value={newTrip.from} onChange={e => setNewTrip({...newTrip, from: e.target.value})} className={`w-full p-4 rounded-2xl border font-bold text-sm outline-none ${bgInput}`}>
-                  <option value="" disabled>محافظة التحرك</option>{EGYPT_CITIES.map(c => <option key={c} value={c}>{c}</option>)}
-                </select>
-                
-                <select required value={newTrip.to} onChange={e => setNewTrip({...newTrip, to: e.target.value})} className={`w-full p-4 rounded-2xl border font-bold text-sm outline-none ${bgInput}`}>
-                  <option value="" disabled>محافظة الوصول</option>{EGYPT_CITIES.map(c => <option key={c} value={c}>{c}</option>)}
-                </select>
-
+                <select required value={newTrip.from} onChange={e => setNewTrip({...newTrip, from: e.target.value})} className={`w-full p-4 rounded-2xl border font-bold text-sm outline-none ${bgInput}`}><option value="" disabled>محافظة التحرك</option>{EGYPT_CITIES.map(c => <option key={c} value={c}>{c}</option>)}</select>
+                <select required value={newTrip.to} onChange={e => setNewTrip({...newTrip, to: e.target.value})} className={`w-full p-4 rounded-2xl border font-bold text-sm outline-none ${bgInput}`}><option value="" disabled>محافظة الوصول</option>{EGYPT_CITIES.map(c => <option key={c} value={c}>{c}</option>)}</select>
                 <div className="grid grid-cols-2 gap-3">
                   <input type="date" required value={newTrip.date} onChange={e => setNewTrip({...newTrip, date: e.target.value})} className={`p-4 rounded-2xl border font-bold text-sm outline-none ${bgInput}`}/>
                   <input type="time" required value={newTrip.time} onChange={e => setNewTrip({...newTrip, time: e.target.value})} className={`p-4 rounded-2xl border font-bold text-sm outline-none ${bgInput}`}/>
@@ -362,7 +320,6 @@ export default function App() {
                 <textarea rows="3" placeholder="ملاحظات إضافية..." value={newTrip.notes} onChange={e => setNewTrip({...newTrip, notes: e.target.value})} className={`w-full p-4 rounded-2xl border font-bold text-sm outline-none resize-none ${bgInput}`}></textarea>
               </form>
             </div>
-            
             <div className="p-4 border-t bg-slate-50 dark:bg-slate-800 dark:border-slate-700 shrink-0">
                <button type="submit" form="addTripForm" disabled={isSubmitting} className="w-full bg-indigo-600 text-white py-4 rounded-2xl font-black shadow-lg hover:bg-indigo-700 active:scale-95 flex justify-center items-center gap-2">
                  {isSubmitting ? <Loader2 className="animate-spin" size={20}/> : 'نشر'}
@@ -379,26 +336,15 @@ export default function App() {
           homeCategory={homeCategory} setHomeCategory={setHomeCategory} viewMode={viewMode} setViewMode={setViewMode} filterType={filterType} setFilterType={setFilterType}
           filterFrom={filterFrom} setFilterFrom={setFilterFrom} filterTo={filterTo} setFilterTo={setFilterTo} openChatFromTrip={openChatFromTrip}
           setSelectedWeekendTrip={setSelectedWeekendTrip} setSelectedStation={setSelectedStation} triggerToast={triggerToast}
-          appSettings={appSettings} // إرسال الإعدادات للرئيسية عشان البانر
+          appSettings={appSettings} 
         />
       )}
 
       {activeTab === 'profile' && (
         <ProfileScreen 
-          user={user}
-          userData={userData}
-          isGuest={isGuest}
-          isAdmin={isAdmin}
-          isDarkMode={isDarkMode}
-          toggleTheme={toggleTheme}
-          handleLogout={handleLogout}
-          isUploadingAvatar={isUploadingAvatar}
-          handleAvatarUpload={handleAvatarUpload}
-          handleEditName={handleEditName}
-          setShowVerifyModal={setShowVerifyModal}
-          setShowRewardsModal={setShowRewardsModal}
-          setShowAdminPanel={setShowAdminPanel}
-          forceSignUpScreen={forceSignUpScreen}
+          user={user} userData={userData} isGuest={isGuest} isAdmin={isAdmin} isDarkMode={isDarkMode} toggleTheme={toggleTheme} handleLogout={handleLogout}
+          isUploadingAvatar={isUploadingAvatar} handleAvatarUpload={handleAvatarUpload} handleEditName={handleEditName}
+          setShowVerifyModal={setShowVerifyModal} setShowRewardsModal={setShowRewardsModal} setShowAdminPanel={setShowAdminPanel} forceSignUpScreen={forceSignUpScreen}
         />
       )}
 
@@ -420,23 +366,12 @@ export default function App() {
 
       {/* VERIFY MODAL INSTANCE */}
       {showVerifyModal && (
-        <VerifyModal 
-          user={user} 
-          isDarkMode={isDarkMode} 
-          onClose={() => setShowVerifyModal(false)} 
-          triggerToast={triggerToast} 
-          setUserData={setUserData} 
-        />
+        <VerifyModal user={user} isDarkMode={isDarkMode} onClose={() => setShowVerifyModal(false)} triggerToast={triggerToast} setUserData={setUserData} />
       )}
 
       {/* ADMIN PANEL INSTANCE */}
       {showAdminPanel && isAdmin && (
-        <AdminPanel 
-          isDarkMode={isDarkMode} 
-          onClose={() => setShowAdminPanel(false)} 
-          triggerToast={triggerToast} 
-          appSettings={appSettings} // إرسال الإعدادات للأدمن للتعديل
-        />
+        <AdminPanel isDarkMode={isDarkMode} onClose={() => setShowAdminPanel(false)} triggerToast={triggerToast} appSettings={appSettings} />
       )}
 
       {/* MATCHING MODAL */}
@@ -470,11 +405,7 @@ export default function App() {
                   myInbox.map(chat => (
                     <div key={chat.chatId} onClick={() => setActiveChat(chat)} className={`p-4 rounded-2xl shadow-sm mb-3 cursor-pointer border hover:border-indigo-500 transition-colors ${isDarkMode ? 'bg-slate-800' : 'bg-slate-50'}`}>
                       <div className="flex items-center gap-4">
-                         {chat.otherPersonPhoto ? (
-                           <img src={chat.otherPersonPhoto} className="w-12 h-12 rounded-full object-cover shrink-0" alt="avatar" />
-                         ) : (
-                           <div className="w-12 h-12 bg-indigo-50 text-indigo-500 rounded-full flex items-center justify-center font-bold text-xl shrink-0">{(chat?.otherPersonName || 'م').charAt(0)}</div>
-                         )}
+                         {chat.otherPersonPhoto ? ( <img src={chat.otherPersonPhoto} className="w-12 h-12 rounded-full object-cover shrink-0" alt="avatar" /> ) : ( <div className="w-12 h-12 bg-indigo-50 text-indigo-500 rounded-full flex items-center justify-center font-bold text-xl shrink-0">{(chat?.otherPersonName || 'م').charAt(0)}</div> )}
                          <div className="flex-1 overflow-hidden"><h4 className={`font-bold text-sm ${textPrimary}`}>{chat?.otherPersonName}</h4><p className={`text-xs mt-1 truncate ${textSecondary}`}>{chat?.lastMessage || '...'}</p></div>
                       </div>
                     </div>
@@ -511,7 +442,7 @@ export default function App() {
         </div>
       )}
 
-      {/* LIVE TRACKER COMPONENT */}
+      {/* LIVE TRACKER COMPONENT (ISOLATED) */}
       {!isGuest && activeTrackers.length > 0 && (!activeChat || activeChat.chatId !== (activeTrackers[0]?.type === 'normal' ? activeTrackers[0].data.chatId : activeTrackers[0]?.data.id)) && (
         <LiveTrackerBar activeTrackers={activeTrackers} isDarkMode={isDarkMode} setActiveChat={setActiveChat} setSelectedWeekendTrip={setSelectedWeekendTrip} setActiveTab={setActiveTab} setViewMode={setViewMode} />
       )}
@@ -528,4 +459,4 @@ export default function App() {
       </nav>
     </div>
   );
-} 
+}
