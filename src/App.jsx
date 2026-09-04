@@ -1,11 +1,12 @@
 import React, { useState, useEffect } from 'react';
 import { onAuthStateChanged, signInWithEmailAndPassword, createUserWithEmailAndPassword, signInAnonymously, updateProfile, signOut } from 'firebase/auth';
 import { collection, onSnapshot, doc, getDoc, setDoc, addDoc, updateDoc, serverTimestamp } from 'firebase/firestore';
+// تم تنظيف الأيقونات هنا.. دول بس اللي مستخدمين فعلياً في الملف ده
 import { Loader2, Car, MessageCircle, User, Home, CheckCircle2, Plus, X, Target, Lock } from 'lucide-react';
 
 import { auth, db, APP_COLLECTION_NAME, USERS_COLLECTION, STATIONS_COLLECTION, ADMIN_EMAIL } from './firebase';
-import { safeMillis, timeToMinutes, EGYPT_CITIES, resizeAndConvertToBase64 } from './utils/helpers';
- 
+import { safeMillis, timeToMinutes, EGYPT_CITIES } from './utils/helpers';
+
 import HomeScreen from './screens/HomeScreen';
 import ProfileScreen from './screens/ProfileScreen';
 import ChatModal from './components/ChatModal';
@@ -214,19 +215,6 @@ export default function App() {
     await setDoc(doc(db, `inbox_${trip.userId}`, chatId), { ...chatDataOther, createdAt: serverTimestamp(), requestStatus: 'none' }, { merge: true });
   };
 
-  const handleAvatarUpload = async (e) => {
-    const file = e.target.files[0];
-    if (!file || !user) return;
-    setIsUploadingAvatar(true);
-    try {
-      const base64 = await resizeAndConvertToBase64(file, 400, 400, 0.8);
-      await updateDoc(doc(db, USERS_COLLECTION, user.uid), { photoURL: base64 });
-      await updateProfile(auth.currentUser, { photoURL: base64 });
-      setUserData(prev => ({...prev, photoURL: base64}));
-      triggerToast('تم تحديث الصورة بنجاح');
-    } catch(err) { triggerToast('حدث خطأ أثناء رفع الصورة'); } finally { setIsUploadingAvatar(false); }
-  };
-
   const getActiveTrackersList = () => {
     if (!user || isGuest) return [];
     let list = [];
@@ -259,11 +247,7 @@ export default function App() {
           </div>
           <div className="flex items-center gap-2 cursor-pointer" onClick={() => {setActiveTab('home'); setViewMode('list');}}>
             <span className="font-black text-xl text-indigo-600 dark:text-indigo-400">طريقنا</span>
-            {appSettings?.logo ? (
-              <img src={appSettings.logo} className="w-8 h-8 object-contain rounded-md" alt="Logo"/>
-            ) : (
-              <div className="bg-indigo-600 text-white p-1.5 rounded-lg"><Car size={20}/></div>
-            )}
+            {appSettings?.logo ? ( <img src={appSettings.logo} className="w-8 h-8 object-contain rounded-md" alt="Logo"/> ) : ( <div className="bg-indigo-600 text-white p-1.5 rounded-lg"><Car size={20}/></div> )}
           </div>
         </div>
       </header>
@@ -315,7 +299,7 @@ export default function App() {
 
       {activeTab === 'home' && (
         <HomeScreen 
-          user={user} isAdmin={isAdmin} isDarkMode={isDarkMode} realTrips={realTrips} stations={stations} 
+          user={user} isAdmin={isAdmin} isDarkMode={isDarkMode} realTrips={realTrips} stations={stations} isGuest={isGuest}
           homeCategory={homeCategory} setHomeCategory={setHomeCategory} viewMode={viewMode} setViewMode={setViewMode} filterType={filterType} setFilterType={setFilterType}
           filterFrom={filterFrom} setFilterFrom={setFilterFrom} filterTo={filterTo} setFilterTo={setFilterTo} openChatFromTrip={openChatFromTrip}
           setSelectedStation={setSelectedStation} triggerToast={triggerToast} appSettings={appSettings} 
@@ -332,7 +316,7 @@ export default function App() {
       {activeTab === 'profile' && (
         <ProfileScreen 
           user={user} userData={userData} isGuest={isGuest} isAdmin={isAdmin} isDarkMode={isDarkMode} toggleTheme={toggleTheme} handleLogout={handleLogout}
-          setShowVerifyModal={setShowVerifyModal} setShowRewardsModal={setShowRewardsModal} setShowAdminPanel={setShowAdminPanel} forceSignUpScreen={forceSignUpScreen}
+          handleEditName={handleEditName} setShowVerifyModal={setShowVerifyModal} setShowRewardsModal={setShowRewardsModal} setShowAdminPanel={setShowAdminPanel} forceSignUpScreen={forceSignUpScreen}
         />
       )}
 
@@ -381,32 +365,7 @@ export default function App() {
         </div>
       )}
 
-      {!user && (
-        <div dir="rtl" className={`fixed inset-0 flex items-center justify-center p-4 z-[1000] ${bgMain}`}>
-          <div className={`${bgCard} p-8 rounded-[2rem] shadow-xl max-w-sm w-full border relative`}>
-            <div className="mb-8 text-center">
-              <div className="bg-indigo-600 text-white w-16 h-16 rounded-[1.25rem] flex items-center justify-center mx-auto mb-4 transform -rotate-3 shadow-lg"><Car size={32} /></div>
-              <h1 className="text-3xl font-black mb-1 text-indigo-600 dark:text-indigo-400">طريقنا</h1>
-              <p className={`${textSecondary} text-sm font-medium mt-2`}>{isLoginMode ? 'سجل دخولك للمتابعة' : 'انضم إلينا الآن'}</p>
-            </div>
-            {alertMsg && <div className="mb-4 bg-rose-100 text-rose-600 p-3 rounded-xl text-xs font-bold text-center border border-rose-200">{alertMsg}</div>}
-            <form onSubmit={handleAuth} className="space-y-4">
-              {!isLoginMode && (<input type="text" required placeholder="الاسم الكامل" value={authForm.name} onChange={e => setAuthForm({...authForm, name: e.target.value})} className={`w-full border rounded-xl py-3.5 px-4 outline-none font-bold ${bgInput}`} />)}
-              <input type="text" required placeholder="رقم الموبايل أو الإيميل" value={authForm.identifier || ''} onChange={e => setAuthForm({...authForm, identifier: e.target.value})} className={`w-full border rounded-xl py-3.5 px-4 outline-none font-bold text-left ${bgInput}`} dir="ltr" />
-              <input type="password" required placeholder="كلمة المرور" value={authForm.password} onChange={e => setAuthForm({...authForm, password: e.target.value})} className={`w-full border rounded-xl py-3.5 px-4 outline-none font-bold text-left ${bgInput}`} dir="ltr" />
-              <button type="submit" disabled={authLoading} className="w-full bg-indigo-600 text-white py-4 rounded-xl font-bold hover:bg-indigo-700 active:scale-95 flex justify-center mt-2 shadow-md">{authLoading ? <Loader2 className="animate-spin m-auto"/> : (isLoginMode ? 'تسجيل الدخول' : 'تسجيل حساب جديد')}</button>
-            </form>
-            <div className="mt-6 text-center space-y-4">
-              <button onClick={() => setIsLoginMode(!isLoginMode)} className="font-bold text-sm text-indigo-600 hover:underline">{isLoginMode ? 'ليس لديك حساب؟ أنشئ حساباً' : 'لديك حساب بالفعل؟ سجل دخولك'}</button>
-              <div className={`flex items-center justify-center gap-2 text-sm ${textSecondary}`}><div className="h-px w-8 bg-slate-200 dark:bg-slate-700"></div> أو <div className="h-px w-8 bg-slate-200 dark:bg-slate-700"></div></div>
-              <button onClick={handleGuestLogin} className={`w-full py-3 rounded-xl text-sm font-bold border transition-all ${isDarkMode ? 'border-slate-700 text-slate-300 hover:bg-slate-800' : 'border-slate-200 text-slate-600 hover:bg-slate-50'}`}>تصفح التطبيق كزائر</button>
-            </div>
-          </div>
-        </div>
-      )}
-
-      {/* منع الخطأ في LiveTrackerBar */}
-      {!isGuest && activeTrackers.length > 0 && activeTrackers[0]?.data && (!activeChat || activeChat.chatId !== (activeTrackers[0]?.type === 'normal' ? activeTrackers[0].data.chatId : activeTrackers[0].data.id)) && (
+      {!isGuest && activeTrackers.length > 0 && (!activeChat || activeChat.chatId !== (activeTrackers[0]?.type === 'normal' ? activeTrackers[0].data.chatId : activeTrackers[0]?.data.id)) && (
         <LiveTrackerBar activeTrackers={activeTrackers} isDarkMode={isDarkMode} setActiveChat={setActiveChat} setActiveTab={setActiveTab} setViewMode={setViewMode} />
       )}
 
