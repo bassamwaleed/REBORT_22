@@ -30,7 +30,6 @@ const HomeScreen = ({
   const [touchEnd, setTouchEnd] = useState(null);
   const banners = Array.isArray(appSettings?.banners) ? appSettings.banners : (appSettings?.banner ? [appSettings.banner] : []);
 
-  // --- حالات إضافة موقف جديد ---
   const [showAddStation, setShowAddStation] = useState(false);
   const [newStationName, setNewStationName] = useState('');
   const [newStationLoc, setNewStationLoc] = useState('');
@@ -74,11 +73,7 @@ const HomeScreen = ({
       setShowAddStation(false);
       setNewStationName('');
       setNewStationLoc('');
-    } catch (err) {
-      triggerToast('حدث خطأ أثناء الإضافة');
-    } finally {
-      setIsSubmittingStation(false);
-    }
+    } catch (err) { triggerToast('حدث خطأ أثناء الإضافة'); } finally { setIsSubmittingStation(false); }
   };
 
   const bgInput = isDarkMode ? 'bg-slate-800 border-slate-700 text-white placeholder-slate-400 focus:border-indigo-500' : 'bg-white border-slate-200 text-slate-900 focus:border-indigo-500';
@@ -104,12 +99,10 @@ const HomeScreen = ({
                {banners.map((imgUrl, idx) => (
                  <img key={idx} src={imgUrl} alt={`Banner ${idx}`} className={`absolute inset-0 w-full h-full object-cover transition-opacity duration-500 ease-in-out ${idx === currentSlide ? 'opacity-100 z-10' : 'opacity-0 z-0'}`} />
                ))}
-               
                {banners.length > 1 && (
                  <>
                    <button onClick={prevSlide} className="absolute right-2 top-1/2 -translate-y-1/2 z-20 bg-black/30 hover:bg-black/50 text-white p-2 rounded-full backdrop-blur-sm transition-all md:opacity-0 group-hover:opacity-100"><ChevronRight size={20}/></button>
                    <button onClick={nextSlide} className="absolute left-2 top-1/2 -translate-y-1/2 z-20 bg-black/30 hover:bg-black/50 text-white p-2 rounded-full backdrop-blur-sm transition-all md:opacity-0 group-hover:opacity-100"><ChevronLeft size={20}/></button>
-                   
                    <div className="absolute bottom-3 left-0 right-0 flex justify-center gap-2 z-20">
                      {banners.map((_, idx) => (
                        <button key={idx} onClick={() => setCurrentSlide(idx)} className={`h-2 rounded-full transition-all duration-300 shadow-sm ${idx === currentSlide ? 'w-6 bg-indigo-600' : 'w-2 bg-white/80 hover:bg-white'}`}></button>
@@ -147,12 +140,8 @@ const HomeScreen = ({
                 </div>
               )}
               <div className={`flex gap-2 p-3 rounded-2xl border ${isDarkMode ? 'bg-slate-800 border-slate-700' : 'bg-slate-50 border-slate-200'}`}>
-                <select value={filterFrom} onChange={(e) => setFilterFrom(e.target.value)} className={`flex-1 p-2.5 rounded-xl border text-xs font-bold outline-none ${bgInput}`}>
-                  <option value="">من المحافظة</option>{EGYPT_CITIES.map(c => <option key={c} value={c}>{c}</option>)}
-                </select>
-                <select value={filterTo} onChange={(e) => setFilterTo(e.target.value)} className={`flex-1 p-2.5 rounded-xl border text-xs font-bold outline-none ${bgInput}`}>
-                  <option value="">إلى الوجهة</option>{EGYPT_CITIES.map(c => <option key={c} value={c}>{c}</option>)}
-                </select>
+                <select value={filterFrom} onChange={(e) => setFilterFrom(e.target.value)} className={`flex-1 p-2.5 rounded-xl border text-xs font-bold outline-none ${bgInput}`}><option value="">من المحافظة</option>{EGYPT_CITIES.map(c => <option key={c} value={c}>{c}</option>)}</select>
+                <select value={filterTo} onChange={(e) => setFilterTo(e.target.value)} className={`flex-1 p-2.5 rounded-xl border text-xs font-bold outline-none ${bgInput}`}><option value="">إلى الوجهة</option>{EGYPT_CITIES.map(c => <option key={c} value={c}>{c}</option>)}</select>
                 {(filterFrom || filterTo) && ( <button onClick={() => {setFilterFrom(''); setFilterTo('');}} className="p-2.5 bg-rose-100 text-rose-600 rounded-xl hover:bg-rose-200 transition-colors"><X size={16}/></button> )}
               </div>
             </div>
@@ -161,7 +150,6 @@ const HomeScreen = ({
           <div className="space-y-4">
              {homeCategory === 'stations' ? (
                <>
-                 {/* زر إضافة موقف جديد */}
                  {!isGuest && (
                    <button onClick={() => setShowAddStation(true)} className="w-full flex justify-center items-center gap-2 py-3 bg-indigo-50 text-indigo-700 dark:bg-indigo-900/30 dark:text-indigo-400 border border-indigo-200 dark:border-indigo-800 rounded-2xl font-bold hover:bg-indigo-100 transition-colors mb-4">
                      <Plus size={18}/> إضافة موقف جديد
@@ -200,7 +188,7 @@ const HomeScreen = ({
                </>
              ) : (
                visibleTrips.length === 0 ? (
-                 <div className={`text-center py-16 rounded-[2rem] border-2 border-dashed ${isDarkMode ? 'border-slate-800 bg-slate-900/50' : 'border-slate-200 bg-slate-50'}`}><Bell size={48} className="mx-auto text-indigo-400 mb-4 opacity-50"/><h3 className="font-bold text-lg text-slate-700 dark:text-slate-300 mb-2">لا توجد إعلانات في هذا المسار</h3><p className="text-xs text-slate-500 mb-6">لم يقم أي شخص بنشر رحلة مطابقة لبحثك حتى الآن.</p></div>
+                 <div className={`text-center py-16 rounded-[2rem] border-2 border-dashed ${isDarkMode ? 'border-slate-800 bg-slate-900/50' : 'border-slate-200 bg-slate-50'}`}><Bell size={48} className="mx-auto text-indigo-400 mb-4 opacity-50"/><h3 className="font-bold text-lg text-slate-700 dark:text-slate-300 mb-2">لا توجد إعلانات في هذا المسار</h3></div>
                ) : (
                  visibleTrips.map(trip => <TripCard key={trip.id} trip={trip} user={user} isAdmin={isAdmin} isDarkMode={isDarkMode} openChatFromTrip={openChatFromTrip} triggerToast={triggerToast} />)
                )
@@ -213,7 +201,6 @@ const HomeScreen = ({
          <div className={`text-center py-20 rounded-[2rem] border-2 border-dashed mt-10 ${isDarkMode ? 'border-slate-800 bg-slate-900/50' : 'border-slate-200 bg-slate-50'}`}><MapPinned size={48} className="mx-auto text-slate-400 mb-4 opacity-50"/><h3 className="font-bold text-lg text-slate-700 dark:text-slate-300">الخريطة قيد التطوير...</h3></div>
       )}
 
-      {/* مودال إضافة موقف جديد */}
       {showAddStation && (
         <div className="fixed inset-0 bg-slate-900/90 backdrop-blur-sm z-[300] flex justify-center items-center p-4 pointer-events-auto">
           <div className={`${bgCard} w-full max-w-sm rounded-[2rem] p-6 shadow-2xl flex flex-col border animate-fade-in-up dark:border-slate-700`}>
