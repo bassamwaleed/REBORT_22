@@ -1,5 +1,5 @@
-import React from 'react';
-import { Bell, BusFront, MapPinned, List, X, Plus, Route } from 'lucide-react';
+import React, { useState, useEffect } from 'react';
+import { Bell, BusFront, MapPinned, List, X, ChevronRight, ChevronLeft, Route } from 'lucide-react';
 import TripCard from '../components/TripCard';
 import { EGYPT_CITIES } from '../utils/helpers';
 
@@ -7,10 +7,10 @@ const HomeScreen = ({
   user, isAdmin, isDarkMode, realTrips, stations, isGuest,
   homeCategory, setHomeCategory, viewMode, setViewMode, filterType, setFilterType,
   filterFrom, setFilterFrom, filterTo, setFilterTo, openChatFromTrip,
-  setSelectedStation, setShowSuggestStationModal, triggerToast, appSettings
+  setSelectedStation, triggerToast, appSettings
 }) => {
   
-  // 1. فلترة الرحلات (مع إزالة الأفواج تماماً)
+  // --- فلترة الرحلات ---
   const visibleTrips = (realTrips || []).filter(t => {
     if (!t || t.status === 'cancelled') return false; 
     if (homeCategory === 'travel') {
@@ -22,62 +22,77 @@ const HomeScreen = ({
     return false;
   });
 
-  // 2. فلترة المواقف (إظهار المعتمد فقط للمستخدمين، وإظهار الكل للأدمن)
-  const visibleStations = (stations || []).filter(s => {
-    if (isAdmin) return true; // الأدمن بيشوف كل حاجة
-    return s.status === 'approved' || !s.status; // المستخدم العادي بيشوف المعتمد بس (أو القديم اللي ملوش حالة)
-  });
+  const visibleStations = (stations || []).filter(s => isAdmin ? true : (s.status === 'approved' || !s.status));
+
+  // --- Slider Logic (Touch & Buttons) ---
+  const [currentSlide, setCurrentSlide] = useState(0);
+  const [touchStart, setTouchStart] = useState(null);
+  const [touchEnd, setTouchEnd] = useState(null);
+  const banners = Array.isArray(appSettings?.banners) ? appSettings.banners : (appSettings?.banner ? [appSettings.banner] : []);
+
+  // Auto-play
+  useEffect(() => {
+    if (banners.length <= 1) return;
+    const interval = setInterval(() => {
+      setCurrentSlide((prev) => (prev + 1) % banners.length);
+    }, 4000); 
+    return () => clearInterval(interval);
+  }, [banners.length]);
+
+  const nextSlide = () => setCurrentSlide((prev) => (prev + 1) % banners.length);
+  const prevSlide = () => setCurrentSlide((prev) => (prev === 0 ? banners.length - 1 : prev - 1));
+
+  // Touch Handlers for Mobile Swiping (RTL Support)
+  const onTouchStart = (e) => {
+    setTouchEnd(null);
+    setTouchStart(e.targetTouches[0].clientX);
+  };
+  const onTouchMove = (e) => setTouchEnd(e.targetTouches[0].clientX);
+  const onTouchEndHandler = () => {
+    if (!touchStart || !touchEnd) return;
+    const distance = touchStart - touchEnd;
+    const minSwipeDistance = 50;
+    if (distance > minSwipeDistance) nextSlide(); // Swipe Left (in RTL means Next)
+    if (distance < -minSwipeDistance) prevSlide(); // Swipe Right (in RTL means Prev)
+  };
 
   const bgInput = isDarkMode ? 'bg-slate-800 border-slate-700 text-white placeholder-slate-400 focus:border-indigo-500' : 'bg-white border-slate-200 text-slate-900 focus:border-indigo-500';
   const textPrimary = isDarkMode ? 'text-white' : 'text-slate-900';
   const bgCard = isDarkMode ? 'bg-slate-900 border-slate-800' : 'bg-white border-slate-200';
 
-  // Slider Logic للبانرات
-  const [currentSlide, setCurrentSlide] = React.useState(0);
-  const banners = Array.isArray(appSettings?.banners) ? appSettings.banners : (appSettings?.banner ? [appSettings.banner] : []);
-
-  React.useEffect(() => {
-    if (banners.length <= 1) return;
-    const interval = setInterval(() => {
-      setCurrentSlide((prev) => (prev + 1) % banners.length);
-    }, 3500); 
-    return () => clearInterval(interval);
-  }, [banners.length]);
-
   return (
     <main className="flex-1 w-full max-w-2xl mx-auto px-4 py-6 relative z-10 pb-[100px]">
       
-      {/* 0. النص الترحيبي والبانر المتحرك */}
+      {/* 0. النص الترحيبي والبانر المتحرك المطور */}
       {viewMode === 'list' && (
         <div className="mb-6">
-          {/* النص بين الشريط العلوي والبانر */}
           {appSettings?.bannerText && (
             <div className={`mb-4 px-2 border-r-4 border-indigo-500`}>
-              <h2 className={`font-black text-lg ${textPrimary} leading-relaxed`}>
-                {appSettings.bannerText}
-              </h2>
+              <h2 className={`font-black text-lg ${textPrimary} leading-relaxed`}>{appSettings.bannerText}</h2>
             </div>
           )}
           
-          {/* البانر المتحرك (Slider) */}
           {banners.length > 0 && (
-            <div className="relative w-full h-40 sm:h-48 rounded-[2rem] overflow-hidden shadow-sm border dark:border-slate-800 bg-slate-100 dark:bg-slate-800">
+            <div 
+              className="relative w-full h-40 sm:h-48 rounded-[2rem] overflow-hidden shadow-md border dark:border-slate-800 bg-slate-100 dark:bg-slate-800 group"
+              onTouchStart={onTouchStart} onTouchMove={onTouchMove} onTouchEnd={onTouchEndHandler}
+            >
                {banners.map((imgUrl, idx) => (
-                 <img 
-                   key={idx} 
-                   src={imgUrl} 
-                   alt={`Banner ${idx}`} 
-                   className={`absolute inset-0 w-full h-full object-cover transition-opacity duration-700 ease-in-out ${idx === currentSlide ? 'opacity-100 z-10' : 'opacity-0 z-0'}`} 
-                 />
+                 <img key={idx} src={imgUrl} alt={`Banner ${idx}`} className={`absolute inset-0 w-full h-full object-cover transition-opacity duration-500 ease-in-out ${idx === currentSlide ? 'opacity-100 z-10' : 'opacity-0 z-0'}`} />
                ))}
                
-               {/* نقط التبديل */}
+               {/* أزرار التنقل (تظهر عند تمرير الماوس أو دائماً على الموبايل) */}
                {banners.length > 1 && (
-                 <div className="absolute bottom-3 left-0 right-0 flex justify-center gap-2 z-20">
-                   {banners.map((_, idx) => (
-                     <span key={idx} className={`h-2 rounded-full transition-all duration-300 shadow-sm ${idx === currentSlide ? 'w-6 bg-indigo-600' : 'w-2 bg-white/80'}`}></span>
-                   ))}
-                 </div>
+                 <>
+                   <button onClick={prevSlide} className="absolute right-2 top-1/2 -translate-y-1/2 z-20 bg-black/30 hover:bg-black/50 text-white p-2 rounded-full backdrop-blur-sm transition-all md:opacity-0 group-hover:opacity-100"><ChevronRight size={20}/></button>
+                   <button onClick={nextSlide} className="absolute left-2 top-1/2 -translate-y-1/2 z-20 bg-black/30 hover:bg-black/50 text-white p-2 rounded-full backdrop-blur-sm transition-all md:opacity-0 group-hover:opacity-100"><ChevronLeft size={20}/></button>
+                   
+                   <div className="absolute bottom-3 left-0 right-0 flex justify-center gap-2 z-20">
+                     {banners.map((_, idx) => (
+                       <button key={idx} onClick={() => setCurrentSlide(idx)} className={`h-2 rounded-full transition-all duration-300 shadow-sm ${idx === currentSlide ? 'w-6 bg-indigo-600' : 'w-2 bg-white/80 hover:bg-white'}`}></button>
+                     ))}
+                   </div>
+                 </>
                )}
             </div>
           )}
@@ -124,62 +139,39 @@ const HomeScreen = ({
 
           <div className="space-y-4">
              {homeCategory === 'stations' ? (
-               <>
-                 {/* زر إضافة موقف أو خط سير */}
-                 {!isGuest && (
-                   <button 
-                     onClick={() => setShowSuggestStationModal && setShowSuggestStationModal(true)} 
-                     className="w-full flex items-center justify-center gap-2 bg-indigo-50 text-indigo-700 dark:bg-indigo-900/30 dark:text-indigo-400 py-3 rounded-2xl font-bold border border-indigo-200 dark:border-indigo-800 hover:bg-indigo-100 transition-colors mb-4"
-                   >
-                     <Plus size={18}/> إضافة خط سير أو موقف جديد
-                   </button>
-                 )}
-
-                 {visibleStations.length === 0 ? (
-                   <div className={`text-center py-20 rounded-[2rem] border-2 border-dashed ${isDarkMode ? 'border-slate-800 bg-slate-900/50' : 'border-slate-200 bg-slate-50'}`}>
-                     <BusFront size={40} className="mx-auto text-slate-300 mb-3"/>
-                     <h3 className="font-bold text-slate-500">لا توجد مواقف مضافة حالياً.</h3>
-                   </div>
-                 ) : (
-                   visibleStations.map(station => (
-                      <div key={station.id} onClick={() => setSelectedStation(station)} className={`p-4 rounded-[1.5rem] border shadow-sm hover:shadow-md cursor-pointer mb-3 transition-all ${bgCard}`}>
-                        <div className="flex items-start gap-3">
-                          <div className="p-3 bg-indigo-100 dark:bg-indigo-900/30 text-indigo-600 dark:text-indigo-400 rounded-2xl shrink-0"><BusFront size={24}/></div>
-                          <div className="flex-1">
-                            <div className="flex justify-between items-start">
-                              <h3 className={`font-black text-base ${textPrimary}`}>{station.name}</h3>
-                              {station.status === 'pending' && <span className="bg-amber-100 text-amber-600 text-[9px] px-2 py-1 rounded-full font-bold">قيد المراجعة</span>}
-                            </div>
-                            <p className="text-xs font-bold text-slate-500 mt-1 flex items-center gap-1"><MapPinned size={12}/> {station.location}</p>
-                            
-                            {/* عرض عدد خطوط السير */}
-                            {station.routes && station.routes.length > 0 && (
-                              <div className="mt-3 flex flex-wrap gap-1.5">
-                                {station.routes.slice(0, 3).map((route, i) => (
-                                  <span key={i} className="bg-slate-100 dark:bg-slate-800 text-[10px] px-2 py-1 rounded-md text-slate-600 dark:text-slate-300 flex items-center gap-1">
-                                    <Route size={10}/> {route.destination}
-                                  </span>
-                                ))}
-                                {station.routes.length > 3 && (
-                                  <span className="bg-slate-100 dark:bg-slate-800 text-[10px] px-2 py-1 rounded-md text-slate-600 dark:text-slate-300">
-                                    +{station.routes.length - 3} خطوط
-                                  </span>
-                                )}
-                              </div>
-                            )}
+               visibleStations.length === 0 ? (
+                 <div className={`text-center py-20 rounded-[2rem] border-2 border-dashed ${isDarkMode ? 'border-slate-800 bg-slate-900/50' : 'border-slate-200 bg-slate-50'}`}><BusFront size={40} className="mx-auto text-slate-300 mb-3"/><h3 className="font-bold text-slate-500">جاري تحميل المواقف...</h3></div>
+               ) : (
+                 visibleStations.map(station => (
+                    <div key={station.id} onClick={() => setSelectedStation(station)} className={`p-4 rounded-[1.5rem] border shadow-sm hover:shadow-md cursor-pointer mb-3 transition-all ${bgCard}`}>
+                      <div className="flex items-start gap-3">
+                        <div className="p-3 bg-indigo-100 dark:bg-indigo-900/30 text-indigo-600 dark:text-indigo-400 rounded-2xl shrink-0"><BusFront size={24}/></div>
+                        <div className="flex-1">
+                          <div className="flex justify-between items-start">
+                            <h3 className={`font-black text-base ${textPrimary}`}>{station.name}</h3>
+                            {station.status === 'pending' && <span className="bg-amber-100 text-amber-600 text-[9px] px-2 py-1 rounded-full font-bold">قيد المراجعة</span>}
                           </div>
+                          <p className="text-xs font-bold text-slate-500 mt-1 flex items-center gap-1"><MapPinned size={12}/> {station.location}</p>
+                          
+                          {/* عرض خطوط السير كـ Tags */}
+                          {station.routes && station.routes.length > 0 && (
+                            <div className="mt-3 flex flex-wrap gap-1.5">
+                              {station.routes.slice(0, 3).map((route, i) => (
+                                <span key={i} className="bg-slate-100 dark:bg-slate-800 text-[10px] px-2 py-1 rounded-md text-slate-600 dark:text-slate-300 flex items-center gap-1 border dark:border-slate-700">
+                                  <Route size={10}/> {route.destination}
+                                </span>
+                              ))}
+                              {station.routes.length > 3 && <span className="bg-slate-100 dark:bg-slate-800 text-[10px] px-2 py-1 rounded-md text-slate-600 dark:text-slate-300">+{station.routes.length - 3}</span>}
+                            </div>
+                          )}
                         </div>
                       </div>
-                   ))
-                 )}
-               </>
+                    </div>
+                 ))
+               )
              ) : (
                visibleTrips.length === 0 ? (
-                 <div className={`text-center py-16 rounded-[2rem] border-2 border-dashed ${isDarkMode ? 'border-slate-800 bg-slate-900/50' : 'border-slate-200 bg-slate-50'}`}>
-                   <Bell size={48} className="mx-auto text-indigo-400 mb-4 opacity-50"/>
-                   <h3 className="font-bold text-lg text-slate-700 dark:text-slate-300 mb-2">لا توجد إعلانات في هذا المسار</h3>
-                   <p className="text-xs text-slate-500 mb-6">لم يقم أي شخص بنشر رحلة مطابقة لبحثك حتى الآن.</p>
-                 </div>
+                 <div className={`text-center py-16 rounded-[2rem] border-2 border-dashed ${isDarkMode ? 'border-slate-800 bg-slate-900/50' : 'border-slate-200 bg-slate-50'}`}><Bell size={48} className="mx-auto text-indigo-400 mb-4 opacity-50"/><h3 className="font-bold text-lg text-slate-700 dark:text-slate-300 mb-2">لا توجد إعلانات في هذا المسار</h3><p className="text-xs text-slate-500 mb-6">لم يقم أي شخص بنشر رحلة مطابقة لبحثك حتى الآن.</p></div>
                ) : (
                  visibleTrips.map(trip => <TripCard key={trip.id} trip={trip} user={user} isAdmin={isAdmin} isDarkMode={isDarkMode} openChatFromTrip={openChatFromTrip} triggerToast={triggerToast} />)
                )
