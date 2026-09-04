@@ -1,10 +1,10 @@
 import React, { useState, useEffect } from 'react';
 import { onAuthStateChanged, signInWithEmailAndPassword, createUserWithEmailAndPassword, signInAnonymously, updateProfile, signOut } from 'firebase/auth';
 import { collection, onSnapshot, doc, getDoc, setDoc, addDoc, updateDoc, serverTimestamp } from 'firebase/firestore';
-import { Loader2, Car, MessageCircle, User, Home, CheckCircle2, Plus, X, Lock, Target } from 'lucide-react';
+import { Loader2, Car, MessageCircle, User, Home, CheckCircle2, Plus, X, Target, Lock } from 'lucide-react';
 
 import { auth, db, APP_COLLECTION_NAME, USERS_COLLECTION, STATIONS_COLLECTION, ADMIN_EMAIL } from './firebase';
-import { safeMillis, timeToMinutes, resizeAndConvertToBase64, EGYPT_CITIES } from './utils/helpers';
+import { safeMillis, timeToMinutes, EGYPT_CITIES, resizeAndConvertToBase64 } from './utils/helpers';
 
 import HomeScreen from './screens/HomeScreen';
 import ProfileScreen from './screens/ProfileScreen';
@@ -192,7 +192,6 @@ export default function App() {
       await addDoc(collection(db, APP_COLLECTION_NAME), tripData);
       setShowAddModal(false); triggerToast('تم النشر بنجاح!');
       setActiveTab('home'); setHomeCategory(newTrip.category);
-      findMatchingRides(tripData); 
       setNewTrip({ type: 'offer', category: 'travel', from: '', fromDetails: '', fromCoords: null, to: '', toDetails: '', toCoords: null, date: '', time: '', seats: 1, cost: '', notes: '' });
     } catch (error) { triggerToast('حدث خطأ.'); } finally { setIsSubmitting(false); }
   };
@@ -215,8 +214,6 @@ export default function App() {
     await setDoc(doc(db, `inbox_${trip.userId}`, chatId), { ...chatDataOther, createdAt: serverTimestamp(), requestStatus: 'none' }, { merge: true });
   };
 
-  const handleConnectMatched = (trip) => { setShowMatchModal(false); openChatFromTrip(trip); };
-
   const handleAvatarUpload = async (e) => {
     const file = e.target.files[0];
     if (!file || !user) return;
@@ -238,6 +235,10 @@ export default function App() {
     return list;
   };
   const activeTrackers = getActiveTrackersList();
+  
+  // حماية التتبع من الأخطاء
+  const firstTracker = activeTrackers.length > 0 ? activeTrackers[0] : null;
+  const firstTrackerId = firstTracker ? (firstTracker.type === 'normal' ? firstTracker.data.chatId : firstTracker.data.id) : null;
 
   const bgMain = isDarkMode ? 'bg-slate-950 text-slate-100' : 'bg-slate-50 text-slate-800';
   const bgCard = isDarkMode ? 'bg-slate-900 border-slate-800' : 'bg-white border-slate-200';
@@ -251,7 +252,6 @@ export default function App() {
     <div dir="rtl" className={`min-h-screen flex flex-col relative transition-colors duration-300 ${bgMain} overflow-x-hidden pb-0`}>
       {toastMsg && ( <div className="fixed top-24 left-1/2 transform -translate-x-1/2 z-[999] bg-slate-900 text-white px-6 py-3 rounded-full shadow-2xl flex items-center gap-3 border border-slate-700"><CheckCircle2 size={18} className="text-emerald-400" /><p className="text-sm font-bold whitespace-nowrap">{toastMsg}</p></div> )}
 
-      {/* HEADER */}
       <header className={`sticky top-0 z-40 border-b ${isDarkMode ? 'bg-slate-950/90 border-slate-800' : 'bg-white/90 border-slate-100 shadow-sm'} backdrop-blur-xl pointer-events-auto`}>
         <div className="max-w-3xl mx-auto px-5 h-16 flex justify-between items-center w-full">
           <div className="flex items-center gap-3 cursor-pointer" onClick={() => setActiveTab('profile')}>
@@ -263,21 +263,15 @@ export default function App() {
           </div>
           <div className="flex items-center gap-2 cursor-pointer" onClick={() => {setActiveTab('home'); setViewMode('list');}}>
             <span className="font-black text-xl text-indigo-600 dark:text-indigo-400">طريقنا</span>
-            {appSettings?.logo ? (
-              <img src={appSettings.logo} className="w-8 h-8 object-contain rounded-md" alt="Logo"/>
-            ) : (
-              <div className="bg-indigo-600 text-white p-1.5 rounded-lg"><Car size={20}/></div>
-            )}
+            {appSettings?.logo ? ( <img src={appSettings.logo} className="w-8 h-8 object-contain rounded-md" alt="Logo"/> ) : ( <div className="bg-indigo-600 text-white p-1.5 rounded-lg"><Car size={20}/></div> )}
           </div>
         </div>
       </header>
 
-      {/* FLOATING ADD BUTTON */}
       {activeTab === 'home' && !isGuest && (
         <button onClick={() => setShowAddModal(true)} className="fixed bottom-[90px] right-5 bg-indigo-600 text-white w-14 h-14 rounded-full shadow-lg flex items-center justify-center z-50 hover:bg-indigo-700 transition-transform"><Plus size={28} /></button>
       )}
 
-      {/* ADD TRIP MODAL */}
       {showAddModal && !isGuest && (
         <div className="fixed inset-0 bg-slate-900/90 backdrop-blur-sm z-[200] flex justify-center items-end sm:items-center p-0 sm:p-4 pointer-events-auto">
           <div className={`${bgCard} w-full sm:max-w-md h-[90vh] sm:h-[80vh] rounded-t-[2rem] sm:rounded-[2rem] shadow-2xl flex flex-col overflow-hidden animate-fade-in-up border dark:border-slate-700`}>
@@ -319,17 +313,15 @@ export default function App() {
         </div>
       )}
 
-      {/* TABS CONTENT */}
       {activeTab === 'home' && (
         <HomeScreen 
-          user={user} isAdmin={isAdmin} isDarkMode={isDarkMode} realTrips={realTrips} stations={stations} isGuest={isGuest}
+          user={user} isAdmin={isAdmin} isDarkMode={isDarkMode} realTrips={realTrips} stations={stations} 
           homeCategory={homeCategory} setHomeCategory={setHomeCategory} viewMode={viewMode} setViewMode={setViewMode} filterType={filterType} setFilterType={setFilterType}
           filterFrom={filterFrom} setFilterFrom={setFilterFrom} filterTo={filterTo} setFilterTo={setFilterTo} openChatFromTrip={openChatFromTrip}
           setSelectedStation={setSelectedStation} triggerToast={triggerToast} appSettings={appSettings} 
         />
       )}
 
-      {/* المكون الجديد: StationModal */}
       {selectedStation && (
         <StationModal 
           station={selectedStation} user={user} isAdmin={isAdmin} isGuest={isGuest} isDarkMode={isDarkMode} 
@@ -413,7 +405,7 @@ export default function App() {
         </div>
       )}
 
-      {!isGuest && activeTrackers.length > 0 && (!activeChat || activeChat.chatId !== (activeTrackers[0]?.type === 'normal' ? activeTrackers[0].data.chatId : activeTrackers[0]?.data.id)) && (
+      {!isGuest && activeTrackers.length > 0 && (!activeChat || activeChat.chatId !== firstTrackerId) && (
         <LiveTrackerBar activeTrackers={activeTrackers} isDarkMode={isDarkMode} setActiveChat={setActiveChat} setActiveTab={setActiveTab} setViewMode={setViewMode} />
       )}
 
