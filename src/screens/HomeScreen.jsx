@@ -24,7 +24,8 @@ const HomeScreen = ({
   openChatFromTrip,
   setSelectedWeekendTrip,
   setSelectedStation,
-  triggerToast
+  triggerToast,
+  appSettings // <-- تم استقبال الإعدادات هنا
 }) => {
   // --- منطق التصفية (البرمجة الدفاعية) ---
   const visibleTrips = (realTrips || []).filter(t => {
@@ -57,6 +58,18 @@ const HomeScreen = ({
   return (
     <main className="flex-1 w-full max-w-2xl mx-auto px-4 py-6 relative z-10 pb-[100px]">
       
+      {/* 0. البانر الإعلاني (يظهر فقط إذا تم رفعه من لوحة الأدمن) */}
+      {appSettings?.banner && viewMode === 'list' && (
+        <div className="relative w-full h-40 sm:h-48 rounded-[2rem] overflow-hidden mb-6 shadow-md border dark:border-slate-800 shrink-0">
+           <img src={appSettings.banner} alt="Banner" className="w-full h-full object-cover" />
+           <div className="absolute inset-0 bg-slate-900/40 flex items-center justify-center p-4 text-center">
+             <h2 className="text-white font-black text-lg sm:text-xl drop-shadow-md leading-relaxed">
+               {appSettings?.bannerText || 'أهلاً بك في طريقنا'}
+             </h2>
+           </div>
+        </div>
+      )}
+
       {/* 1. التبويبات العلوية وأزرار العرض */}
       <div className="flex justify-between items-center mb-6 pointer-events-auto relative z-10">
          
