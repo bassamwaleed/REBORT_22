@@ -2,7 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { Bell, BusFront, MapPinned, List, X, ChevronRight, ChevronLeft, Route } from 'lucide-react';
 import TripCard from '../components/TripCard';
 import { EGYPT_CITIES } from '../utils/helpers';
-
+ 
 const HomeScreen = ({
   user, isAdmin, isDarkMode, realTrips, stations, isGuest,
   homeCategory, setHomeCategory, viewMode, setViewMode, filterType, setFilterType,
