@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { collection, getDocs, doc, updateDoc, setDoc } from 'firebase/firestore';
-import { X, ShieldAlert, ShieldCheck, Check, XCircle, ImageIcon, Loader2, LayoutTemplate, Save, Type, Trash2, Plus, BusFront, Route } from 'lucide-react';
+// 👇 تم إضافة Edit3 هنا عشان الخطأ يختفي
+import { X, ShieldAlert, ShieldCheck, Check, XCircle, ImageIcon, Loader2, LayoutTemplate, Save, Type, Trash2, Plus, BusFront, Route, Edit3 } from 'lucide-react';
 import { db, USERS_COLLECTION, STATIONS_COLLECTION } from '../firebase';
 import { resizeAndConvertToBase64 } from '../utils/helpers';
 
@@ -39,7 +40,6 @@ const AdminPanel = ({ isDarkMode, onClose, triggerToast, appSettings }) => {
       });
       setPendingRequests(reqs);
 
-      // جلب بيانات المواقف اللي فيها أي حاجة "قيد المراجعة"
       const statSnap = await getDocs(collection(db, STATIONS_COLLECTION));
       const pStats = [];
       statSnap.forEach(doc => {
@@ -70,12 +70,11 @@ const AdminPanel = ({ isDarkMode, onClose, triggerToast, appSettings }) => {
     } catch (error) { triggerToast('حدث خطأ'); }
   };
 
-  // --- دوال الموافقة/الرفض للمواقف وخطوط السير ---
   const handleApproveStation = async (stationId) => {
     try {
       await updateDoc(doc(db, STATIONS_COLLECTION, stationId), { status: 'approved' });
       triggerToast('تم اعتماد الموقف بنجاح ✅');
-      fetchAdminData(); // ريفرش الداتا
+      fetchAdminData(); 
     } catch (error) {}
   };
 
@@ -104,17 +103,16 @@ const AdminPanel = ({ isDarkMode, onClose, triggerToast, appSettings }) => {
     try {
       const updatedRoutes = [...stationRoutes];
       if (isEditOnly) {
-        updatedRoutes[routeIndex].editRequest = null; // مسح طلب التعديل بس
+        updatedRoutes[routeIndex].editRequest = null; 
       } else {
-        updatedRoutes.splice(routeIndex, 1); // مسح الخط الجديد المرفوض
+        updatedRoutes.splice(routeIndex, 1); 
       }
       await updateDoc(doc(db, STATIONS_COLLECTION, stationId), { routes: updatedRoutes });
       triggerToast('تم رفض الطلب ❌');
       fetchAdminData();
     } catch(e){}
-  }
+  };
 
-  // --- إعدادات الواجهة ---
   const handleImageUpload = async (e, type) => {
     const file = e.target.files[0];
     if (!file) return;
@@ -191,7 +189,6 @@ const AdminPanel = ({ isDarkMode, onClose, triggerToast, appSettings }) => {
                 pendingStationsData.map(station => (
                   <div key={station.id} className={`p-4 rounded-[1.5rem] border shadow-sm ${bgCard} flex flex-col gap-3`}>
                     
-                    {/* رأس الموقف: لو الموقف نفسه جديد */}
                     <div className="flex items-center justify-between border-b dark:border-slate-800 pb-3">
                       <div>
                         <h4 className={`font-black text-lg ${textPrimary}`}>{station.name} <span className="text-sm font-normal text-slate-500">({station.location})</span></h4>
@@ -202,10 +199,8 @@ const AdminPanel = ({ isDarkMode, onClose, triggerToast, appSettings }) => {
                       )}
                     </div>
 
-                    {/* تفاصيل خطوط السير جوه الموقف ده */}
                     <div className="space-y-2 pt-2">
                       {station.routes?.map((route, rIndex) => {
-                        // هنعرض الخطوط اللي مستنية اعتماد خط جديد أو اعتماد أجرة جديدة بس
                         if (route.status === 'pending') {
                            return (
                              <div key={rIndex} className="flex justify-between items-center bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-800 p-3 rounded-xl">
