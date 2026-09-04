@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { doc, getDoc, updateDoc } from 'firebase/firestore';
-import { X, MapPinned, Route, Plus, Loader2, BusFront, CheckCircle2, Edit3, Check } from 'lucide-react';
+import { X, MapPinned, Route, Plus, Loader2, BusFront, CheckCircle2, Edit3, Check, AlertCircle } from 'lucide-react';
 import { db, STATIONS_COLLECTION } from '../firebase';
 import { EGYPT_CITIES } from '../utils/helpers';
 
@@ -10,7 +10,7 @@ const StationModal = ({ station, user, isAdmin, isGuest, isDarkMode, onClose, tr
   const [newRouteFare, setNewRouteFare] = useState('');
   const [isSubmitting, setIsSubmitting] = useState(false);
 
-  // حالات التعديل
+  // حالات تعديل الأجرة لخط موجود
   const [editingIndex, setEditingIndex] = useState(-1);
   const [editFareValue, setEditFareValue] = useState('');
 
@@ -29,35 +29,30 @@ const StationModal = ({ station, user, isAdmin, isGuest, isDarkMode, onClose, tr
       const stationRef = doc(db, STATIONS_COLLECTION, station.id);
       const stationSnap = await getDoc(stationRef);
       if (!stationSnap.exists()) throw new Error("الموقف غير موجود");
-      const currentData = stationSnap.data();
-      let currentRoutes = currentData.routes || [];
-
+      
+      const currentRoutes = stationSnap.data().routes || [];
       const existingRouteIndex = currentRoutes.findIndex(r => r.destination === newRouteDest);
-      let toastMessage = 'تم إرسال اقتراحك للمراجعة ⏳';
 
       if (existingRouteIndex >= 0) {
-        let route = currentRoutes[existingRouteIndex];
-        if (!(route.addedBy && user && route.addedBy.includes(user.uid))) {
-          route.addedBy = [...(route.addedBy || []), user.uid];
-          if (route.addedBy.length >= 2 || isAdmin) {
-            route.status = 'approved';
-            route.fare = newRouteFare; 
-            toastMessage = 'تم اعتماد خط السير فوراً لتوافق الآراء! ✅';
-          }
-        } else {
-          toastMessage = 'لقد قمت بإضافة هذا الخط مسبقاً';
-        }
+        triggerToast('هذا الخط موجود بالفعل في هذا الموقف!');
       } else {
-        currentRoutes.push({ destination: newRouteDest, fare: newRouteFare, status: isAdmin ? 'approved' : 'pending', addedBy: [user.uid] });
-        if (isAdmin) toastMessage = 'تم إضافة الخط واعتماده بنجاح ✅';
+        currentRoutes.push({
+          destination: newRouteDest,
+          fare: newRouteFare,
+          status: isAdmin ? 'approved' : 'pending',
+          addedBy: user.uid
+        });
+        await updateDoc(stationRef, { routes: currentRoutes });
+        triggerToast(isAdmin ? 'تم إضافة الخط بنجاح ✅' : 'تم إرسال اقتراح إضافة الخط للمراجعة ⏳');
+        setIsAddingRoute(false);
+        setNewRouteDest('');
+        setNewRouteFare('');
       }
-
-      await updateDoc(stationRef, { routes: currentRoutes });
-      triggerToast(toastMessage);
-      setIsAddingRoute(false);
-      setNewRouteDest('');
-      setNewRouteFare('');
-    } catch (error) { triggerToast('حدث خطأ أثناء الإضافة'); } finally { setIsSubmitting(false); }
+    } catch (error) {
+      triggerToast('حدث خطأ أثناء الإضافة');
+    } finally {
+      setIsSubmitting(false);
+    }
   };
 
   const handleSaveEditFare = async (index) => {
@@ -67,28 +62,26 @@ const StationModal = ({ station, user, isAdmin, isGuest, isDarkMode, onClose, tr
       const stationSnap = await getDoc(stationRef);
       const currentRoutes = stationSnap.data().routes || [];
       
-      currentRoutes[index].fare = editFareValue;
-      // لو مش أدمن، ترجع تتراجع تاني عشان ميبوظش التسعيرة لوحده
-      if(!isAdmin) currentRoutes[index].status = 'pending'; 
+      if (isAdmin) {
+        // الأدمن يعدل فوراً
+        currentRoutes[index].fare = editFareValue;
+        currentRoutes[index].editRequest = null; // مسح أي طلبات تعديل لو موجودة
+        triggerToast('تم تعديل الأجرة بنجاح ✅');
+      } else {
+        // الراكب يقترح التعديل
+        currentRoutes[index].editRequest = {
+          proposedFare: editFareValue,
+          suggestedBy: user.uid
+        };
+        triggerToast('تم إرسال اقتراح التعديل للإدارة ⏳');
+      }
 
       await updateDoc(stationRef, { routes: currentRoutes });
-      triggerToast(isAdmin ? 'تم تعديل الأجرة بنجاح' : 'تم إرسال تعديلك للمراجعة ⏳');
       setEditingIndex(-1);
       setEditFareValue('');
-    } catch (e) { triggerToast('حدث خطأ'); }
-  };
-
-  const handleApproveRoute = async (routeIndex) => {
-    if (!isAdmin) return;
-    try {
-      const stationRef = doc(db, STATIONS_COLLECTION, station.id);
-      const stationSnap = await getDoc(stationRef);
-      const currentRoutes = stationSnap.data().routes || [];
-      
-      currentRoutes[routeIndex].status = 'approved';
-      await updateDoc(stationRef, { routes: currentRoutes });
-      triggerToast('تم اعتماد الخط بنجاح');
-    } catch (e) { triggerToast('حدث خطأ'); }
+    } catch (e) {
+      triggerToast('حدث خطأ أثناء التعديل');
+    }
   };
 
   return (
@@ -117,6 +110,7 @@ const StationModal = ({ station, user, isAdmin, isGuest, isDarkMode, onClose, tr
             )}
           </div>
 
+          {/* Form إضافة خط */}
           {isAddingRoute && (
             <form onSubmit={handleAddRoute} className="mb-6 p-4 bg-slate-50 dark:bg-slate-800/50 rounded-2xl border dark:border-slate-700 animate-fade-in-up">
               <div className="space-y-3">
@@ -135,16 +129,17 @@ const StationModal = ({ station, user, isAdmin, isGuest, isDarkMode, onClose, tr
             </form>
           )}
 
+          {/* عرض الخطوط الحالية */}
           <div className="space-y-3">
             {(!station.routes || station.routes.length === 0) ? (
               <div className="text-center py-10 opacity-50">
                 <Route size={40} className="mx-auto mb-2 text-slate-400"/>
                 <p className="font-bold text-sm">لا توجد خطوط سير مسجلة حتى الآن.</p>
-                <p className="text-xs mt-1">كن أول من يضيف خط سير لهذا الموقف!</p>
               </div>
             ) : (
               station.routes.map((route, index) => {
-                if (!isAdmin && route.status === 'pending' && !(route.addedBy && user && route.addedBy.includes(user.uid))) return null;
+                // إخفاء الخطوط المقترحة عن المستخدمين العاديين (تظهر للأدمن وللي اقترحها بس)
+                if (!isAdmin && route.status === 'pending' && route.addedBy !== user?.uid) return null;
                 
                 return (
                   <div key={index} className={`flex items-center justify-between p-4 rounded-xl border shadow-sm ${bgCard} ${route.status === 'pending' ? 'border-amber-200 bg-amber-50/30 dark:border-amber-900/30' : ''}`}>
@@ -153,34 +148,38 @@ const StationModal = ({ station, user, isAdmin, isGuest, isDarkMode, onClose, tr
                       <div>
                         <h4 className={`font-black text-sm ${textPrimary}`}>{route.destination}</h4>
                         {route.status === 'pending' ? (
-                          <span className="text-[10px] font-bold text-amber-600">قيد المراجعة ⏳</span>
+                          <span className="text-[10px] font-bold text-amber-600 flex items-center gap-1"><AlertCircle size={10}/> قيد المراجعة كخط جديد</span>
                         ) : (
                           <span className="text-[10px] font-bold text-emerald-500 flex items-center gap-1"><CheckCircle2 size={10}/> معتمد</span>
+                        )}
+                        {route.editRequest && isAdmin && (
+                          <p className="text-[10px] font-bold text-rose-500 mt-1">يوجد طلب تعديل أجرة</p>
                         )}
                       </div>
                     </div>
                     
                     <div className="text-left flex flex-col items-end gap-2">
-                      {/* عرض وضع التعديل للأجرة أو العرض العادي */}
                       {editingIndex === index ? (
-                        <div className="flex items-center gap-1">
-                           <input type="number" autoFocus value={editFareValue} onChange={(e) => setEditFareValue(e.target.value)} className={`w-16 p-1 text-center rounded-lg border text-sm font-bold ${bgInput}`} />
-                           <button onClick={() => handleSaveEditFare(index)} className="p-1.5 bg-emerald-500 text-white rounded-lg"><Check size={14}/></button>
-                           <button onClick={() => setEditingIndex(-1)} className="p-1.5 bg-rose-500 text-white rounded-lg"><X size={14}/></button>
+                        <div className="flex items-center gap-1 animate-fade-in-up">
+                           <input type="number" autoFocus placeholder="الأجرة" value={editFareValue} onChange={(e) => setEditFareValue(e.target.value)} className={`w-16 p-1 text-center rounded-lg border text-sm font-bold ${bgInput}`} />
+                           <button onClick={() => handleSaveEditFare(index)} className="p-1.5 bg-emerald-500 text-white rounded-lg hover:bg-emerald-600"><Check size={14}/></button>
+                           <button onClick={() => setEditingIndex(-1)} className="p-1.5 bg-rose-500 text-white rounded-lg hover:bg-rose-600"><X size={14}/></button>
                         </div>
                       ) : (
                         <div className="flex items-center gap-2">
                           {!isGuest && (
-                            <button onClick={() => {setEditingIndex(index); setEditFareValue(route.fare);}} className="text-slate-400 hover:text-indigo-500"><Edit3 size={14}/></button>
+                            <button onClick={() => {setEditingIndex(index); setEditFareValue(route.fare);}} className="text-slate-400 hover:text-indigo-500 bg-slate-100 dark:bg-slate-800 p-1.5 rounded-lg"><Edit3 size={14}/></button>
                           )}
-                          <span className="font-black text-indigo-600 dark:text-indigo-400 text-lg bg-indigo-50 dark:bg-indigo-900/30 px-3 py-1 rounded-lg">
-                            {route.fare} ج
-                          </span>
+                          <div className="flex flex-col items-end">
+                            <span className="font-black text-indigo-600 dark:text-indigo-400 text-lg bg-indigo-50 dark:bg-indigo-900/30 px-3 py-1 rounded-lg">
+                              {route.fare} ج
+                            </span>
+                            {/* لو المستخدم هو اللي اقترح التعديل يظهرله تنبيه إنه لسه بيتراجع */}
+                            {route.editRequest?.suggestedBy === user?.uid && !isAdmin && (
+                              <span className="text-[9px] text-amber-500 font-bold mt-1">اقتراحك ({route.editRequest.proposedFare}ج) يُراجع</span>
+                            )}
+                          </div>
                         </div>
-                      )}
-
-                      {isAdmin && route.status === 'pending' && (
-                        <button onClick={() => handleApproveRoute(index)} className="text-[10px] font-bold bg-emerald-500 text-white px-2 py-1 rounded hover:bg-emerald-600">اعتماد كأدمن</button>
                       )}
                     </div>
                   </div>
