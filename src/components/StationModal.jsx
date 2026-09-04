@@ -29,26 +29,22 @@ const StationModal = ({ station, user, isAdmin, isGuest, isDarkMode, onClose, tr
       const currentData = stationSnap.data();
       let currentRoutes = currentData.routes || [];
 
-      // اللوجيك الذكي: التحقق من وجود الخط مسبقاً
       const existingRouteIndex = currentRoutes.findIndex(r => r.destination === newRouteDest);
       let toastMessage = 'تم إرسال اقتراحك للمراجعة ⏳';
 
       if (existingRouteIndex >= 0) {
         let route = currentRoutes[existingRouteIndex];
-        // التأكد إن المستخدم ده مضافش نفس الخط قبل كده
-        if (!route.addedBy?.includes(user.uid)) {
+        if (!(route.addedBy && user && route.addedBy.includes(user.uid))) {
           route.addedBy = [...(route.addedBy || []), user.uid];
-          // لو اتنين وافقوا عليه (أو لو الأدمن بيضيفه) يتقبل فوراً
           if (route.addedBy.length >= 2 || isAdmin) {
             route.status = 'approved';
-            route.fare = newRouteFare; // تحديث الأجرة بناء على الإجماع
+            route.fare = newRouteFare; 
             toastMessage = 'تم اعتماد خط السير فوراً لتوافق الآراء! ✅';
           }
         } else {
           toastMessage = 'لقد قمت بإضافة هذا الخط مسبقاً';
         }
       } else {
-        // إضافة خط جديد تماماً
         currentRoutes.push({
           destination: newRouteDest,
           fare: newRouteFare,
@@ -87,7 +83,6 @@ const StationModal = ({ station, user, isAdmin, isGuest, isDarkMode, onClose, tr
     <div className="fixed inset-0 bg-slate-900/95 backdrop-blur-sm z-[400] flex justify-center items-end sm:items-center p-0 sm:p-4 pointer-events-auto">
       <div className={`${bgCard} w-full sm:max-w-md h-[90vh] sm:h-[650px] rounded-t-[2rem] sm:rounded-[2rem] shadow-2xl flex flex-col overflow-hidden animate-fade-in-up border dark:border-slate-700`}>
         
-        {/* Header */}
         <div className="p-4 border-b flex justify-between items-center bg-indigo-50 dark:bg-slate-800 dark:border-slate-700 shrink-0">
           <div className="flex items-center gap-3">
             <div className="p-2 bg-indigo-100 text-indigo-600 dark:bg-indigo-900 dark:text-indigo-400 rounded-xl"><BusFront size={20}/></div>
@@ -99,7 +94,6 @@ const StationModal = ({ station, user, isAdmin, isGuest, isDarkMode, onClose, tr
           <button onClick={onClose} className="p-2 bg-white dark:bg-slate-700 rounded-full hover:bg-slate-200 transition-colors shadow-sm"><X size={20}/></button>
         </div>
 
-        {/* Content */}
         <div className="flex-1 overflow-y-auto p-5 custom-scrollbar">
           
           <div className="flex justify-between items-center mb-4">
@@ -111,7 +105,6 @@ const StationModal = ({ station, user, isAdmin, isGuest, isDarkMode, onClose, tr
             )}
           </div>
 
-          {/* Form إضافة خط */}
           {isAddingRoute && (
             <form onSubmit={handleAddRoute} className="mb-6 p-4 bg-slate-50 dark:bg-slate-800/50 rounded-2xl border dark:border-slate-700 animate-fade-in-up">
               <div className="space-y-3">
@@ -130,7 +123,6 @@ const StationModal = ({ station, user, isAdmin, isGuest, isDarkMode, onClose, tr
             </form>
           )}
 
-          {/* قائمة الخطوط */}
           <div className="space-y-3">
             {(!station.routes || station.routes.length === 0) ? (
               <div className="text-center py-10 opacity-50">
@@ -140,7 +132,7 @@ const StationModal = ({ station, user, isAdmin, isGuest, isDarkMode, onClose, tr
               </div>
             ) : (
               station.routes.map((route, index) => {
-                if (!isAdmin && route.status === 'pending' && !route.addedBy?.includes(user?.uid)) return null;
+                if (!isAdmin && route.status === 'pending' && !(route.addedBy && user && route.addedBy.includes(user.uid))) return null;
                 
                 return (
                   <div key={index} className={`flex items-center justify-between p-4 rounded-xl border shadow-sm ${bgCard} ${route.status === 'pending' ? 'border-amber-200 bg-amber-50/30 dark:border-amber-900/30' : ''}`}>
