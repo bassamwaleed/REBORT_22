@@ -1,25 +1,35 @@
-import React from 'react';
-import { Bell, BusFront, MapPinned, List, X } from 'lucide-react';
+import React, { useState, useEffect } from 'react';
+import { Bell, BusFront, MapPinned, List, X, ChevronRight, ChevronLeft } from 'lucide-react';
 import TripCard from '../components/TripCard';
-import SquadTripCard from '../components/SquadTripCard';
 import { EGYPT_CITIES } from '../utils/helpers';
 
 const HomeScreen = ({
   user, isAdmin, isDarkMode, realTrips, stations, isGuest,
   homeCategory, setHomeCategory, viewMode, setViewMode, filterType, setFilterType,
   filterFrom, setFilterFrom, filterTo, setFilterTo, openChatFromTrip,
-  setSelectedWeekendTrip, setSelectedStation, triggerToast, appSettings
+  setSelectedStation, triggerToast, appSettings
 }) => {
+  
+  // Slider Logic
+  const [currentSlide, setCurrentSlide] = useState(0);
+  const banners = Array.isArray(appSettings?.banners) ? appSettings.banners : (appSettings?.banner ? [appSettings.banner] : []);
+
+  useEffect(() => {
+    if (banners.length <= 1) return;
+    const interval = setInterval(() => {
+      setCurrentSlide((prev) => (prev + 1) % banners.length);
+    }, 3500); // يغير الصورة كل 3.5 ثانية
+    return () => clearInterval(interval);
+  }, [banners.length]);
+
   const visibleTrips = (realTrips || []).filter(t => {
     if (!t || t.status === 'cancelled') return false; 
+    // شيلنا شرط الـ weekend من الفلترة نهائياً
     if (homeCategory === 'travel') {
        return t.category === 'travel' && t.type === filterType && (!filterFrom || t.from === filterFrom) && (!filterTo || t.to === filterTo);
     }
     if (homeCategory === 'parcel') {
        return (t.category === 'parcel' || t.type === 'delivery') && (!filterFrom || t.from === filterFrom) && (!filterTo || t.to === filterTo);
-    }
-    if (homeCategory === 'weekend') {
-       return t.category === 'weekend' && (!filterFrom || t.from === filterFrom) && (!filterTo || t.to === filterTo);
     }
     return false;
   });
@@ -31,15 +41,40 @@ const HomeScreen = ({
   return (
     <main className="flex-1 w-full max-w-2xl mx-auto px-4 py-6 relative z-10 pb-[100px]">
       
-      {appSettings?.banner && viewMode === 'list' && (
-        <div className="relative w-full h-40 sm:h-48 rounded-[2rem] overflow-hidden mb-6 shadow-md border dark:border-slate-800 shrink-0">
-           <img src={appSettings.banner} alt="Banner" className="w-full h-full object-cover" />
-           <div className="absolute inset-0 bg-slate-900/40 flex items-center justify-center p-4 text-center">
-             <h2 className="text-white font-black text-lg sm:text-xl drop-shadow-md leading-relaxed">{appSettings?.bannerText || ''}</h2>
-           </div>
+      {/* 0. النص الترحيبي والبانر المتحرك */}
+      {viewMode === 'list' && (
+        <div className="mb-6">
+          {appSettings?.bannerText && (
+            <h2 className={`font-black text-lg mb-3 px-1 ${textPrimary} leading-relaxed`}>
+              {appSettings.bannerText}
+            </h2>
+          )}
+          
+          {banners.length > 0 && (
+            <div className="relative w-full h-40 sm:h-48 rounded-[2rem] overflow-hidden shadow-sm border dark:border-slate-800 bg-slate-100 dark:bg-slate-800">
+               {banners.map((imgUrl, idx) => (
+                 <img 
+                   key={idx} 
+                   src={imgUrl} 
+                   alt={`Banner ${idx}`} 
+                   className={`absolute inset-0 w-full h-full object-cover transition-opacity duration-700 ease-in-out ${idx === currentSlide ? 'opacity-100 z-10' : 'opacity-0 z-0'}`} 
+                 />
+               ))}
+               
+               {/* نقط التبديل (Dots) أسفل البانر */}
+               {banners.length > 1 && (
+                 <div className="absolute bottom-3 left-0 right-0 flex justify-center gap-2 z-20">
+                   {banners.map((_, idx) => (
+                     <span key={idx} className={`h-2 rounded-full transition-all duration-300 ${idx === currentSlide ? 'w-6 bg-indigo-600' : 'w-2 bg-white/60'}`}></span>
+                   ))}
+                 </div>
+               )}
+            </div>
+          )}
         </div>
       )}
 
+      {/* 1. التبويبات العلوية وأزرار العرض */}
       <div className="flex justify-between items-center mb-6 pointer-events-auto relative z-10">
          <div className={`flex p-1 rounded-xl shadow-sm border ${isDarkMode ? 'bg-slate-900 border-slate-800' : 'bg-white/80 border-slate-200/60'}`}>
             <button onClick={() => setViewMode('list')} className={`p-2 rounded-lg transition-all flex items-center justify-center ${viewMode === 'list' ? 'bg-indigo-50 text-indigo-600 shadow-sm dark:bg-slate-800 dark:text-white' : 'text-slate-500'}`}><List size={18}/></button>
@@ -49,15 +84,15 @@ const HomeScreen = ({
            <div className={`flex p-1.5 rounded-2xl shadow-sm border overflow-x-auto flex-nowrap whitespace-nowrap custom-scrollbar hide-scrollbar ${isDarkMode ? 'bg-slate-900 border-slate-800' : 'bg-white/80 border-slate-200/60'}`}>
              <button onClick={() => {setHomeCategory('travel'); setFilterFrom(''); setFilterTo('');}} className={`shrink-0 px-4 py-2 rounded-xl text-xs font-bold transition-all ${homeCategory === 'travel' ? 'bg-white text-indigo-600 shadow-sm dark:bg-slate-700 dark:text-white' : 'text-slate-500'}`}>سفريات 🚗</button>
              <button onClick={() => {setHomeCategory('parcel'); setFilterFrom(''); setFilterTo('');}} className={`shrink-0 px-4 py-2 rounded-xl text-xs font-bold transition-all ${homeCategory === 'parcel' ? 'bg-white text-indigo-600 shadow-sm dark:bg-slate-700 dark:text-white' : 'text-slate-500'}`}>أمانات 📦</button>
-             <button onClick={() => {setHomeCategory('weekend'); setFilterFrom(''); setFilterTo('');}} className={`shrink-0 px-4 py-2 rounded-xl text-xs font-bold transition-all ${homeCategory === 'weekend' ? 'bg-white text-indigo-600 shadow-sm dark:bg-slate-700 dark:text-white' : 'text-slate-500'}`}>أفواج ⛺</button>
              <button onClick={() => {setHomeCategory('stations'); setFilterFrom(''); setFilterTo('');}} className={`shrink-0 px-4 py-2 rounded-xl text-xs font-bold transition-all ${homeCategory === 'stations' ? 'bg-white text-indigo-600 shadow-sm dark:bg-slate-700 dark:text-white' : 'text-slate-500'}`}>مواقف مصر 🚏</button>
            </div>
          )}
       </div>
 
+      {/* 2. منطقة العرض */}
       {viewMode === 'list' && (
         <div className="animate-fade-in-up">
-          {(homeCategory === 'travel' || homeCategory === 'parcel' || homeCategory === 'weekend') && (
+          {(homeCategory === 'travel' || homeCategory === 'parcel') && (
             <div className="mb-6 space-y-4">
               {homeCategory === 'travel' && (
                 <div className="flex gap-2">
@@ -95,7 +130,7 @@ const HomeScreen = ({
                visibleTrips.length === 0 ? (
                  <div className={`text-center py-16 rounded-[2rem] border-2 border-dashed ${isDarkMode ? 'border-slate-800 bg-slate-900/50' : 'border-slate-200 bg-slate-50'}`}><Bell size={48} className="mx-auto text-indigo-400 mb-4 opacity-50"/><h3 className="font-bold text-lg text-slate-700 dark:text-slate-300 mb-2">لا توجد إعلانات في هذا المسار</h3><p className="text-xs text-slate-500 mb-6">لم يقم أي شخص بنشر رحلة مطابقة لبحثك حتى الآن.</p></div>
                ) : (
-                 visibleTrips.map(trip => trip.category === 'weekend' ? <SquadTripCard key={trip.id} trip={trip} user={user} isAdmin={isAdmin} isDarkMode={isDarkMode} setSelectedWeekendTrip={setSelectedWeekendTrip} triggerToast={triggerToast} /> : <TripCard key={trip.id} trip={trip} user={user} isAdmin={isAdmin} isDarkMode={isDarkMode} openChatFromTrip={openChatFromTrip} triggerToast={triggerToast} />)
+                 visibleTrips.map(trip => <TripCard key={trip.id} trip={trip} user={user} isAdmin={isAdmin} isDarkMode={isDarkMode} openChatFromTrip={openChatFromTrip} triggerToast={triggerToast} />)
                )
              )}
           </div>
