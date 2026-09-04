@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { Bell, BusFront, MapPinned, List, X, ChevronRight, ChevronLeft, Route, Plus, Loader2 } from 'lucide-react';
+import { Bell, BusFront, MapPinned, List, X, ChevronRight, ChevronLeft, Route, Plus, Loader2, Map } from 'lucide-react';
 import TripCard from '../components/TripCard';
 import { EGYPT_CITIES } from '../utils/helpers';
 import { collection, addDoc } from 'firebase/firestore';
@@ -33,6 +33,7 @@ const HomeScreen = ({
   const [showAddStation, setShowAddStation] = useState(false);
   const [newStationName, setNewStationName] = useState('');
   const [newStationLoc, setNewStationLoc] = useState('');
+  const [newStationMapUrl, setNewStationMapUrl] = useState(''); // حقل جديد للرابط
   const [isSubmittingStation, setIsSubmittingStation] = useState(false);
 
   useEffect(() => {
@@ -65,14 +66,18 @@ const HomeScreen = ({
       await addDoc(collection(db, STATIONS_COLLECTION), {
         name: newStationName,
         location: newStationLoc,
+        mapUrl: newStationMapUrl.trim() || null, // حفظ الرابط
         status: isAdmin ? 'approved' : 'pending',
         addedBy: user.uid,
-        routes: []
+        routes: [],
+        crowdStatus: 'normal', // الحالة الافتراضية
+        crowdUpdatedAt: null
       });
       triggerToast(isAdmin ? 'تمت إضافة الموقف بنجاح ✅' : 'تم إرسال الموقف للمراجعة ⏳');
       setShowAddStation(false);
       setNewStationName('');
       setNewStationLoc('');
+      setNewStationMapUrl('');
     } catch (err) { triggerToast('حدث خطأ أثناء الإضافة'); } finally { setIsSubmittingStation(false); }
   };
 
@@ -140,8 +145,12 @@ const HomeScreen = ({
                 </div>
               )}
               <div className={`flex gap-2 p-3 rounded-2xl border ${isDarkMode ? 'bg-slate-800 border-slate-700' : 'bg-slate-50 border-slate-200'}`}>
-                <select value={filterFrom} onChange={(e) => setFilterFrom(e.target.value)} className={`flex-1 p-2.5 rounded-xl border text-xs font-bold outline-none ${bgInput}`}><option value="">من المحافظة</option>{EGYPT_CITIES.map(c => <option key={c} value={c}>{c}</option>)}</select>
-                <select value={filterTo} onChange={(e) => setFilterTo(e.target.value)} className={`flex-1 p-2.5 rounded-xl border text-xs font-bold outline-none ${bgInput}`}><option value="">إلى الوجهة</option>{EGYPT_CITIES.map(c => <option key={c} value={c}>{c}</option>)}</select>
+                <select value={filterFrom} onChange={(e) => setFilterFrom(e.target.value)} className={`flex-1 p-2.5 rounded-xl border text-xs font-bold outline-none ${bgInput}`}>
+                  <option value="">من المحافظة</option>{EGYPT_CITIES.map(c => <option key={c} value={c}>{c}</option>)}
+                </select>
+                <select value={filterTo} onChange={(e) => setFilterTo(e.target.value)} className={`flex-1 p-2.5 rounded-xl border text-xs font-bold outline-none ${bgInput}`}>
+                  <option value="">إلى الوجهة</option>{EGYPT_CITIES.map(c => <option key={c} value={c}>{c}</option>)}
+                </select>
                 {(filterFrom || filterTo) && ( <button onClick={() => {setFilterFrom(''); setFilterTo('');}} className="p-2.5 bg-rose-100 text-rose-600 rounded-xl hover:bg-rose-200 transition-colors"><X size={16}/></button> )}
               </div>
             </div>
@@ -166,9 +175,21 @@ const HomeScreen = ({
                           <div className="flex-1">
                             <div className="flex justify-between items-start">
                               <h3 className={`font-black text-base ${textPrimary}`}>{station.name}</h3>
-                              {station.status === 'pending' && <span className="bg-amber-100 text-amber-600 text-[9px] px-2 py-1 rounded-full font-bold">قيد المراجعة</span>}
+                              {/* عرض حالة الزحمة في الكارت الخارجي */}
+                              {station.crowdStatus === 'crowded' && <span className="text-[10px] bg-rose-100 text-rose-600 px-2 py-0.5 rounded-md font-bold">زحمة 🔴</span>}
+                              {station.crowdStatus === 'empty' && <span className="text-[10px] bg-emerald-100 text-emerald-600 px-2 py-0.5 rounded-md font-bold">رايق 🟢</span>}
                             </div>
-                            <p className="text-xs font-bold text-slate-500 mt-1 flex items-center gap-1"><MapPinned size={12}/> {station.location}</p>
+                            
+                            {/* الرابط التفاعلي للخريطة */}
+                            <a 
+                               href={station.mapUrl || `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(station.name + ' ' + station.location)}`} 
+                               target="_blank" 
+                               rel="noreferrer"
+                               onClick={(e) => e.stopPropagation()} // عشان المودال ميفتحش وإنت بتدوس ع اللينك
+                               className="text-xs font-bold text-slate-500 mt-1 flex items-center gap-1 hover:text-indigo-500 transition-colors w-fit"
+                            >
+                               <MapPinned size={12}/> {station.location}
+                            </a>
                             
                             {station.routes && station.routes.length > 0 && (
                               <div className="mt-3 flex flex-wrap gap-1.5">
@@ -201,6 +222,7 @@ const HomeScreen = ({
          <div className={`text-center py-20 rounded-[2rem] border-2 border-dashed mt-10 ${isDarkMode ? 'border-slate-800 bg-slate-900/50' : 'border-slate-200 bg-slate-50'}`}><MapPinned size={48} className="mx-auto text-slate-400 mb-4 opacity-50"/><h3 className="font-bold text-lg text-slate-700 dark:text-slate-300">الخريطة قيد التطوير...</h3></div>
       )}
 
+      {/* مودال إضافة موقف جديد */}
       {showAddStation && (
         <div className="fixed inset-0 bg-slate-900/90 backdrop-blur-sm z-[300] flex justify-center items-center p-4 pointer-events-auto">
           <div className={`${bgCard} w-full max-w-sm rounded-[2rem] p-6 shadow-2xl flex flex-col border animate-fade-in-up dark:border-slate-700`}>
@@ -214,6 +236,7 @@ const HomeScreen = ({
                   <option value="" disabled>المحافظة</option>
                   {EGYPT_CITIES.map(c => <option key={c} value={c}>{c}</option>)}
                 </select>
+                <input type="url" placeholder="رابط لوكيشن جوجل ماب (اختياري)" value={newStationMapUrl} onChange={e => setNewStationMapUrl(e.target.value)} className={`w-full p-3 rounded-xl border text-sm font-bold outline-none ${bgInput}`} dir="ltr"/>
                 <button type="submit" disabled={isSubmittingStation} className="w-full bg-indigo-600 text-white py-3 rounded-xl font-bold flex justify-center items-center gap-2 mt-2">
                   {isSubmittingStation ? <Loader2 size={18} className="animate-spin"/> : 'إضافة الموقف'}
                 </button>
