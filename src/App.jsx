@@ -2,7 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { onAuthStateChanged, signInWithEmailAndPassword, createUserWithEmailAndPassword, signInAnonymously, updateProfile, signOut } from 'firebase/auth';
 import { collection, onSnapshot, doc, getDoc, setDoc, addDoc, updateDoc, serverTimestamp } from 'firebase/firestore';
 import { Loader2, Car, MessageCircle, User, Home, CheckCircle2, Plus, X, Target, Lock } from 'lucide-react';
- 
+
 import { auth, db, APP_COLLECTION_NAME, USERS_COLLECTION, STATIONS_COLLECTION, ADMIN_EMAIL } from './firebase';
 import { safeMillis, timeToMinutes, EGYPT_CITIES, resizeAndConvertToBase64 } from './utils/helpers';
 
@@ -235,10 +235,6 @@ export default function App() {
     return list;
   };
   const activeTrackers = getActiveTrackersList();
-  
-  // حماية التتبع من الأخطاء
-  const firstTracker = activeTrackers.length > 0 ? activeTrackers[0] : null;
-  const firstTrackerId = firstTracker ? (firstTracker.type === 'normal' ? firstTracker.data.chatId : firstTracker.data.id) : null;
 
   const bgMain = isDarkMode ? 'bg-slate-950 text-slate-100' : 'bg-slate-50 text-slate-800';
   const bgCard = isDarkMode ? 'bg-slate-900 border-slate-800' : 'bg-white border-slate-200';
@@ -263,7 +259,11 @@ export default function App() {
           </div>
           <div className="flex items-center gap-2 cursor-pointer" onClick={() => {setActiveTab('home'); setViewMode('list');}}>
             <span className="font-black text-xl text-indigo-600 dark:text-indigo-400">طريقنا</span>
-            {appSettings?.logo ? ( <img src={appSettings.logo} className="w-8 h-8 object-contain rounded-md" alt="Logo"/> ) : ( <div className="bg-indigo-600 text-white p-1.5 rounded-lg"><Car size={20}/></div> )}
+            {appSettings?.logo ? (
+              <img src={appSettings.logo} className="w-8 h-8 object-contain rounded-md" alt="Logo"/>
+            ) : (
+              <div className="bg-indigo-600 text-white p-1.5 rounded-lg"><Car size={20}/></div>
+            )}
           </div>
         </div>
       </header>
@@ -405,7 +405,8 @@ export default function App() {
         </div>
       )}
 
-      {!isGuest && activeTrackers.length > 0 && (!activeChat || activeChat.chatId !== firstTrackerId) && (
+      {/* منع الخطأ في LiveTrackerBar */}
+      {!isGuest && activeTrackers.length > 0 && activeTrackers[0]?.data && (!activeChat || activeChat.chatId !== (activeTrackers[0]?.type === 'normal' ? activeTrackers[0].data.chatId : activeTrackers[0].data.id)) && (
         <LiveTrackerBar activeTrackers={activeTrackers} isDarkMode={isDarkMode} setActiveChat={setActiveChat} setActiveTab={setActiveTab} setViewMode={setViewMode} />
       )}
 
