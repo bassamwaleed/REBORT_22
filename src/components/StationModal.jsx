@@ -3,7 +3,7 @@ import { doc, getDoc, updateDoc } from 'firebase/firestore';
 import { X, MapPinned, Route, Plus, Loader2, BusFront, CheckCircle2 } from 'lucide-react';
 import { db, STATIONS_COLLECTION } from '../firebase';
 import { EGYPT_CITIES } from '../utils/helpers';
- 
+
 const StationModal = ({ station, user, isAdmin, isGuest, isDarkMode, onClose, triggerToast }) => {
   const [isAddingRoute, setIsAddingRoute] = useState(false);
   const [newRouteDest, setNewRouteDest] = useState('');
