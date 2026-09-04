@@ -1,10 +1,10 @@
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect } from 'react';
 import { onAuthStateChanged, signInWithEmailAndPassword, createUserWithEmailAndPassword, signInAnonymously, updateProfile, signOut } from 'firebase/auth';
 import { collection, onSnapshot, doc, getDoc, setDoc, addDoc, updateDoc, serverTimestamp, getDocs } from 'firebase/firestore';
-import { Loader2, Car, MessageCircle, User, Home, CheckCircle2, Plus, X, MapPin, Lock, Camera, Edit2, ShieldAlert, Gift, Moon, LogOut, BusFront, Bell, Target } from 'lucide-react';
+import { Loader2, Car, MessageCircle, User, Home, CheckCircle2, Plus, X, MapPin, Lock, Camera, ShieldAlert, Gift, Moon, LogOut, BusFront, Target } from 'lucide-react';
 
 import { auth, db, APP_COLLECTION_NAME, USERS_COLLECTION, STATIONS_COLLECTION, ADMIN_EMAIL } from './firebase';
-import { safeMillis, timeToMinutes, formatTripDateTime, EGYPT_CITIES, resizeAndConvertToBase64 } from './utils/helpers';
+import { safeMillis, timeToMinutes, EGYPT_CITIES, resizeAndConvertToBase64 } from './utils/helpers';
 
 import HomeScreen from './screens/HomeScreen';
 import ProfileScreen from './screens/ProfileScreen';
@@ -34,10 +34,9 @@ export default function App() {
   const [realTrips, setRealTrips] = useState([]); 
   const [stations, setStations] = useState([]); 
   const [myInbox, setMyInbox] = useState([]);
-  const [appSettings, setAppSettings] = useState({ logo: null, banner: null, bannerText: '' });
+  const [appSettings, setAppSettings] = useState({ logo: null, banners: [], bannerText: '' });
   
   const [selectedStation, setSelectedStation] = useState(null);
-  const [selectedWeekendTrip, setSelectedWeekendTrip] = useState(null);
   const [activeChat, setActiveChat] = useState(null);
   
   const [showAddModal, setShowAddModal] = useState(false);
@@ -52,7 +51,7 @@ export default function App() {
   const [isLoginMode, setIsLoginMode] = useState(true);
   const [authLoading, setAuthLoading] = useState(false);
   const [authForm, setAuthForm] = useState({ name: '', identifier: '', password: '' });
-  const [newTrip, setNewTrip] = useState({ type: 'offer', category: 'travel', from: '', fromDetails: '', fromCoords: null, to: '', toDetails: '', toCoords: null, date: '', time: '', seats: 1, cost: '', notes: '', tripTitle: '', squadTags: 'شلة شباب' });
+  const [newTrip, setNewTrip] = useState({ type: 'offer', category: 'travel', from: '', fromDetails: '', fromCoords: null, to: '', toDetails: '', toCoords: null, date: '', time: '', seats: 1, cost: '', notes: '' });
   const [toastMsg, setToastMsg] = useState('');
   const [alertMsg, setAlertMsg] = useState('');
   const [isSubmitting, setIsSubmitting] = useState(false);
@@ -103,13 +102,9 @@ export default function App() {
       });
       tripsData.sort((a, b) => safeMillis(b.createdAt) - safeMillis(a.createdAt));
       setRealTrips(tripsData);
-      if (selectedWeekendTrip) {
-        const updatedTrip = tripsData.find(t => t.id === selectedWeekendTrip.id);
-        if (updatedTrip) setSelectedWeekendTrip(updatedTrip);
-      }
     });
     return () => unsubscribe();
-  }, [user, selectedWeekendTrip]);
+  }, [user]);
 
   useEffect(() => {
     if (!user) return;
@@ -148,7 +143,7 @@ export default function App() {
   const forceSignUpScreen = async () => { try { await signOut(auth); setIsLoginMode(false); setAuthForm({ name: '', identifier: '', password: '' }); setActiveTab('home'); } catch(e){} };
   const handleGuestLogin = async () => { setAuthLoading(true); try { await signInAnonymously(auth); } catch (error) {} finally { setAuthLoading(false); } };
   const toggleTheme = () => { const newTheme = !isDarkMode; setIsDarkMode(newTheme); localStorage.setItem('khodnimaak_theme', newTheme ? 'dark' : 'light'); };
-  const handleLogout = async () => { try { await signOut(auth); setUserData(null); setMyInbox([]); setActiveChat(null); setSelectedWeekendTrip(null); setActiveTab('home'); } catch(e) {} };
+  const handleLogout = async () => { try { await signOut(auth); setUserData(null); setMyInbox([]); setActiveChat(null); setActiveTab('home'); } catch(e) {} };
 
   const handleEditName = async () => {
     const newName = prompt('أدخل الاسم الجديد:', userData?.name || '');
@@ -162,7 +157,7 @@ export default function App() {
   };
 
   const findMatchingRides = (newPostedTrip) => {
-    if(!newPostedTrip || newPostedTrip.category === 'weekend' || newPostedTrip.squadTags) return; 
+    if(!newPostedTrip) return; 
     const matches = (realTrips || []).filter(t => {
       if(!t || t.status === 'cancelled' || t.status === 'completed') return false;
       if(t.userId === user?.uid) return false; 
@@ -197,7 +192,7 @@ export default function App() {
       setShowAddModal(false); triggerToast('تم النشر بنجاح!');
       setActiveTab('home'); setHomeCategory(newTrip.category);
       findMatchingRides(tripData); 
-      setNewTrip({ type: 'offer', category: 'travel', from: '', fromDetails: '', fromCoords: null, to: '', toDetails: '', toCoords: null, date: '', time: '', seats: 1, cost: '', notes: '', tripTitle: '', squadTags: 'شلة شباب' });
+      setNewTrip({ type: 'offer', category: 'travel', from: '', fromDetails: '', fromCoords: null, to: '', toDetails: '', toCoords: null, date: '', time: '', seats: 1, cost: '', notes: '' });
     } catch (error) { triggerToast('حدث خطأ.'); } finally { setIsSubmitting(false); }
   };
 
@@ -219,8 +214,6 @@ export default function App() {
     await setDoc(doc(db, `inbox_${trip.userId}`, chatId), { ...chatDataOther, createdAt: serverTimestamp(), requestStatus: 'none' }, { merge: true });
   };
 
-  const handleConnectMatched = (trip) => { setShowMatchModal(false); openChatFromTrip(trip); };
-
   const handleAvatarUpload = async (e) => {
     const file = e.target.files[0];
     if (!file || !user) return;
@@ -239,8 +232,6 @@ export default function App() {
     let list = [];
     const activeNormals = (myInbox || []).filter(c => ['pending', 'accepted', 'moving', 'arrived', 'in_progress_trip'].includes(c?.requestStatus) && !c?.isGroup);
     activeNormals.forEach(item => list.push({ type: 'normal', data: item }));
-    const myWeekendTrips = (realTrips || []).filter(t => t.category === 'weekend' && t.joinedMembers?.some(m => m.uid === user.uid));
-    myWeekendTrips.forEach(item => list.push({ type: 'weekend', data: item }));
     return list;
   };
   const activeTrackers = getActiveTrackersList();
@@ -279,7 +270,7 @@ export default function App() {
       </header>
 
       {/* FLOATING ADD BUTTON */}
-      {activeTab === 'home' && !selectedStation && !selectedWeekendTrip && !isGuest && (
+      {activeTab === 'home' && !isGuest && (
         <button onClick={() => setShowAddModal(true)} className="fixed bottom-[90px] right-5 bg-indigo-600 text-white w-14 h-14 rounded-full shadow-lg flex items-center justify-center z-50 hover:bg-indigo-700 transition-transform"><Plus size={28} /></button>
       )}
 
@@ -295,20 +286,16 @@ export default function App() {
               <div className="flex bg-slate-100 dark:bg-slate-800 p-1 rounded-2xl mb-6">
                  <button onClick={() => setNewTrip({...newTrip, category: 'travel'})} className={`flex-1 py-2.5 rounded-xl text-xs font-bold transition-all ${newTrip.category === 'travel' ? 'bg-white text-indigo-600 shadow-sm dark:bg-slate-700 dark:text-white' : 'text-slate-500'}`}>سفر</button>
                  <button onClick={() => setNewTrip({...newTrip, category: 'parcel'})} className={`flex-1 py-2.5 rounded-xl text-xs font-bold transition-all ${newTrip.category === 'parcel' ? 'bg-white text-indigo-600 shadow-sm dark:bg-slate-700 dark:text-white' : 'text-slate-500'}`}>أمانات</button>
-                 <button onClick={() => setNewTrip({...newTrip, category: 'weekend'})} className={`flex-1 py-2.5 rounded-xl text-xs font-bold transition-all ${newTrip.category === 'weekend' ? 'bg-white text-indigo-600 shadow-sm dark:bg-slate-700 dark:text-white' : 'text-slate-500'}`}>أفواج</button>
               </div>
               <form id="addTripForm" onSubmit={handleAddTrip} className="space-y-4">
-                {newTrip.category === 'travel' && (
-                  <div className="flex gap-3 mb-2">
-                    <label className={`flex-1 flex items-center gap-2 p-3 rounded-xl border cursor-pointer ${newTrip.type === 'offer' ? 'bg-indigo-50 border-indigo-500 text-indigo-700' : 'bg-transparent border-slate-200 dark:border-slate-700'}`}>
-                      <input type="radio" name="tripType" value="offer" checked={newTrip.type === 'offer'} onChange={() => setNewTrip({...newTrip, type: 'offer'})} className="hidden"/><Car size={18}/> <span className="text-sm font-bold">سائق (متاح)</span>
-                    </label>
-                    <label className={`flex-1 flex items-center gap-2 p-3 rounded-xl border cursor-pointer ${newTrip.type === 'request' ? 'bg-indigo-50 border-indigo-500 text-indigo-700' : 'bg-transparent border-slate-200 dark:border-slate-700'}`}>
-                      <input type="radio" name="tripType" value="request" checked={newTrip.type === 'request'} onChange={() => setNewTrip({...newTrip, type: 'request'})} className="hidden"/><User size={18}/> <span className="text-sm font-bold">راكب (مطلوب)</span>
-                    </label>
-                  </div>
-                )}
-                {newTrip.category === 'weekend' && ( <input type="text" required placeholder="عنوان الرحلة (مثال: سفاري وادي الريان)" value={newTrip.tripTitle} onChange={e => setNewTrip({...newTrip, tripTitle: e.target.value})} className={`w-full p-4 rounded-2xl border font-bold text-sm outline-none ${bgInput}`}/> )}
+                <div className="flex gap-3 mb-2">
+                  <label className={`flex-1 flex items-center gap-2 p-3 rounded-xl border cursor-pointer ${newTrip.type === 'offer' ? 'bg-indigo-50 border-indigo-500 text-indigo-700' : 'bg-transparent border-slate-200 dark:border-slate-700'}`}>
+                    <input type="radio" name="tripType" value="offer" checked={newTrip.type === 'offer'} onChange={() => setNewTrip({...newTrip, type: 'offer'})} className="hidden"/><Car size={18}/> <span className="text-sm font-bold">سائق (متاح)</span>
+                  </label>
+                  <label className={`flex-1 flex items-center gap-2 p-3 rounded-xl border cursor-pointer ${newTrip.type === 'request' ? 'bg-indigo-50 border-indigo-500 text-indigo-700' : 'bg-transparent border-slate-200 dark:border-slate-700'}`}>
+                    <input type="radio" name="tripType" value="request" checked={newTrip.type === 'request'} onChange={() => setNewTrip({...newTrip, type: 'request'})} className="hidden"/><User size={18}/> <span className="text-sm font-bold">راكب (مطلوب)</span>
+                  </label>
+                </div>
                 <select required value={newTrip.from} onChange={e => setNewTrip({...newTrip, from: e.target.value})} className={`w-full p-4 rounded-2xl border font-bold text-sm outline-none ${bgInput}`}><option value="" disabled>محافظة التحرك</option>{EGYPT_CITIES.map(c => <option key={c} value={c}>{c}</option>)}</select>
                 <select required value={newTrip.to} onChange={e => setNewTrip({...newTrip, to: e.target.value})} className={`w-full p-4 rounded-2xl border font-bold text-sm outline-none ${bgInput}`}><option value="" disabled>محافظة الوصول</option>{EGYPT_CITIES.map(c => <option key={c} value={c}>{c}</option>)}</select>
                 <div className="grid grid-cols-2 gap-3">
@@ -329,14 +316,25 @@ export default function App() {
         </div>
       )}
 
+      {/* STATION MODAL */}
+      {selectedStation && (
+        <div className="fixed inset-0 bg-slate-900/90 backdrop-blur-sm z-[300] flex justify-center items-center p-4 pointer-events-auto">
+          <div className={`${bgCard} w-full max-w-sm rounded-[2rem] p-6 shadow-2xl flex flex-col items-center text-center border animate-fade-in-up dark:border-slate-700`}>
+            <div className="bg-indigo-100 dark:bg-indigo-900/50 p-4 rounded-full text-indigo-600 dark:text-indigo-400 mb-4"><BusFront size={40}/></div>
+            <h2 className={`text-xl font-black mb-2 ${textPrimary}`}>{selectedStation.name}</h2>
+            <p className={`text-sm mb-6 ${textSecondary}`}>{selectedStation.location}</p>
+            <button onClick={() => setSelectedStation(null)} className="w-full bg-slate-200 dark:bg-slate-800 text-slate-800 dark:text-slate-200 py-3 rounded-xl font-bold">إغلاق</button>
+          </div>
+        </div>
+      )}
+
       {/* TABS CONTENT */}
-      {activeTab === 'home' && !selectedStation && !selectedWeekendTrip && (
+      {activeTab === 'home' && (
         <HomeScreen 
           user={user} isAdmin={isAdmin} isDarkMode={isDarkMode} realTrips={realTrips} stations={stations} isGuest={isGuest}
           homeCategory={homeCategory} setHomeCategory={setHomeCategory} viewMode={viewMode} setViewMode={setViewMode} filterType={filterType} setFilterType={setFilterType}
           filterFrom={filterFrom} setFilterFrom={setFilterFrom} filterTo={filterTo} setFilterTo={setFilterTo} openChatFromTrip={openChatFromTrip}
-          setSelectedWeekendTrip={setSelectedWeekendTrip} setSelectedStation={setSelectedStation} triggerToast={triggerToast}
-          appSettings={appSettings} 
+          setSelectedStation={setSelectedStation} triggerToast={triggerToast} appSettings={appSettings} 
         />
       )}
 
@@ -348,12 +346,8 @@ export default function App() {
         />
       )}
 
-      {/* CHAT MODAL INSTANCE */}
-      {activeChat && !isGuest && (
-        <ChatModal baseChatData={activeChat} user={user} userData={userData} isDarkMode={isDarkMode} onClose={() => setActiveChat(null)} triggerToast={triggerToast} />
-      )}
+      {activeChat && !isGuest && ( <ChatModal baseChatData={activeChat} user={user} userData={userData} isDarkMode={isDarkMode} onClose={() => setActiveChat(null)} triggerToast={triggerToast} /> )}
 
-      {/* REWARDS MODAL */}
       {showRewardsModal && (
         <div className="fixed inset-0 bg-slate-900/80 backdrop-blur-sm z-[350] flex justify-center items-center p-4">
           <div className={`${bgCard} w-full max-w-sm rounded-[2rem] p-6 shadow-2xl border`}>
@@ -364,17 +358,14 @@ export default function App() {
         </div>
       )}
 
-      {/* VERIFY MODAL INSTANCE */}
       {showVerifyModal && (
         <VerifyModal user={user} isDarkMode={isDarkMode} onClose={() => setShowVerifyModal(false)} triggerToast={triggerToast} setUserData={setUserData} />
       )}
 
-      {/* ADMIN PANEL INSTANCE */}
       {showAdminPanel && isAdmin && (
         <AdminPanel isDarkMode={isDarkMode} onClose={() => setShowAdminPanel(false)} triggerToast={triggerToast} appSettings={appSettings} />
       )}
 
-      {/* MATCHING MODAL */}
       {showMatchModal && !isGuest && (
          <div className="fixed inset-0 bg-slate-900/80 backdrop-blur-md z-[400] flex justify-center items-end sm:items-center p-0 sm:p-4">
             <div className={`bg-slate-50 dark:bg-slate-900 w-full sm:max-w-md rounded-t-[2rem] sm:rounded-[2rem] p-6 shadow-2xl animate-fade-in-up border`}>
@@ -392,7 +383,6 @@ export default function App() {
          </div>
       )}
 
-      {/* INBOX TAB */}
       {activeTab === 'inbox' && (
         <div className="pb-[100px] flex-1 w-full max-w-2xl mx-auto px-4 py-6 mt-4 relative z-10 animate-fade-in-up">
           <div className={`rounded-[2rem] shadow-sm border min-h-[500px] flex flex-col ${bgCard}`}>
@@ -417,7 +407,6 @@ export default function App() {
         </div>
       )}
 
-      {/* GUEST AUTH SCREEN */}
       {!user && (
         <div dir="rtl" className={`fixed inset-0 flex items-center justify-center p-4 z-[1000] ${bgMain}`}>
           <div className={`${bgCard} p-8 rounded-[2rem] shadow-xl max-w-sm w-full border relative`}>
@@ -442,12 +431,10 @@ export default function App() {
         </div>
       )}
 
-      {/* LIVE TRACKER COMPONENT (ISOLATED) */}
       {!isGuest && activeTrackers.length > 0 && (!activeChat || activeChat.chatId !== (activeTrackers[0]?.type === 'normal' ? activeTrackers[0].data.chatId : activeTrackers[0]?.data.id)) && (
-        <LiveTrackerBar activeTrackers={activeTrackers} isDarkMode={isDarkMode} setActiveChat={setActiveChat} setSelectedWeekendTrip={setSelectedWeekendTrip} setActiveTab={setActiveTab} setViewMode={setViewMode} />
+        <LiveTrackerBar activeTrackers={activeTrackers} isDarkMode={isDarkMode} setActiveChat={setActiveChat} setActiveTab={setActiveTab} setViewMode={setViewMode} />
       )}
 
-      {/* BOTTOM NAV */}
       <nav className={`fixed bottom-0 w-full z-[100] border-t ${isDarkMode ? 'bg-slate-950 border-slate-800' : 'bg-white border-slate-100'} pointer-events-auto`}>
         <div className="flex justify-around items-center h-[70px] w-full max-w-md mx-auto px-2 pb-2">
           <button onClick={() => setActiveTab('home')} className={`flex flex-col items-center justify-center gap-1 w-20 transition-colors ${activeTab === 'home' ? 'text-indigo-600 dark:text-indigo-400' : textSecondary}`}><Home size={22} /><span className="text-[10px] font-bold">الرئيسية</span></button>
