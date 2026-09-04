@@ -3,7 +3,7 @@ import { collection, getDocs, doc, updateDoc, setDoc } from 'firebase/firestore'
 import { X, ShieldAlert, ShieldCheck, Check, XCircle, ImageIcon, Loader2, LayoutTemplate, Save, Type, Trash2, Plus, BusFront, Route, Edit3 } from 'lucide-react';
 import { db, USERS_COLLECTION, STATIONS_COLLECTION } from '../firebase';
 import { resizeAndConvertToBase64 } from '../utils/helpers';
-
+ 
 const AdminPanel = ({ isDarkMode, onClose, triggerToast, appSettings }) => {
   const [activeTab, setActiveTab] = useState('verifications'); 
   const [pendingRequests, setPendingRequests] = useState([]);
