@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { collection, getDocs, doc, updateDoc, setDoc } from 'firebase/firestore';
-import { X, ShieldAlert, Check, XCircle, ImageIcon, Loader2, LayoutTemplate, Save, Type, Trash2, Plus } from 'lucide-react';
+import { X, ShieldAlert, ShieldCheck, Check, XCircle, ImageIcon, Loader2, LayoutTemplate, Save, Type, Trash2, Plus } from 'lucide-react';
 import { db, USERS_COLLECTION } from '../firebase';
 import { resizeAndConvertToBase64 } from '../utils/helpers';
 
@@ -9,7 +9,6 @@ const AdminPanel = ({ isDarkMode, onClose, triggerToast, appSettings }) => {
   const [pendingRequests, setPendingRequests] = useState([]);
   const [isLoading, setIsLoading] = useState(true);
   
-  // الإعدادات دلوقتي فيها مصفوفة للبانرات (banners array)
   const [localSettings, setLocalSettings] = useState({ logo: null, banners: [], bannerText: '' });
   const [isSavingSettings, setIsSavingSettings] = useState(false);
 
@@ -23,7 +22,6 @@ const AdminPanel = ({ isDarkMode, onClose, triggerToast, appSettings }) => {
 
   useEffect(() => {
     if(appSettings) {
-      // توافق مع الإصدار القديم لو كان فيه banner واحد string نخليه array
       const bannersArray = Array.isArray(appSettings.banners) ? appSettings.banners : (appSettings.banner ? [appSettings.banner] : []);
       setLocalSettings({ ...appSettings, banners: bannersArray });
     }
