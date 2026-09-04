@@ -1,12 +1,13 @@
 import React, { useState, useEffect } from 'react';
 import { collection, getDocs, doc, updateDoc, setDoc } from 'firebase/firestore';
-import { X, ShieldAlert, ShieldCheck, Check, XCircle, ImageIcon, Loader2, LayoutTemplate, Save, Type, Trash2, Plus } from 'lucide-react';
-import { db, USERS_COLLECTION } from '../firebase';
+import { X, ShieldAlert, ShieldCheck, Check, XCircle, ImageIcon, Loader2, LayoutTemplate, Save, Type, Trash2, Plus, BusFront } from 'lucide-react';
+import { db, USERS_COLLECTION, STATIONS_COLLECTION } from '../firebase';
 import { resizeAndConvertToBase64 } from '../utils/helpers';
 
 const AdminPanel = ({ isDarkMode, onClose, triggerToast, appSettings }) => {
-  const [activeTab, setActiveTab] = useState('verifications'); 
+  const [activeTab, setActiveTab] = useState('verifications'); // 'verifications' | 'stations' | 'settings'
   const [pendingRequests, setPendingRequests] = useState([]);
+  const [pendingStations, setPendingStations] = useState([]);
   const [isLoading, setIsLoading] = useState(true);
   
   const [localSettings, setLocalSettings] = useState({ logo: null, banners: [], bannerText: '' });
@@ -17,7 +18,7 @@ const AdminPanel = ({ isDarkMode, onClose, triggerToast, appSettings }) => {
   const textSecondary = isDarkMode ? 'text-slate-400' : 'text-slate-500';
 
   useEffect(() => {
-    fetchPendingRequests();
+    fetchAdminData();
   }, []);
 
   useEffect(() => {
@@ -27,20 +28,29 @@ const AdminPanel = ({ isDarkMode, onClose, triggerToast, appSettings }) => {
     }
   }, [appSettings]);
 
-  const fetchPendingRequests = async () => {
+  const fetchAdminData = async () => {
     setIsLoading(true);
     try {
-      const snapshot = await getDocs(collection(db, USERS_COLLECTION));
-      const requests = [];
-      snapshot.forEach(doc => {
+      // 1. جلب التوثيقات
+      const usersSnap = await getDocs(collection(db, USERS_COLLECTION));
+      const reqs = [];
+      usersSnap.forEach(doc => {
         const data = doc.data();
-        if (data.verificationStatus === 'pending') {
-          requests.push({ id: doc.id, ...data });
-        }
+        if (data.verificationStatus === 'pending') reqs.push({ id: doc.id, ...data });
       });
-      setPendingRequests(requests);
+      setPendingRequests(reqs);
+
+      // 2. جلب المواقف اللي قيد المراجعة
+      const statSnap = await getDocs(collection(db, STATIONS_COLLECTION));
+      const pStats = [];
+      statSnap.forEach(doc => {
+        const data = doc.data();
+        if (data.status === 'pending') pStats.push({ id: doc.id, ...data });
+      });
+      setPendingStations(pStats);
+
     } catch (error) {
-      triggerToast('تعذر جلب طلبات التوثيق');
+      triggerToast('تعذر جلب البيانات');
     } finally {
       setIsLoading(false);
     }
@@ -51,11 +61,23 @@ const AdminPanel = ({ isDarkMode, onClose, triggerToast, appSettings }) => {
       const updateData = action === 'approve' 
         ? { isVerified: true, verificationStatus: 'approved' }
         : { isVerified: false, verificationStatus: 'rejected', idFront: null, idBack: null };
-
       await updateDoc(doc(db, USERS_COLLECTION, userId), updateData);
       triggerToast(action === 'approve' ? 'تم قبول التوثيق ✅' : 'تم رفض التوثيق ❌');
       setPendingRequests(prev => prev.filter(req => req.id !== userId));
-    } catch (error) { triggerToast('حدث خطأ أثناء تنفيذ الإجراء'); }
+    } catch (error) { triggerToast('حدث خطأ'); }
+  };
+
+  const handleStationAction = async (stationId, action) => {
+    try {
+      if (action === 'approve') {
+        await updateDoc(doc(db, STATIONS_COLLECTION, stationId), { status: 'approved' });
+        triggerToast('تم اعتماد الموقف ✅');
+      } else {
+        await updateDoc(doc(db, STATIONS_COLLECTION, stationId), { status: 'rejected' });
+        triggerToast('تم رفض الموقف ❌');
+      }
+      setPendingStations(prev => prev.filter(s => s.id !== stationId));
+    } catch (error) { triggerToast('حدث خطأ'); }
   };
 
   const handleImageUpload = async (e, type) => {
@@ -66,21 +88,13 @@ const AdminPanel = ({ isDarkMode, onClose, triggerToast, appSettings }) => {
       const height = type === 'logo' ? 400 : 600;
       const base64 = await resizeAndConvertToBase64(file, width, height, 0.8);
       
-      if (type === 'logo') {
-        setLocalSettings(prev => ({ ...prev, logo: base64 }));
-      } else if (type === 'banner') {
-        setLocalSettings(prev => ({ ...prev, banners: [...(prev.banners || []), base64] }));
-      }
+      if (type === 'logo') setLocalSettings(prev => ({ ...prev, logo: base64 }));
+      else if (type === 'banner') setLocalSettings(prev => ({ ...prev, banners: [...(prev.banners || []), base64] }));
     } catch (error) { triggerToast('حدث خطأ أثناء رفع الصورة'); }
   };
 
-  const handleRemoveBanner = (index) => {
-    setLocalSettings(prev => ({
-      ...prev,
-      banners: prev.banners.filter((_, i) => i !== index)
-    }));
-  };
-
+  const handleRemoveBanner = (index) => setLocalSettings(prev => ({...prev, banners: prev.banners.filter((_, i) => i !== index)}));
+  
   const saveSettings = async () => {
     setIsSavingSettings(true);
     try {
@@ -99,22 +113,23 @@ const AdminPanel = ({ isDarkMode, onClose, triggerToast, appSettings }) => {
         </div>
 
         <div className="flex border-b dark:border-slate-800 shrink-0 bg-slate-50 dark:bg-slate-900">
-          <button onClick={() => setActiveTab('verifications')} className={`flex-1 py-4 text-sm font-bold flex items-center justify-center gap-2 transition-colors ${activeTab === 'verifications' ? 'border-b-2 border-indigo-600 text-indigo-600 dark:text-indigo-400' : textSecondary}`}>
-            <ShieldAlert size={18}/> التوثيق {pendingRequests.length > 0 && <span className="bg-rose-500 text-white text-[10px] px-2 py-0.5 rounded-full">{pendingRequests.length}</span>}
+          <button onClick={() => setActiveTab('verifications')} className={`flex-1 py-4 text-sm font-bold flex flex-col items-center justify-center gap-1 transition-colors ${activeTab === 'verifications' ? 'border-b-2 border-indigo-600 text-indigo-600 dark:text-indigo-400' : textSecondary}`}>
+            <div className="relative"><ShieldAlert size={18}/>{pendingRequests.length > 0 && <span className="absolute -top-2 -right-2 bg-rose-500 text-white text-[10px] w-4 h-4 rounded-full flex items-center justify-center">{pendingRequests.length}</span>}</div> التوثيق
           </button>
-          <button onClick={() => setActiveTab('settings')} className={`flex-1 py-4 text-sm font-bold flex items-center justify-center gap-2 transition-colors ${activeTab === 'settings' ? 'border-b-2 border-indigo-600 text-indigo-600 dark:text-indigo-400' : textSecondary}`}>
+          <button onClick={() => setActiveTab('stations')} className={`flex-1 py-4 text-sm font-bold flex flex-col items-center justify-center gap-1 transition-colors ${activeTab === 'stations' ? 'border-b-2 border-indigo-600 text-indigo-600 dark:text-indigo-400' : textSecondary}`}>
+            <div className="relative"><BusFront size={18}/>{pendingStations.length > 0 && <span className="absolute -top-2 -right-2 bg-amber-500 text-white text-[10px] w-4 h-4 rounded-full flex items-center justify-center">{pendingStations.length}</span>}</div> المواقف
+          </button>
+          <button onClick={() => setActiveTab('settings')} className={`flex-1 py-4 text-sm font-bold flex flex-col items-center justify-center gap-1 transition-colors ${activeTab === 'settings' ? 'border-b-2 border-indigo-600 text-indigo-600 dark:text-indigo-400' : textSecondary}`}>
             <LayoutTemplate size={18}/> الإعدادات
           </button>
         </div>
 
         <div className="flex-1 overflow-y-auto p-4 sm:p-6 custom-scrollbar bg-slate-100 dark:bg-slate-950">
+          
+          {/* التوثيقات */}
           {activeTab === 'verifications' && (
             <div className="space-y-4">
-              {isLoading ? (
-                <div className="flex justify-center items-center py-20"><Loader2 className="animate-spin text-indigo-500" size={40}/></div>
-              ) : pendingRequests.length === 0 ? (
-                <div className="text-center py-20 bg-white dark:bg-slate-900 rounded-[2rem] border dark:border-slate-800"><ShieldCheck size={48} className="mx-auto mb-4 text-slate-300 dark:text-slate-700"/><h3 className={`font-bold text-lg ${textPrimary}`}>لا يوجد طلبات توثيق</h3></div>
-              ) : (
+              {isLoading ? ( <div className="flex justify-center py-20"><Loader2 className="animate-spin text-indigo-500" size={40}/></div> ) : pendingRequests.length === 0 ? ( <div className="text-center py-20 bg-white dark:bg-slate-900 rounded-[2rem] border dark:border-slate-800"><ShieldCheck size={48} className="mx-auto mb-4 text-slate-300"/><h3 className={`font-bold text-lg ${textPrimary}`}>لا يوجد طلبات توثيق</h3></div> ) : (
                 pendingRequests.map(req => (
                   <div key={req.id} className={`p-4 rounded-[1.5rem] border shadow-sm ${bgCard} flex flex-col gap-4`}>
                     <div className="flex justify-between items-center border-b dark:border-slate-800 pb-3">
@@ -122,12 +137,12 @@ const AdminPanel = ({ isDarkMode, onClose, triggerToast, appSettings }) => {
                       <span className="text-xs font-bold bg-amber-100 text-amber-600 px-3 py-1 rounded-full">قيد المراجعة</span>
                     </div>
                     <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                      <div><p className="text-xs font-bold mb-2">الوجه الأمامي:</p><img src={req.idFront} alt="الوجه الأمامي" className="w-full h-40 object-cover rounded-xl border" /></div>
-                      <div><p className="text-xs font-bold mb-2">الوجه الخلفي:</p><img src={req.idBack} alt="الوجه الخلفي" className="w-full h-40 object-cover rounded-xl border" /></div>
+                      <div><p className="text-xs font-bold mb-2">الوجه الأمامي:</p><img src={req.idFront} className="w-full h-40 object-cover rounded-xl border" /></div>
+                      <div><p className="text-xs font-bold mb-2">الوجه الخلفي:</p><img src={req.idBack} className="w-full h-40 object-cover rounded-xl border" /></div>
                     </div>
                     <div className="flex gap-2 mt-2">
-                      <button onClick={() => handleVerificationAction(req.id, 'approve')} className="flex-1 bg-emerald-500 hover:bg-emerald-600 text-white py-3 rounded-xl font-bold flex items-center justify-center gap-2"><Check size={18}/> قبول</button>
-                      <button onClick={() => handleVerificationAction(req.id, 'reject')} className="flex-1 bg-rose-500 hover:bg-rose-600 text-white py-3 rounded-xl font-bold flex items-center justify-center gap-2"><XCircle size={18}/> رفض</button>
+                      <button onClick={() => handleVerificationAction(req.id, 'approve')} className="flex-1 bg-emerald-500 text-white py-3 rounded-xl font-bold flex items-center justify-center gap-2"><Check size={18}/> قبول</button>
+                      <button onClick={() => handleVerificationAction(req.id, 'reject')} className="flex-1 bg-rose-500 text-white py-3 rounded-xl font-bold flex items-center justify-center gap-2"><XCircle size={18}/> رفض</button>
                     </div>
                   </div>
                 ))
@@ -135,33 +150,45 @@ const AdminPanel = ({ isDarkMode, onClose, triggerToast, appSettings }) => {
             </div>
           )}
 
+          {/* المواقف الجديدة */}
+          {activeTab === 'stations' && (
+            <div className="space-y-4">
+              {isLoading ? ( <div className="flex justify-center py-20"><Loader2 className="animate-spin text-indigo-500" size={40}/></div> ) : pendingStations.length === 0 ? ( <div className="text-center py-20 bg-white dark:bg-slate-900 rounded-[2rem] border dark:border-slate-800"><BusFront size={48} className="mx-auto mb-4 text-slate-300"/><h3 className={`font-bold text-lg ${textPrimary}`}>لا يوجد مواقف جديدة</h3></div> ) : (
+                pendingStations.map(station => (
+                  <div key={station.id} className={`p-4 rounded-[1.5rem] border shadow-sm ${bgCard} flex items-center justify-between`}>
+                    <div>
+                      <h4 className={`font-black text-lg ${textPrimary}`}>{station.name}</h4>
+                      <p className={`text-sm ${textSecondary} mt-1`}>{station.location}</p>
+                    </div>
+                    <div className="flex gap-2">
+                      <button onClick={() => handleStationAction(station.id, 'approve')} className="w-10 h-10 bg-emerald-100 text-emerald-600 rounded-xl flex items-center justify-center hover:bg-emerald-200"><Check size={20}/></button>
+                      <button onClick={() => handleStationAction(station.id, 'reject')} className="w-10 h-10 bg-rose-100 text-rose-600 rounded-xl flex items-center justify-center hover:bg-rose-200"><X size={20}/></button>
+                    </div>
+                  </div>
+                ))
+              )}
+            </div>
+          )}
+
+          {/* الإعدادات */}
           {activeTab === 'settings' && (
             <div className="space-y-6">
-              
               <div className={`p-5 rounded-[1.5rem] border shadow-sm ${bgCard}`}>
                 <h3 className={`font-black text-lg mb-4 ${textPrimary} flex items-center gap-2`}><Type size={20}/> نص تعريفي (فوق البانر)</h3>
                 <input type="text" value={localSettings.bannerText} onChange={(e) => setLocalSettings({...localSettings, bannerText: e.target.value})} placeholder="اكتب النص هنا..." className="w-full p-4 rounded-xl border font-bold text-sm outline-none bg-slate-50 dark:bg-slate-800 dark:border-slate-700 dark:text-white focus:border-indigo-500" />
               </div>
-
               <div className={`p-5 rounded-[1.5rem] border shadow-sm ${bgCard}`}>
                 <h3 className={`font-black text-lg mb-4 ${textPrimary}`}>تغيير لوجو التطبيق</h3>
                 <div className="flex items-center gap-4">
                   <div className="w-24 h-24 rounded-2xl border-2 border-dashed border-indigo-300 dark:border-slate-700 flex items-center justify-center overflow-hidden bg-slate-50 dark:bg-slate-800">{localSettings.logo ? <img src={localSettings.logo} className="w-full h-full object-cover"/> : <ImageIcon size={30} className="text-slate-300"/>}</div>
-                  <div>
-                    <label className="bg-indigo-50 text-indigo-600 px-4 py-2 rounded-xl text-sm font-bold cursor-pointer hover:bg-indigo-100 transition-colors inline-block">اختيار لوجو جديد<input type="file" accept="image/*" className="hidden" onChange={(e) => handleImageUpload(e, 'logo')} /></label>
-                  </div>
+                  <div><label className="bg-indigo-50 text-indigo-600 px-4 py-2 rounded-xl text-sm font-bold cursor-pointer hover:bg-indigo-100 transition-colors inline-block">اختيار لوجو جديد<input type="file" accept="image/*" className="hidden" onChange={(e) => handleImageUpload(e, 'logo')} /></label></div>
                 </div>
               </div>
-
               <div className={`p-5 rounded-[1.5rem] border shadow-sm ${bgCard}`}>
                 <h3 className={`font-black text-lg mb-4 ${textPrimary} flex justify-between items-center`}>
                   صور البانر الإعلاني
-                  <label className="bg-indigo-600 text-white px-3 py-1.5 rounded-lg text-xs font-bold cursor-pointer hover:bg-indigo-700 flex items-center gap-1">
-                    <Plus size={14}/> إضافة صورة
-                    <input type="file" accept="image/*" className="hidden" onChange={(e) => handleImageUpload(e, 'banner')} />
-                  </label>
+                  <label className="bg-indigo-600 text-white px-3 py-1.5 rounded-lg text-xs font-bold cursor-pointer hover:bg-indigo-700 flex items-center gap-1"><Plus size={14}/> إضافة صورة<input type="file" accept="image/*" className="hidden" onChange={(e) => handleImageUpload(e, 'banner')} /></label>
                 </h3>
-                
                 {localSettings.banners?.length === 0 ? (
                   <div className="text-center text-slate-400 py-6 border-2 border-dashed rounded-xl dark:border-slate-700"><LayoutTemplate size={40} className="mx-auto mb-2 opacity-50"/><span className="text-sm font-bold">لا توجد صور للبانر</span></div>
                 ) : (
@@ -176,7 +203,6 @@ const AdminPanel = ({ isDarkMode, onClose, triggerToast, appSettings }) => {
                   </div>
                 )}
               </div>
-
               <button onClick={saveSettings} disabled={isSavingSettings} className="w-full bg-indigo-600 text-white py-4 rounded-2xl font-black shadow-lg hover:bg-indigo-700 active:scale-95 transition-transform flex justify-center items-center gap-2">
                  {isSavingSettings ? <Loader2 className="animate-spin" size={20}/> : <><Save size={20}/> حفظ التعديلات</>}
               </button>
