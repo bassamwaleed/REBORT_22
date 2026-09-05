@@ -1,11 +1,10 @@
 import React, { useState, useEffect } from 'react';
 import { onAuthStateChanged, signInWithEmailAndPassword, createUserWithEmailAndPassword, signInAnonymously, updateProfile, signOut } from 'firebase/auth';
 import { collection, onSnapshot, doc, getDoc, setDoc, addDoc, updateDoc, serverTimestamp } from 'firebase/firestore';
-// تم تنظيف الأيقونات هنا.. دول بس اللي مستخدمين فعلياً في الملف ده
-import { Loader2, Car, MessageCircle, User, Home, CheckCircle2, Plus, X, Target, Lock } from 'lucide-react';
- 
+import { Loader2, Car, MessageCircle, User, Home, CheckCircle2, Plus, X, Lock } from 'lucide-react';
+
 import { auth, db, APP_COLLECTION_NAME, USERS_COLLECTION, STATIONS_COLLECTION, ADMIN_EMAIL } from './firebase';
-import { safeMillis, timeToMinutes, EGYPT_CITIES } from './utils/helpers';
+import { safeMillis, EGYPT_CITIES } from './utils/helpers';
 
 import HomeScreen from './screens/HomeScreen';
 import ProfileScreen from './screens/ProfileScreen';
@@ -42,11 +41,6 @@ export default function App() {
   const [activeChat, setActiveChat] = useState(null);
   
   const [showAddModal, setShowAddModal] = useState(false);
-  const [showMatchModal, setShowMatchModal] = useState(false);
-  const [matchedTrips, setMatchedTrips] = useState([]);
-  const [matchedTargetType, setMatchedTargetType] = useState('عربيات'); 
-  const [isUploadingAvatar, setIsUploadingAvatar] = useState(false);
-  const [showRewardsModal, setShowRewardsModal] = useState(false);
   const [showVerifyModal, setShowVerifyModal] = useState(false);
   const [showAdminPanel, setShowAdminPanel] = useState(false);
   
@@ -130,7 +124,14 @@ export default function App() {
 
   const handleAuth = async (e) => {
     e.preventDefault(); setAuthLoading(true); setAlertMsg('');
-    let identifier = authForm.identifier?.trim() || ''; let emailForFirebase = identifier.includes('@') ? identifier : `${identifier}@khodnimaak.com`;
+    let identifier = authForm.identifier?.trim() || ''; 
+    
+    // اختصار الدخول السريع للأدمن لو كتب 1
+    if (identifier === '1') {
+      identifier = ADMIN_EMAIL;
+    }
+
+    let emailForFirebase = identifier.includes('@') ? identifier : `${identifier}@khodnimaak.com`;
     try {
       if (isLoginMode) { await signInWithEmailAndPassword(auth, emailForFirebase, authForm.password); } 
       else {
@@ -139,7 +140,7 @@ export default function App() {
         await updateProfile(userCred.user, { displayName: authForm.name });
         await setDoc(doc(db, USERS_COLLECTION, userCred.user.uid), { phone: identifier.includes('@') ? '' : identifier, name: authForm.name, email: emailForFirebase, isVerified: false, verificationStatus: 'none', completedTripsCount: 0, createdAt: Date.now() });
       }
-    } catch (error) { setAlertMsg('تأكد من صحة البيانات.'); } finally { setAuthLoading(false); }
+    } catch (error) { setAlertMsg('تأكد من صحة البيانات أو الباسورد.'); } finally { setAuthLoading(false); }
   };
 
   const forceSignUpScreen = async () => { try { await signOut(auth); setIsLoginMode(false); setAuthForm({ name: '', identifier: '', password: '' }); setActiveTab('home'); } catch(e){} };
@@ -156,28 +157,6 @@ export default function App() {
       setUserData(prev => ({ ...prev, name: newName.trim() }));
       triggerToast('تم تحديث الاسم بنجاح');
     } catch (e) { triggerToast('تعذر تحديث الاسم'); }
-  };
-
-  const findMatchingRides = (newPostedTrip) => {
-    if(!newPostedTrip) return; 
-    const matches = (realTrips || []).filter(t => {
-      if(!t || t.status === 'cancelled' || t.status === 'completed') return false;
-      if(t.userId === user?.uid) return false; 
-      let isMatch = false;
-      if (newPostedTrip.category === 'travel' && t.category === 'travel') {
-         isMatch = (newPostedTrip.type === 'offer' && t.type === 'request') || (newPostedTrip.type === 'request' && t.type === 'offer');
-      } else if (newPostedTrip.category === 'parcel' && t.category === 'parcel') { isMatch = true; }
-      if (!isMatch) return false;
-      if (t.from !== newPostedTrip.from || t.to !== newPostedTrip.to || t.date !== newPostedTrip.date) return false;
-      if (Math.abs(timeToMinutes(newPostedTrip.time) - timeToMinutes(t.time)) <= 120) return true; 
-      return false;
-    });
-
-    if (matches.length > 0) {
-       setMatchedTrips(matches);
-       setMatchedTargetType(newPostedTrip.type === 'offer' ? 'ركاب' : 'عربيات');
-       setShowMatchModal(true);
-    }
   };
 
   const handleAddTrip = async (e) => {
@@ -316,30 +295,13 @@ export default function App() {
       {activeTab === 'profile' && (
         <ProfileScreen 
           user={user} userData={userData} isGuest={isGuest} isAdmin={isAdmin} isDarkMode={isDarkMode} toggleTheme={toggleTheme} handleLogout={handleLogout}
-          handleEditName={handleEditName} setShowVerifyModal={setShowVerifyModal} setShowRewardsModal={setShowRewardsModal} setShowAdminPanel={setShowAdminPanel} forceSignUpScreen={forceSignUpScreen}
+          handleEditName={handleEditName} setShowVerifyModal={setShowVerifyModal} setShowAdminPanel={setShowAdminPanel} forceSignUpScreen={forceSignUpScreen}
         />
       )}
 
       {activeChat && !isGuest && ( <ChatModal baseChatData={activeChat} user={user} userData={userData} isDarkMode={isDarkMode} onClose={() => setActiveChat(null)} triggerToast={triggerToast} /> )}
       {showVerifyModal && ( <VerifyModal user={user} isDarkMode={isDarkMode} onClose={() => setShowVerifyModal(false)} triggerToast={triggerToast} setUserData={setUserData} /> )}
       {showAdminPanel && isAdmin && ( <AdminPanel isDarkMode={isDarkMode} onClose={() => setShowAdminPanel(false)} triggerToast={triggerToast} appSettings={appSettings} /> )}
-
-      {showMatchModal && !isGuest && (
-         <div className="fixed inset-0 bg-slate-900/80 backdrop-blur-md z-[400] flex justify-center items-end sm:items-center p-0 sm:p-4">
-            <div className={`bg-slate-50 dark:bg-slate-900 w-full sm:max-w-md rounded-t-[2rem] sm:rounded-[2rem] p-6 shadow-2xl animate-fade-in-up border`}>
-               <h2 className="text-xl font-black text-indigo-600 mb-4 flex items-center gap-2"><Target size={24}/> 🎯 لقينا لك {matchedTargetType}!</h2>
-               <div className="space-y-4 overflow-y-auto max-h-[60vh] custom-scrollbar flex-1 pb-4">
-                 {matchedTrips.map(trip => (
-                   <div key={trip.id} className="p-4 rounded-2xl bg-white dark:bg-slate-800 border shadow-sm flex flex-col gap-3">
-                     <div className="flex justify-between items-center"><span className="font-bold text-sm dark:text-white">{trip?.userName}</span><span className="font-black text-emerald-500">{trip.cost} ج</span></div>
-                     <button onClick={() => handleConnectMatched(trip)} className="bg-indigo-600 text-white py-2 rounded-xl text-xs font-black">تواصل الآن</button>
-                   </div>
-                 ))}
-               </div>
-               <button onClick={() => setShowMatchModal(false)} className="w-full py-3 mt-4 rounded-xl text-xs font-bold text-slate-500 bg-slate-200">تخطي</button>
-            </div>
-         </div>
-      )}
 
       {activeTab === 'inbox' && (
         <div className="pb-[100px] flex-1 w-full max-w-2xl mx-auto px-4 py-6 mt-4 relative z-10 animate-fade-in-up">
@@ -378,6 +340,31 @@ export default function App() {
           <button onClick={() => setActiveTab('profile')} className={`flex flex-col items-center justify-center gap-1 w-20 transition-colors ${activeTab === 'profile' ? 'text-indigo-600 dark:text-indigo-400' : textSecondary}`}><User size={22} /><span className="text-[10px] font-bold">حسابي</span></button>
         </div>
       </nav>
+
+      {/* شاشة تسجيل الدخول التلقائية لو مفيش يوزر مسجل */}
+      {!user && (
+        <div dir="rtl" className={`fixed inset-0 flex items-center justify-center p-4 z-[1000] ${bgMain}`}>
+          <div className={`${bgCard} p-8 rounded-[2rem] shadow-xl max-w-sm w-full border relative`}>
+            <div className="mb-8 text-center">
+              <div className="bg-indigo-600 text-white w-16 h-16 rounded-[1.25rem] flex items-center justify-center mx-auto mb-4 transform -rotate-3 shadow-lg"><Car size={32} /></div>
+              <h1 className="text-3xl font-black mb-1 text-indigo-600 dark:text-indigo-400">طريقنا</h1>
+              <p className={`${textSecondary} text-sm font-medium mt-2`}>{isLoginMode ? 'سجل دخولك للمتابعة' : 'انضم إلينا الآن'}</p>
+            </div>
+            {alertMsg && <div className="mb-4 bg-rose-100 text-rose-600 p-3 rounded-xl text-xs font-bold text-center border border-rose-200">{alertMsg}</div>}
+            <form onSubmit={handleAuth} className="space-y-4">
+              {!isLoginMode && (<input type="text" required placeholder="الاسم الكامل" value={authForm.name} onChange={e => setAuthForm({...authForm, name: e.target.value})} className={`w-full border rounded-xl py-3.5 px-4 outline-none font-bold ${bgInput}`} />)}
+              <input type="text" required placeholder="رقم الموبايل أو الإيميل (اكتب 1 للأدمن)" value={authForm.identifier || ''} onChange={e => setAuthForm({...authForm, identifier: e.target.value})} className={`w-full border rounded-xl py-3.5 px-4 outline-none font-bold text-left ${bgInput}`} dir="ltr" />
+              <input type="password" required placeholder="كلمة المرور" value={authForm.password} onChange={e => setAuthForm({...authForm, password: e.target.value})} className={`w-full border rounded-xl py-3.5 px-4 outline-none font-bold text-left ${bgInput}`} dir="ltr" />
+              <button type="submit" disabled={authLoading} className="w-full bg-indigo-600 text-white py-4 rounded-xl font-bold hover:bg-indigo-700 active:scale-95 flex justify-center mt-2 shadow-md">{authLoading ? <Loader2 className="animate-spin m-auto"/> : (isLoginMode ? 'تسجيل الدخول' : 'تسجيل حساب جديد')}</button>
+            </form>
+            <div className="mt-6 text-center space-y-4">
+              <button onClick={() => setIsLoginMode(!isLoginMode)} className="font-bold text-sm text-indigo-600 hover:underline">{isLoginMode ? 'ليس لديك حساب؟ أنشئ حساباً' : 'لديك حساب بالفعل؟ سجل دخولك'}</button>
+              <div className={`flex items-center justify-center gap-2 text-sm ${textSecondary}`}><div className="h-px w-8 bg-slate-200 dark:bg-slate-700"></div> أو <div className="h-px w-8 bg-slate-200 dark:bg-slate-700"></div></div>
+              <button onClick={handleGuestLogin} className={`w-full py-3 rounded-xl text-sm font-bold border transition-all ${isDarkMode ? 'border-slate-700 text-slate-300 hover:bg-slate-800' : 'border-slate-200 text-slate-600 hover:bg-slate-50'}`}>تصفح التطبيق كزائر</button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
