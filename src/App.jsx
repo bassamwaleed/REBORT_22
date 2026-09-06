@@ -1,10 +1,10 @@
 import React, { useState, useEffect } from 'react';
 import { onAuthStateChanged, signInWithEmailAndPassword, createUserWithEmailAndPassword, signInAnonymously, updateProfile, signOut } from 'firebase/auth';
-import { collection, onSnapshot, doc, getDoc, setDoc, addDoc, updateDoc, serverTimestamp, increment } from 'firebase/firestore';
-import { Loader2, Car, MessageCircle, User, Home, CheckCircle2, Plus, X, Lock } from 'lucide-react';
+import { collection, onSnapshot, doc, getDoc, setDoc, addDoc, updateDoc, serverTimestamp, increment, writeBatch, query, where, getDocs } from 'firebase/firestore';
+import { Loader2, Car, MessageCircle, User, Home, CheckCircle2, Plus, X, Lock, MapPin } from 'lucide-react';
 
 import { auth, db, APP_COLLECTION_NAME, USERS_COLLECTION, STATIONS_COLLECTION, ADMIN_EMAIL } from './firebase';
-import { safeMillis, EGYPT_CITIES } from './utils/helpers';
+import { safeMillis, EGYPT_CITIES, useEgyptianLocation } from './utils/helpers';
 
 import HomeScreen from './screens/HomeScreen';
 import ProfileScreen from './screens/ProfileScreen';
@@ -55,6 +55,9 @@ export default function App() {
   const [isSubmitting, setIsSubmitting] = useState(false);
   
   const triggerToast = (msg) => { setToastMsg(msg); setTimeout(() => setToastMsg(''), 3500); };
+
+  // استخدام Custom Hook بتاع التحديد التلقائي
+  const { getMyCity, isLocating, locationError, setLocationError } = useEgyptianLocation();
 
   useEffect(() => {
     const unsubscribe = onAuthStateChanged(auth, async (currentUser) => {
@@ -149,12 +152,26 @@ export default function App() {
   const handleEditName = async () => {
     const newName = prompt('أدخل الاسم الجديد:', userData?.name || '');
     if (!newName || !newName.trim()) return;
+    
     try {
       await updateDoc(doc(db, USERS_COLLECTION, user.uid), { name: newName.trim() });
       await updateProfile(auth.currentUser, { displayName: newName.trim() });
+      
+      const tripsQuery = query(collection(db, APP_COLLECTION_NAME), where('userId', '==', user.uid));
+      const querySnapshot = await getDocs(tripsQuery);
+      
+      const batch = writeBatch(db);
+      querySnapshot.forEach((tripDoc) => {
+        batch.update(tripDoc.ref, { userName: newName.trim() });
+      });
+      await batch.commit(); 
+
       setUserData(prev => ({ ...prev, name: newName.trim() }));
-      triggerToast('تم تحديث الاسم بنجاح');
-    } catch (e) { triggerToast('تعذر تحديث الاسم'); }
+      triggerToast('تم تحديث الاسم في حسابك وفي جميع رحلاتك السابقة بنجاح');
+    } catch (e) { 
+      console.error(e);
+      triggerToast('تعذر تحديث الاسم'); 
+    }
   };
 
   const handleAddTrip = async (e) => {
@@ -176,65 +193,57 @@ export default function App() {
   };
 
   const openChatFromTrip = async (trip) => {
-    if (!trip || !trip.userId || !trip.id) {
-      triggerToast('بيانات الرحلة غير مكتملة، لا يمكن التنسيق.');
+    if (!trip || typeof trip !== 'object' || !trip.userId || !trip.id) {
+      triggerToast('عذراً، بيانات هذه الرحلة غير مكتملة أو بها خلل.');
       return; 
     }
     
-    if (isGuest || !user) return forceSignUpScreen(); 
-    if (user.uid === trip.userId) return triggerToast('هذه رحلتك الخاصة!');
+    if (isGuest || !user) { forceSignUpScreen(); return; }
+    if (user.uid === trip.userId) { triggerToast('هذه رحلتك الخاصة!'); return; }
     
-    const user1 = user.uid < trip.userId ? user.uid : trip.userId;
-    const user2 = user.uid < trip.userId ? trip.userId : user.uid;
-    const chatId = `${trip.id}_${user1}_${user2}`;
-    
-    const safeFrom = trip.from || 'مكان غير محدد';
-    const safeTo = trip.to || 'مكان غير محدد';
-    const tripRouteName = `${safeFrom} ➔ ${safeTo}`;
-
-    const chatDataMe = { 
-      chatId: chatId, 
-      tripId: trip.id, 
-      tripType: trip.type || 'offer', 
-      tripOwnerId: trip.userId, 
-      otherPersonId: trip.userId, 
-      otherPersonName: trip.userName || 'مستخدم', 
-      otherPersonPhoto: trip.userPhoto || null, 
-      otherPersonVerified: trip.verified || false, 
-      tripInfo: tripRouteName 
-    };
-    
-    const chatDataOther = { 
-      chatId: chatId, 
-      tripId: trip.id, 
-      tripType: trip.type || 'offer', 
-      tripOwnerId: trip.userId, 
-      otherPersonId: user.uid, 
-      otherPersonName: userData?.name || 'مستخدم', 
-      otherPersonPhoto: userData?.photoURL || null, 
-      otherPersonVerified: userData?.isVerified || false, 
-      tripInfo: tripRouteName 
-    };
-
-    setActiveChat(chatDataMe); 
-
     try {
+      const user1 = user.uid < trip.userId ? user.uid : trip.userId;
+      const user2 = user.uid < trip.userId ? trip.userId : user.uid;
+      const chatId = `${user1}_${user2}`;
+      
+      const safeFrom = trip.from ? String(trip.from) : 'مكان غير محدد';
+      const safeTo = trip.to ? String(trip.to) : 'مكان غير محدد';
+      const tripRouteName = `${safeFrom} ➔ ${safeTo}`;
+      
+      const safeTripType = trip.type ? String(trip.type) : 'offer';
+      const safeUserName = trip.userName ? String(trip.userName) : 'مستخدم';
+      const safeMyName = userData?.name ? String(userData.name) : 'مستخدم';
+      const safeUserPhoto = trip.userPhoto || null;
+      const safeMyPhoto = userData?.photoURL || null;
+      const safeUserVerified = Boolean(trip.verified);
+      const safeMyVerified = Boolean(userData?.isVerified);
+
+      const chatDataMe = { chatId: chatId, tripId: trip.id, tripType: safeTripType, tripOwnerId: trip.userId, otherPersonId: trip.userId, otherPersonName: safeUserName, otherPersonPhoto: safeUserPhoto, otherPersonVerified: safeUserVerified, tripInfo: tripRouteName };
+      const chatDataOther = { chatId: chatId, tripId: trip.id, tripType: safeTripType, tripOwnerId: trip.userId, otherPersonId: user.uid, otherPersonName: safeMyName, otherPersonPhoto: safeMyPhoto, otherPersonVerified: safeMyVerified, tripInfo: tripRouteName };
+
+      setActiveChat(chatDataMe); 
+
       await setDoc(doc(db, `inbox_${user.uid}`, chatId), { ...chatDataMe, createdAt: serverTimestamp(), requestStatus: 'none' }, { merge: true });
       await setDoc(doc(db, `inbox_${trip.userId}`, chatId), { ...chatDataOther, createdAt: serverTimestamp(), requestStatus: 'none' }, { merge: true });
     } catch (err) {
       console.error("Chat Creation Error:", err);
-      triggerToast('حدث مشكلة في الشبكة أثناء فتح الشات.');
+      triggerToast('حدث خطأ في النظام أثناء محاولة فتح الشات.');
+      setActiveChat(null); 
     }
   };
 
   const handleTripAction = async (chatInfo, actionType) => {
-    if (!chatInfo || !chatInfo.chatId || !user) return;
+    if (!chatInfo || typeof chatInfo !== 'object' || !chatInfo.chatId || !user) return;
     try {
       const chatId = chatInfo.chatId;
       let newStatus = ''; let systemText = '';
 
-      if (actionType === 'request') { newStatus = 'pending'; systemText = 'قام بإرسال طلب للتنسيق 🙋‍♂️'; } 
-      else if (actionType === 'cancel_request') { newStatus = 'none'; systemText = 'قام بإلغاء الطلب 🔙'; } 
+      const myName = userData?.name?.split(' ')[0] || 'مستخدم';
+      const otherName = chatInfo.otherPersonName?.split(' ')[0] || 'مستخدم';
+      const ownerName = chatInfo.tripOwnerId === user.uid ? myName : otherName;
+
+      if (actionType === 'request') { newStatus = 'pending'; systemText = `قام ${myName} بطلب الانضمام لرحلة (${chatInfo.tripInfo}) الخاصة بـ ${ownerName} 🙋‍♂️`; } 
+      else if (actionType === 'cancel_request') { newStatus = 'none'; systemText = `قام ${myName} بإلغاء الطلب 🔙`; } 
       else if (actionType === 'accept') { newStatus = 'accepted'; systemText = 'تم قبول طلبك! سيتم التواصل معك 🚗'; } 
       else if (actionType === 'reject') { newStatus = 'rejected'; systemText = 'عذراً، تم رفض الطلب ❌'; } 
       else if (actionType === 'start_moving') { newStatus = 'moving'; systemText = 'تنبيه: الكابتن في الطريق 🚙'; } 
@@ -256,8 +265,16 @@ export default function App() {
       const updateDataOther = { ...updateDataMe };
 
       if (actionType === 'request') { 
-         updateDataMe.requestSenderId = user.uid; updateDataOther.requestSenderId = user.uid; 
-         updateDataOther.tripId = chatInfo.tripId; updateDataOther.tripType = chatInfo.tripType; updateDataOther.tripOwnerId = chatInfo.tripOwnerId; updateDataOther.tripInfo = chatInfo.tripInfo; updateDataOther.otherPersonId = user.uid; updateDataOther.otherPersonName = userData?.name || 'مستخدم'; updateDataOther.otherPersonPhoto = userData?.photoURL || null; updateDataOther.otherPersonVerified = userData?.isVerified || false;
+         updateDataMe.requestSenderId = user.uid; 
+         updateDataOther.requestSenderId = user.uid; 
+         updateDataOther.tripId = chatInfo.tripId || ''; 
+         updateDataOther.tripType = chatInfo.tripType || 'offer'; 
+         updateDataOther.tripOwnerId = chatInfo.tripOwnerId || ''; 
+         updateDataOther.tripInfo = chatInfo.tripInfo || 'رحلة'; 
+         updateDataOther.otherPersonId = user.uid; 
+         updateDataOther.otherPersonName = userData?.name || 'مستخدم'; 
+         updateDataOther.otherPersonPhoto = userData?.photoURL || null; 
+         updateDataOther.otherPersonVerified = Boolean(userData?.isVerified);
       }
       if (actionType === 'cancel_request') { updateDataMe.requestSenderId = null; updateDataOther.requestSenderId = null; }
       if (actionType === 'accept') { updateDataMe.tripStartTime = serverTimestamp(); updateDataOther.tripStartTime = serverTimestamp(); }
@@ -341,7 +358,20 @@ export default function App() {
                 </div>
 
                 <div className="space-y-2">
-                  <label className="text-[10px] font-bold text-slate-500 px-1">نقطة الانطلاق</label>
+                  <div className="flex justify-between items-center px-1">
+                    <label className="text-[10px] font-bold text-slate-500">نقطة الانطلاق</label>
+                    <button 
+                      type="button" 
+                      onClick={() => getMyCity((locationData) => setNewTrip({...newTrip, from: locationData.city, fromDetails: locationData.details}))} 
+                      disabled={isLocating} 
+                      className="text-[10px] font-bold text-indigo-600 dark:text-indigo-400 flex items-center gap-1 hover:underline bg-indigo-50 dark:bg-indigo-900/30 px-2 py-0.5 rounded-lg"
+                    >
+                      {isLocating ? <Loader2 size={12} className="animate-spin"/> : <MapPin size={12}/>} 
+                      تحديد تلقائي
+                    </button>
+                  </div>
+                  {locationError && <p className="text-[10px] text-rose-500 px-1">{locationError}</p>}
+                  
                   <select required value={newTrip.from} onChange={e => setNewTrip({...newTrip, from: e.target.value})} className={`w-full p-3.5 rounded-xl border font-bold text-sm outline-none ${bgInput}`}><option value="" disabled>محافظة التحرك *</option>{EGYPT_CITIES.map(c => <option key={c} value={c}>{c}</option>)}</select>
                   <input type="text" placeholder="مكان التحرك بالتفصيل (مثال: الحصري، شارع 75)" value={newTrip.fromDetails} onChange={e => setNewTrip({...newTrip, fromDetails: e.target.value})} className={`w-full p-3.5 rounded-xl border font-medium text-xs outline-none ${bgInput}`}/>
                 </div>
@@ -451,7 +481,7 @@ export default function App() {
       )}
 
       <nav className={`fixed bottom-0 w-full z-[100] border-t ${isDarkMode ? 'bg-slate-950 border-slate-800' : 'bg-white border-slate-100'} pointer-events-auto`}>
-        <div className="flex justify-around items-center h-[70px] w-full max-w-md mx-auto px-2 pb-2">
+        <div className="flex justify-around items-center h-[70px] w-full max-w-md md:max-w-2xl mx-auto px-2 pb-2">
           <button onClick={() => setActiveTab('home')} className={`flex flex-col items-center justify-center gap-1 w-20 transition-colors ${activeTab === 'home' ? 'text-indigo-600 dark:text-indigo-400' : textSecondary}`}><Home size={22} /><span className="text-[10px] font-bold">الرئيسية</span></button>
           <button onClick={() => setActiveTab('inbox')} className={`flex flex-col items-center justify-center gap-1 w-20 relative transition-colors ${activeTab === 'inbox' ? 'text-indigo-600 dark:text-indigo-400' : textSecondary}`}>
             <div className="relative"><MessageCircle size={22} />{(myInbox || []).length > 0 && !isGuest && <span className="absolute -top-1 -right-1 w-2.5 h-2.5 bg-rose-500 rounded-full border-2 border-white dark:border-slate-900"></span>}</div><span className="text-[10px] font-bold">الرسائل</span>
@@ -470,8 +500,8 @@ export default function App() {
             </div>
             {alertMsg && <div className="mb-4 bg-rose-100 text-rose-600 p-3 rounded-xl text-xs font-bold text-center border border-rose-200">{alertMsg}</div>}
             <form onSubmit={handleAuth} className="space-y-4">
-              {!isLoginMode && (<input type="text" required placeholder="الاسم الكامل" value={authForm.name} onChange={e => setAuthForm({...authForm, name: e.target.value})} className={`w-full border rounded-xl py-3.5 px-4 outline-none font-bold ${bgInput}`} />)}
-              <input type="text" required placeholder="رقم الموبايل أو الإيميل (اكتب 1 للأدمن)" value={authForm.identifier || ''} onChange={e => setAuthForm({...authForm, identifier: e.target.value})} className={`w-full border rounded-xl py-3.5 px-4 outline-none font-bold text-left ${bgInput}`} dir="ltr" />
+              {!isLoginMode && (<input type="text" required placeholder="ادخل الاسم  " value={authForm.name} onChange={e => setAuthForm({...authForm, name: e.target.value})} className={`w-full border rounded-xl py-3.5 px-4 outline-none font-bold ${bgInput}`} />)}
+              <input type="text" required placeholder="رقم الموبايل أو الإيميل" value={authForm.identifier || ''} onChange={e => setAuthForm({...authForm, identifier: e.target.value})} className={`w-full border rounded-xl py-3.5 px-4 outline-none font-bold text-left ${bgInput}`} dir="ltr" />
               <input type="password" required placeholder="كلمة المرور" value={authForm.password} onChange={e => setAuthForm({...authForm, password: e.target.value})} className={`w-full border rounded-xl py-3.5 px-4 outline-none font-bold text-left ${bgInput}`} dir="ltr" />
               <button type="submit" disabled={authLoading} className="w-full bg-indigo-600 text-white py-4 rounded-xl font-bold hover:bg-indigo-700 active:scale-95 flex justify-center mt-2 shadow-md">{authLoading ? <Loader2 className="animate-spin m-auto"/> : (isLoginMode ? 'تسجيل الدخول' : 'تسجيل حساب جديد')}</button>
             </form>
