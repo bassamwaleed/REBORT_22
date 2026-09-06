@@ -9,7 +9,7 @@ const TripCard = ({ trip, user, isAdmin, isDarkMode, openChatFromTrip, triggerTo
 
   const isOwner = user?.uid === trip.userId;
   const isVerified = trip?.verified;
-  const isCompleted = trip?.status === 'completed'; // فحص إذا كانت الرحلة مكتملة
+  const isCompleted = trip?.status === 'completed'; 
   
   const textPrimary = isDarkMode ? 'text-white' : 'text-slate-900';
   const textSecondary = isDarkMode ? 'text-slate-400' : 'text-slate-500';
@@ -42,7 +42,6 @@ const TripCard = ({ trip, user, isAdmin, isDarkMode, openChatFromTrip, triggerTo
       onClick={() => !isOwner && !isCompleted && openChatFromTrip(trip)}
       className={`p-4 sm:p-5 rounded-[1.5rem] border shadow-[0_2px_12px_rgba(0,0,0,0.03)] hover:shadow-md hover:border-indigo-500/50 transition-all flex flex-col gap-3 relative cursor-pointer ${bgCard} mb-4 group`} 
     >
-      {/* القسم العلوي: السائق والسعر */}
       <div className="flex justify-between items-start relative z-10">
          <div className="flex items-center gap-3">
            {trip?.userPhoto ? (
@@ -86,7 +85,6 @@ const TripCard = ({ trip, user, isAdmin, isDarkMode, openChatFromTrip, triggerTo
          </div>
       </div>
 
-      {/* القسم الأوسط: مسار الرحلة والتفاصيل */}
       <div className={`p-3 rounded-xl border flex flex-col gap-2 relative z-10 ${isDarkMode ? 'bg-slate-800/60 border-slate-700 group-hover:bg-slate-800' : 'bg-slate-50 border-slate-100 group-hover:bg-slate-100'} transition-colors`}>
          <div className="flex items-center gap-2 flex-wrap">
            <span className={`text-sm font-black ${textPrimary}`}>{trip?.from || 'غير محدد'}</span>
@@ -102,7 +100,6 @@ const TripCard = ({ trip, user, isAdmin, isDarkMode, openChatFromTrip, triggerTo
          )}
       </div>
 
-      {/* القسم السفلي: التوقيت وإمكانية التحول لـ رحلة مكتملة بأثر رجعي */}
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 mt-1 relative z-10 pointer-events-none">
          <div className="flex items-center gap-3">
            <div className={`flex items-center gap-1.5 text-xs font-bold ${textSecondary}`}>
@@ -114,7 +111,6 @@ const TripCard = ({ trip, user, isAdmin, isDarkMode, openChatFromTrip, triggerTo
            </div>
          </div>
          
-         {/* التعديل هنا: لو الرحلة مكتملة بيظهر بانر مكتملة بدل زرار التنسيق، وشغال بأثر رجعي للرحلات القديمة */}
          {!isOwner && ( 
            isCompleted ? (
              <div className="w-full sm:w-auto bg-emerald-50 dark:bg-emerald-900/20 text-emerald-600 dark:text-emerald-400 px-4 py-2 rounded-xl text-xs font-black flex items-center justify-center gap-1.5 border border-emerald-200 dark:border-emerald-800">
