@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { collection, onSnapshot, addDoc, doc, setDoc, serverTimestamp } from 'firebase/firestore';
-import { ChevronLeft, Users, User, Loader2, Send, MapPin, ShieldAlert, CheckCircle2 } from 'lucide-react';
+import { ChevronLeft, Users, User, Loader2, Send, MapPin, ShieldAlert, CheckCircle2, MessageCircle } from 'lucide-react';
 
 import { db } from '../firebase';
 import { safeMillis } from '../utils/helpers';
@@ -89,7 +89,7 @@ const ChatModal = ({ baseChatData, user, userData, isDarkMode, onClose, triggerT
 
   return (
     <div className="fixed inset-0 bg-slate-900/95 backdrop-blur-md z-[400] flex justify-center items-end sm:items-center p-0 sm:p-4 pointer-events-auto">
-      <div className={`bg-white dark:bg-slate-900 w-full h-[90vh] sm:h-[650px] sm:max-w-md rounded-t-[2rem] sm:rounded-[2rem] shadow-2xl flex flex-col overflow-hidden animate-fade-in-up relative border dark:border-slate-700`}>
+      <div className={`bg-white dark:bg-slate-900 w-full h-[90vh] sm:h-[650px] sm:max-w-md md:max-w-2xl rounded-t-[2rem] sm:rounded-[2rem] shadow-2xl flex flex-col overflow-hidden animate-fade-in-up relative border dark:border-slate-700`}>
         
         <div className={`text-white p-4 flex items-center gap-3 shadow-md z-20 ${liveChatInfo?.isGroup ? 'bg-purple-600' : 'bg-indigo-600'}`}>
           <button onClick={onClose} className="p-2 rounded-full hover:bg-black/20 transition-colors"><ChevronLeft size={24} /></button>
