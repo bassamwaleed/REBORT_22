@@ -1,6 +1,6 @@
 import React from 'react';
 import { doc, deleteDoc } from 'firebase/firestore';
-import { Trash2, Share2, User, ShieldCheck, Star, ArrowLeft, Clock, Car, MapPin, Package } from 'lucide-react';
+import { Trash2, Share2, User, ShieldCheck, Star, ArrowLeft, Clock, Car, MapPin, Package, CheckCircle2 } from 'lucide-react';
 import { db, APP_COLLECTION_NAME } from '../firebase';
 import { formatTripDateTime, getSeatsText } from '../utils/helpers';
 
@@ -9,12 +9,12 @@ const TripCard = ({ trip, user, isAdmin, isDarkMode, openChatFromTrip, triggerTo
 
   const isOwner = user?.uid === trip.userId;
   const isVerified = trip?.verified;
+  const isCompleted = trip?.status === 'completed'; // فحص إذا كانت الرحلة مكتملة
   
   const textPrimary = isDarkMode ? 'text-white' : 'text-slate-900';
   const textSecondary = isDarkMode ? 'text-slate-400' : 'text-slate-500';
   const bgCard = isDarkMode ? 'bg-slate-900 border-slate-800' : 'bg-white border-slate-200';
   
-  // فحص السعر بمرونة من أكثر من حقل لتفادي خطأ الاختفاء
   const price = trip.cost || trip.price || trip.fare || 'غير محدد';
 
   const handleDelete = async (e) => {
@@ -39,7 +39,7 @@ const TripCard = ({ trip, user, isAdmin, isDarkMode, openChatFromTrip, triggerTo
 
   return (
     <div 
-      onClick={() => !isOwner && openChatFromTrip(trip)}
+      onClick={() => !isOwner && !isCompleted && openChatFromTrip(trip)}
       className={`p-4 sm:p-5 rounded-[1.5rem] border shadow-[0_2px_12px_rgba(0,0,0,0.03)] hover:shadow-md hover:border-indigo-500/50 transition-all flex flex-col gap-3 relative cursor-pointer ${bgCard} mb-4 group`} 
     >
       {/* القسم العلوي: السائق والسعر */}
@@ -102,7 +102,7 @@ const TripCard = ({ trip, user, isAdmin, isDarkMode, openChatFromTrip, triggerTo
          )}
       </div>
 
-      {/* القسم السفلي: التوقيت والإجراء */}
+      {/* القسم السفلي: التوقيت وإمكانية التحول لـ رحلة مكتملة بأثر رجعي */}
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 mt-1 relative z-10 pointer-events-none">
          <div className="flex items-center gap-3">
            <div className={`flex items-center gap-1.5 text-xs font-bold ${textSecondary}`}>
@@ -114,10 +114,17 @@ const TripCard = ({ trip, user, isAdmin, isDarkMode, openChatFromTrip, triggerTo
            </div>
          </div>
          
+         {/* التعديل هنا: لو الرحلة مكتملة بيظهر بانر مكتملة بدل زرار التنسيق، وشغال بأثر رجعي للرحلات القديمة */}
          {!isOwner && ( 
-           <button className="w-full sm:w-auto bg-indigo-600 text-white px-5 py-2.5 rounded-xl text-xs font-black shadow-md hover:bg-indigo-700 active:scale-95 transition-all relative z-20 pointer-events-auto">
-             تواصل وتنسيق المشوار 💬
-           </button> 
+           isCompleted ? (
+             <div className="w-full sm:w-auto bg-emerald-50 dark:bg-emerald-900/20 text-emerald-600 dark:text-emerald-400 px-4 py-2 rounded-xl text-xs font-black flex items-center justify-center gap-1.5 border border-emerald-200 dark:border-emerald-800">
+               <CheckCircle2 size={14}/> رحلة مكتملة ✅
+             </div>
+           ) : (
+             <button className="w-full sm:w-auto bg-indigo-600 text-white px-5 py-2.5 rounded-xl text-xs font-black shadow-md hover:bg-indigo-700 active:scale-95 transition-all relative z-20 pointer-events-auto">
+               تواصل وتنسيق المشوار 💬
+             </button> 
+           )
          )}
       </div>
     </div>
