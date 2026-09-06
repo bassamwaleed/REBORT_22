@@ -4,7 +4,7 @@ import { ChevronLeft, Users, User, Loader2, Send, MapPin, ShieldAlert, CheckCirc
 
 import { db } from '../firebase';
 import { safeMillis } from '../utils/helpers';
-
+ 
 const ChatModal = ({ baseChatData, user, userData, isDarkMode, onClose, triggerToast, handleTripAction }) => {
   const [messages, setMessages] = useState([]);
   const [newMessage, setNewMessage] = useState('');
