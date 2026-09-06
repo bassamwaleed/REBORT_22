@@ -1,3 +1,5 @@
+import { useState } from 'react';
+
 export const CITY_COORDS = {
   "القاهرة": [30.0444, 31.2357], "الجيزة": [30.0131, 31.2089], "الإسكندرية": [31.2001, 29.9187],
   "القليوبية": [30.4067, 31.1849], "المنوفية": [30.5972, 30.9876], "الغربية": [30.8754, 31.0335],
@@ -56,7 +58,7 @@ export const formatTripDateTime = (dateStr, timeStr) => {
 
     let ampm = hours >= 12 ? "م" : "ص";
     hours = hours % 12;
-    hours = hours ? hours : 12; // تحويل 0 إلى 12
+    hours = hours ? hours : 12;
 
     const minStr = minutes < 10 ? '0' + minutes : minutes;
 
@@ -100,4 +102,110 @@ export const resizeAndConvertToBase64 = (file, maxWidth = 800, maxHeight = 800, 
       reader.onerror = reject;
     } catch (err) { reject(err); }
   });
+};
+
+// ==========================================
+// Custom Hook: Geolocation to Egyptian City + Detailed Address
+// ==========================================
+export const useEgyptianLocation = () => {
+  const [isLocating, setIsLocating] = useState(false);
+  const [locationError, setLocationError] = useState('');
+
+  const mapApiStateToEgyptCities = (apiStateName) => {
+    if (!apiStateName) return null;
+    const cleanName = apiStateName.replace('محافظة', '').trim();
+    
+    if (cleanName.includes('القاهرة')) return 'القاهرة';
+    if (cleanName.includes('الجيزة')) return 'الجيزة';
+    if (cleanName.includes('الاسكندرية') || cleanName.includes('الإسكندرية')) return 'الإسكندرية';
+    if (cleanName.includes('الشرقية')) return 'الشرقية';
+    if (cleanName.includes('الغربية')) return 'الغربية';
+    if (cleanName.includes('الدقهلية')) return 'الدقهلية';
+    if (cleanName.includes('القليوبية')) return 'القليوبية';
+    if (cleanName.includes('البحيرة')) return 'البحيرة';
+    if (cleanName.includes('المنوفية')) return 'المنوفية';
+    if (cleanName.includes('كفر الشيخ')) return 'كفر الشيخ';
+    if (cleanName.includes('دمياط')) return 'دمياط';
+    if (cleanName.includes('بورسعيد')) return 'بورسعيد';
+    if (cleanName.includes('الإسماعيلية')) return 'الإسماعيلية';
+    if (cleanName.includes('السويس')) return 'السويس';
+    if (cleanName.includes('مطروح')) return 'مطروح';
+    if (cleanName.includes('البحر الأحمر')) return 'البحر الأحمر';
+    if (cleanName.includes('الفيوم')) return 'الفيوم';
+    if (cleanName.includes('بني سويف')) return 'بني سويف';
+    if (cleanName.includes('المنيا')) return 'المنيا';
+    if (cleanName.includes('أسيوط')) return 'أسيوط';
+    if (cleanName.includes('سوهاج')) return 'سوهاج';
+    if (cleanName.includes('قنا')) return 'قنا';
+    if (cleanName.includes('الأقصر')) return 'الأقصر';
+    if (cleanName.includes('أسوان')) return 'أسوان';
+    
+    return EGYPT_CITIES.find(city => cleanName.includes(city) || city.includes(cleanName)) || null;
+  };
+
+  const getMyCity = async (onSuccess) => {
+    if (!navigator.geolocation) {
+      setLocationError('متصفحك لا يدعم تحديد الموقع');
+      return;
+    }
+
+    setIsLocating(true);
+    setLocationError('');
+
+    navigator.geolocation.getCurrentPosition(
+      async (position) => {
+        const { latitude, longitude } = position.coords;
+        try {
+          // استدعاء واجهة برمجة التطبيقات للحصول على العنوان بالتفصيل بالعربي
+          const response = await fetch(`https://nominatim.openstreetmap.org/reverse?format=json&lat=${latitude}&lon=${longitude}&accept-language=ar`);
+          const data = await response.json();
+          
+          if (data && data.address) {
+            // استخراج المحافظة
+            const stateName = data.address.state || data.address.region || data.address.city; 
+            const matchedCity = mapApiStateToEgyptCities(stateName);
+
+            // استخراج التفاصيل الدقيقة (الشارع، الحي، أو المنطقة)
+            let detailedAddress = '';
+            
+            // نأخذ أهم التفاصيل المتاحة ونجمعها
+            const parts = [];
+            if (data.address.road) parts.push(data.address.road);
+            if (data.address.suburb) parts.push(data.address.suburb);
+            if (data.address.neighbourhood) parts.push(data.address.neighbourhood);
+            if (data.address.town && !parts.includes(data.address.town)) parts.push(data.address.town);
+            
+            // لو مفيش تفاصيل دقيقة، ناخد الاسم العام المعروض (مع حذف المحافظة والبلد عشان ميبقاش طويل جداً)
+            if (parts.length > 0) {
+              detailedAddress = parts.join('، ');
+            } else if (data.display_name) {
+              const nameArray = data.display_name.split('،');
+              detailedAddress = nameArray.slice(0, 2).join('،').trim(); // أول جزئين فقط
+            }
+
+            if (matchedCity) {
+              // بنبعت كائن فيه المحافظة والتفاصيل الدقيقة مع بعض
+              onSuccess({ city: matchedCity, details: detailedAddress });
+            } else {
+              setLocationError('لم نتمكن من مطابقة محافظتك بدقة.');
+            }
+          } else {
+             setLocationError('لم نتمكن من قراءة العنوان.');
+          }
+        } catch (err) {
+          setLocationError('حدث خطأ في جلب بيانات الخريطة.');
+        } finally {
+          setIsLocating(false);
+        }
+      },
+      (error) => {
+        setIsLocating(false);
+        if (error.code === 1) setLocationError('يرجى إعطاء صلاحية الموقع (Location).');
+        else setLocationError('تعذر تحديد موقعك الحالي.');
+      },
+      { timeout: 10000, enableHighAccuracy: true } // خليناها true هنا عشان نجيب الشارع بدقة
+    );
+  };
+
+  return { getMyCity, isLocating, locationError, setLocationError };
 };
