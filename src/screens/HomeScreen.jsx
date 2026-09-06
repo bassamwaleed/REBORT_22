@@ -38,20 +38,17 @@ const HomeScreen = ({
     return true;
   });
 
-  // حالة البانر المتحرك
   const [currentSlide, setCurrentSlide] = useState(0);
   const [touchStart, setTouchStart] = useState(null);
   const [touchEnd, setTouchEnd] = useState(null);
   const banners = Array.isArray(appSettings?.banners) ? appSettings.banners : (appSettings?.banner ? [appSettings.banner] : []);
 
-  // حالة إضافة موقف جديد
   const [showAddStation, setShowAddStation] = useState(false);
   const [newStationName, setNewStationName] = useState('');
   const [newStationLoc, setNewStationLoc] = useState('');
   const [newStationMapUrl, setNewStationMapUrl] = useState(''); 
   const [isSubmittingStation, setIsSubmittingStation] = useState(false);
 
-  // تشغيل البانر المتحرك تلقائياً
   useEffect(() => {
     if (banners.length <= 1) return;
     const interval = setInterval(() => {
@@ -72,7 +69,6 @@ const HomeScreen = ({
     if (distance < -50) prevSlide(); 
   };
 
-  // دالة حفظ الموقف الجديد
   const handleAddStation = async (e) => {
     e.preventDefault();
     if (isGuest || !user) return triggerToast('يجب تسجيل الدخول أولاً');
@@ -102,6 +98,28 @@ const HomeScreen = ({
     }
   };
 
+  // --- التعديل الجديد: دالة تفعيل التنبيه ---
+  const handleSetAlert = async () => {
+    if (isGuest || !user) return triggerToast('يجب تسجيل الدخول أولاً لتفعيل التنبيهات');
+    if (!filterFrom || !filterTo) return triggerToast('يرجى تحديد المحافظة والوجهة أولاً');
+
+    try {
+      await addDoc(collection(db, 'trip_alerts'), {
+        userId: user.uid,
+        userName: user.displayName || 'مستخدم',
+        from: filterFrom,
+        to: filterTo,
+        category: homeCategory,
+        createdAt: new Date(),
+        active: true 
+      });
+      triggerToast('تم تفعيل التنبيه بنجاح! هنبلغك أول ما رحلة تنزل 🔔');
+    } catch (error) {
+      triggerToast('حدث خطأ أثناء تفعيل التنبيه');
+    }
+  };
+  // ------------------------------------------
+
   const bgInput = isDarkMode ? 'bg-slate-800 border-slate-700 text-white placeholder-slate-400 focus:border-indigo-500' : 'bg-white border-slate-200 text-slate-900 focus:border-indigo-500';
   const textPrimary = isDarkMode ? 'text-white' : 'text-slate-900';
   const bgCard = isDarkMode ? 'bg-slate-900 border-slate-800' : 'bg-white border-slate-200';
@@ -122,7 +140,6 @@ const HomeScreen = ({
         }
       `}</style>
 
-      {/* 1. استرجاع البانر المتحرك والنص الإعلاني */}
       {viewMode === 'list' && (
         <div className="mb-6 animate-fade-in-up">
           {appSettings?.bannerText && (
@@ -155,7 +172,6 @@ const HomeScreen = ({
         </div>
       )}
 
-      {/* 2. أزرار التبديل والفلاتر */}
       <div className="flex justify-between items-center mb-6 pointer-events-auto relative z-10">
          <div className={`flex p-1 rounded-xl shadow-sm border ${isDarkMode ? 'bg-slate-900 border-slate-800' : 'bg-white/80 border-slate-200/60'}`}>
             <button onClick={() => setViewMode('list')} className={`p-2 rounded-lg transition-all flex items-center justify-center ${viewMode === 'list' ? 'bg-indigo-50 text-indigo-600 shadow-sm dark:bg-slate-800 dark:text-white' : 'text-slate-500'}`}><List size={18}/></button>
@@ -192,10 +208,10 @@ const HomeScreen = ({
             </div>
           )}
 
-          <div className="space-y-4">
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
              {homeCategory === 'stations' ? (
                <>
-                 <div className="flex gap-2 mb-4 h-12">
+                 <div className="flex gap-2 mb-4 h-12 col-span-1 md:col-span-2">
                    <div className={`flex-1 flex items-center gap-2 px-4 rounded-2xl border ${bgInput} h-full`}>
                      <Search size={18} className="text-slate-400 shrink-0" />
                      <input 
@@ -215,10 +231,10 @@ const HomeScreen = ({
                  </div>
 
                  {visibleStations.length === 0 ? (
-                   <div className={`text-center py-20 rounded-[2rem] border-2 border-dashed ${isDarkMode ? 'border-slate-800 bg-slate-900/50' : 'border-slate-200 bg-slate-50'}`}><BusFront size={40} className="mx-auto text-slate-300 mb-3"/><h3 className="font-bold text-slate-500">لا توجد مواقف مطابقة لبحثك</h3></div>
+                   <div className={`text-center py-20 rounded-[2rem] border-2 border-dashed col-span-1 md:col-span-2 ${isDarkMode ? 'border-slate-800 bg-slate-900/50' : 'border-slate-200 bg-slate-50'}`}><BusFront size={40} className="mx-auto text-slate-300 mb-3"/><h3 className="font-bold text-slate-500">لا توجد مواقف مطابقة لبحثك</h3></div>
                  ) : (
                    visibleStations.map(station => (
-                      <div key={station.id} onClick={() => setSelectedStation(station)} className={`station-card-wrapper relative overflow-hidden p-0 rounded-[1.5rem] border shadow-sm hover:shadow-xl cursor-pointer mb-5 transition-all duration-300 group ${bgCard}`}>
+                      <div key={station.id} onClick={() => setSelectedStation(station)} className={`station-card-wrapper relative overflow-hidden p-0 rounded-[1.5rem] border shadow-sm hover:shadow-xl cursor-pointer transition-all duration-300 group ${bgCard}`}>
                         
                         <div className="absolute top-0 right-0 w-32 h-32 bg-indigo-500/10 dark:bg-indigo-500/5 rounded-full blur-3xl -mr-10 -mt-10 pointer-events-none transition-all duration-500 group-hover:scale-150"></div>
 
@@ -301,7 +317,25 @@ const HomeScreen = ({
                </>
              ) : (
                visibleTrips.length === 0 ? (
-                 <div className={`text-center py-16 rounded-[2rem] border-2 border-dashed ${isDarkMode ? 'border-slate-800 bg-slate-900/50' : 'border-slate-200 bg-slate-50'}`}><Bell size={48} className="mx-auto text-indigo-400 mb-4 opacity-50"/><h3 className="font-bold text-lg text-slate-700 dark:text-slate-300 mb-2">لا توجد إعلانات في هذا المسار</h3></div>
+                 <div className={`text-center py-16 px-4 rounded-[2rem] border-2 border-dashed col-span-1 md:col-span-2 ${isDarkMode ? 'border-slate-800 bg-slate-900/50' : 'border-slate-200 bg-slate-50'}`}>
+                   <Bell size={48} className="mx-auto text-indigo-400 mb-4 opacity-50"/>
+                   <h3 className="font-bold text-lg text-slate-700 dark:text-slate-300 mb-2">لا توجد رحلات متاحة حالياً</h3>
+                   
+                   {/* التعديل الجديد: إظهار زر التنبيه لو مفيش نتائج */}
+                   {filterFrom && filterTo ? (
+                      <div className="mt-4 space-y-3 animate-fade-in-up">
+                         <p className="text-sm text-slate-500">فعل التنبيه وهنبعتلك إشعار فوراً أول ما حد ينزل رحلة من <span className="font-bold text-indigo-500">{filterFrom}</span> إلى <span className="font-bold text-indigo-500">{filterTo}</span></p>
+                         <button 
+                           onClick={handleSetAlert} 
+                           className="inline-flex items-center justify-center gap-2 bg-indigo-600 hover:bg-indigo-700 text-white font-bold py-2.5 px-6 rounded-xl transition-transform active:scale-95 shadow-md hover:shadow-lg"
+                         >
+                            <Bell size={18} className="animate-bounce" /> أعلمني عند توفر رحلة
+                         </button>
+                      </div>
+                   ) : (
+                      <p className="text-sm text-slate-500 mt-2">حدد "من المحافظة" و "إلى الوجهة" للبحث أو لتفعيل التنبيهات الذكية</p>
+                   )}
+                 </div>
                ) : (
                  visibleTrips.map(trip => <TripCard key={trip.id} trip={trip} user={user} isAdmin={isAdmin} isDarkMode={isDarkMode} openChatFromTrip={openChatFromTrip} triggerToast={triggerToast} />)
                )
@@ -314,7 +348,6 @@ const HomeScreen = ({
          <div className={`text-center py-20 rounded-[2rem] border-2 border-dashed mt-10 ${isDarkMode ? 'border-slate-800 bg-slate-900/50' : 'border-slate-200 bg-slate-50'}`}><MapPinned size={48} className="mx-auto text-slate-400 mb-4 opacity-50"/><h3 className="font-bold text-lg text-slate-700 dark:text-slate-300">الخريطة قيد التطوير...</h3></div>
       )}
 
-      {/* 3. نافذة إضافة الموقف المستقلة والمضمونة الظهور */}
       {showAddStation && (
         <div className="fixed inset-0 bg-slate-900/90 backdrop-blur-sm z-[999] flex justify-center items-center p-4 pointer-events-auto">
           <div className={`${bgCard} w-full max-w-sm rounded-[2rem] p-6 shadow-2xl flex flex-col border animate-fade-in-up dark:border-slate-700`}>
@@ -341,4 +374,4 @@ const HomeScreen = ({
   );
 };
 
-export default HomeScreen;
+export default HomeScreen;;
