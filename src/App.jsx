@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { onAuthStateChanged, signInWithEmailAndPassword, createUserWithEmailAndPassword, signInAnonymously, updateProfile, signOut } from 'firebase/auth';
 import { collection, onSnapshot, doc, getDoc, setDoc, addDoc, updateDoc, serverTimestamp, increment, writeBatch, query, where, getDocs } from 'firebase/firestore';
-import { Loader2, Car, MessageCircle, User, Home, CheckCircle2, Plus, X, Lock, MapPin } from 'lucide-react';
+import { Loader2, Car, MessageCircle, User, Home, CheckCircle2, Plus, X, Lock, MapPin, Bell } from 'lucide-react';
 
 import { auth, db, APP_COLLECTION_NAME, USERS_COLLECTION, STATIONS_COLLECTION, ADMIN_EMAIL } from './firebase';
 import { safeMillis, EGYPT_CITIES, useEgyptianLocation } from './utils/helpers';
@@ -37,6 +37,11 @@ export default function App() {
   const [myInbox, setMyInbox] = useState([]);
   const [appSettings, setAppSettings] = useState({ logo: null, banners: [], bannerText: '' });
   
+  // --- التعديل: متغيرات حالة الإشعارات ---
+  const [notifications, setNotifications] = useState([]);
+  const [showNotificationsModal, setShowNotificationsModal] = useState(false);
+  // ----------------------------------------
+
   const [selectedStation, setSelectedStation] = useState(null);
   const [activeChat, setActiveChat] = useState(null);
   
@@ -56,7 +61,6 @@ export default function App() {
   
   const triggerToast = (msg) => { setToastMsg(msg); setTimeout(() => setToastMsg(''), 3500); };
 
-  // استخدام Custom Hook بتاع التحديد التلقائي
   const { getMyCity, isLocating, locationError, setLocationError } = useEgyptianLocation();
 
   useEffect(() => {
@@ -77,7 +81,7 @@ export default function App() {
           }
         } else {
           setUser(null); setUserData(null); setIsGuest(false); setIsAdmin(false);
-          setMyInbox([]); setActiveChat(null); setRealTrips([]); 
+          setMyInbox([]); setActiveChat(null); setRealTrips([]); setNotifications([]);
         }
       } catch (e) {} finally { setLoading(false); }
     });
@@ -127,6 +131,19 @@ export default function App() {
     return () => unsubscribe();
   }, [user, isGuest]);
 
+  // --- التعديل: جلب الإشعارات من الداتا بيز ---
+  useEffect(() => {
+    if (!user || isGuest) return;
+    const q = query(collection(db, 'notifications'), where('userId', '==', user.uid));
+    const unsubscribe = onSnapshot(q, (snapshot) => {
+      const notifs = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+      notifs.sort((a, b) => safeMillis(b.createdAt) - safeMillis(a.createdAt));
+      setNotifications(notifs);
+    });
+    return () => unsubscribe();
+  }, [user, isGuest]);
+  // ----------------------------------------------
+
   const handleAuth = async (e) => {
     e.preventDefault(); setAuthLoading(true); setAlertMsg('');
     let identifier = authForm.identifier?.trim() || ''; 
@@ -147,7 +164,7 @@ export default function App() {
   const forceSignUpScreen = async () => { try { await signOut(auth); setIsLoginMode(false); setAuthForm({ name: '', identifier: '', password: '' }); setActiveTab('home'); } catch(e){} };
   const handleGuestLogin = async () => { setAuthLoading(true); try { await signInAnonymously(auth); } catch (error) {} finally { setAuthLoading(false); } };
   const toggleTheme = () => { const newTheme = !isDarkMode; setIsDarkMode(newTheme); localStorage.setItem('khodnimaak_theme', newTheme ? 'dark' : 'light'); };
-  const handleLogout = async () => { try { await signOut(auth); setUserData(null); setMyInbox([]); setActiveChat(null); setActiveTab('home'); } catch(e) {} };
+  const handleLogout = async () => { try { await signOut(auth); setUserData(null); setMyInbox([]); setActiveChat(null); setActiveTab('home'); setNotifications([]); } catch(e) {} };
 
   const handleEditName = async () => {
     const newName = prompt('أدخل الاسم الجديد:', userData?.name || '');
@@ -185,7 +202,44 @@ export default function App() {
         ...newTrip, type: typeToSave, userId: user.uid, userName: userData?.name || 'مستخدم', userPhoto: userData?.photoURL || null, userPhone: userData?.phone || '', verified: userData?.isVerified || false, rating: userData?.rating || 0, status: 'open', createdAt: serverTimestamp(), joinedMembers: [],
         price: newTrip.cost 
       };
-      await addDoc(collection(db, APP_COLLECTION_NAME), tripData);
+      
+      // حفظ الرحلة واستلام الـ ID بتاعها
+      const docRef = await addDoc(collection(db, APP_COLLECTION_NAME), tripData);
+
+      // --- التعديل: فحص التنبيهات وإرسال إشعارات للناس المهتمة بالرحلة دي ---
+      try {
+        const alertsQuery = query(
+          collection(db, 'trip_alerts'),
+          where('from', '==', newTrip.from),
+          where('to', '==', newTrip.to),
+          where('active', '==', true)
+        );
+        const alertsSnap = await getDocs(alertsQuery);
+        
+        if (!alertsSnap.empty) {
+           const batch = writeBatch(db);
+           alertsSnap.forEach(alertDoc => {
+              const alertData = alertDoc.data();
+              // متبعتش إشعار للشخص اللي بينزل الرحلة نفسه
+              if (alertData.userId !== user.uid) { 
+                 const notifRef = doc(collection(db, 'notifications'));
+                 batch.set(notifRef, {
+                    userId: alertData.userId,
+                    title: 'رحلة جديدة متاحة! 🚗',
+                    body: `تم إضافة رحلة من ${newTrip.from} إلى ${newTrip.to} تناسب بحثك.`,
+                    tripId: docRef.id,
+                    read: false,
+                    createdAt: serverTimestamp()
+                 });
+              }
+           });
+           await batch.commit();
+        }
+      } catch (err) {
+        console.error("خطأ أثناء إرسال التنبيهات:", err);
+      }
+      // ------------------------------------------------------------------------
+
       setShowAddModal(false); triggerToast('تم النشر بنجاح!');
       setActiveTab('home'); setHomeCategory(newTrip.category);
       setNewTrip({ type: 'offer', category: 'travel', from: '', fromDetails: '', to: '', toDetails: '', date: '', time: '', seats: 1, cost: '', notes: '' });
@@ -223,8 +277,8 @@ export default function App() {
 
       setActiveChat(chatDataMe); 
 
-      await setDoc(doc(db, `inbox_${user.uid}`, chatId), { ...chatDataMe, createdAt: serverTimestamp(), requestStatus: 'none' }, { merge: true });
-      await setDoc(doc(db, `inbox_${trip.userId}`, chatId), { ...chatDataOther, createdAt: serverTimestamp(), requestStatus: 'none' }, { merge: true });
+      await setDoc(doc(db, `inbox_${user.uid}`, chatId), { ...chatDataMe, createdAt: serverTimestamp(), requestStatus: 'none', tripId: trip.id, tripInfo: tripRouteName }, { merge: true });
+      await setDoc(doc(db, `inbox_${trip.userId}`, chatId), { ...chatDataOther, createdAt: serverTimestamp(), requestStatus: 'none', tripId: trip.id, tripInfo: tripRouteName }, { merge: true });
     } catch (err) {
       console.error("Chat Creation Error:", err);
       triggerToast('حدث خطأ في النظام أثناء محاولة فتح الشات.');
@@ -246,6 +300,7 @@ export default function App() {
       else if (actionType === 'cancel_request') { newStatus = 'none'; systemText = `قام ${myName} بإلغاء الطلب 🔙`; } 
       else if (actionType === 'accept') { newStatus = 'accepted'; systemText = 'تم قبول طلبك! سيتم التواصل معك 🚗'; } 
       else if (actionType === 'reject') { newStatus = 'rejected'; systemText = 'عذراً، تم رفض الطلب ❌'; } 
+      else if (actionType === 'block') { newStatus = 'blocked'; systemText = 'تم حظر التعامل في هذا الشات 🚫'; }
       else if (actionType === 'start_moving') { newStatus = 'moving'; systemText = 'تنبيه: الكابتن في الطريق 🚙'; } 
       else if (actionType === 'arrive') { newStatus = 'arrived'; systemText = 'تنبيه: الكابتن وصل 📍'; } 
       else if (actionType === 'start_trip') { newStatus = 'in_progress_trip'; systemText = 'بدأت الرحلة.. نتمنى لكم طريقاً آمناً 🛣️'; } 
@@ -267,14 +322,6 @@ export default function App() {
       if (actionType === 'request') { 
          updateDataMe.requestSenderId = user.uid; 
          updateDataOther.requestSenderId = user.uid; 
-         updateDataOther.tripId = chatInfo.tripId || ''; 
-         updateDataOther.tripType = chatInfo.tripType || 'offer'; 
-         updateDataOther.tripOwnerId = chatInfo.tripOwnerId || ''; 
-         updateDataOther.tripInfo = chatInfo.tripInfo || 'رحلة'; 
-         updateDataOther.otherPersonId = user.uid; 
-         updateDataOther.otherPersonName = userData?.name || 'مستخدم'; 
-         updateDataOther.otherPersonPhoto = userData?.photoURL || null; 
-         updateDataOther.otherPersonVerified = Boolean(userData?.isVerified);
       }
       if (actionType === 'cancel_request') { updateDataMe.requestSenderId = null; updateDataOther.requestSenderId = null; }
       if (actionType === 'accept') { updateDataMe.tripStartTime = serverTimestamp(); updateDataOther.tripStartTime = serverTimestamp(); }
@@ -320,12 +367,72 @@ export default function App() {
               <span className={`text-sm font-black ${textPrimary}`}>{isGuest ? 'زائر' : (userData?.name?.split(' ')[0] || 'مستخدم')}</span>
             </div>
           </div>
-          <div className="flex items-center gap-2 cursor-pointer" onClick={() => {setActiveTab('home'); setViewMode('list');}}>
-            <span className="font-black text-xl text-indigo-600 dark:text-indigo-400">طريقنا</span>
-            {appSettings?.logo ? ( <img src={appSettings.logo} className="w-8 h-8 object-contain rounded-md" alt="Logo"/> ) : ( <div className="bg-indigo-600 text-white p-1.5 rounded-lg"><Car size={20}/></div> )}
+          
+          {/* --- التعديل: قسم اللوجو وبجانبه الجرس --- */}
+          <div className="flex items-center gap-4">
+            
+            {!isGuest && (
+              <div 
+                className="relative cursor-pointer bg-slate-100 dark:bg-slate-800 p-2 rounded-full hover:bg-slate-200 dark:hover:bg-slate-700 transition-colors" 
+                onClick={() => setShowNotificationsModal(true)}
+              >
+                <Bell size={20} className={textSecondary} />
+                {notifications.filter(n => !n.read).length > 0 && (
+                  <span className="absolute top-0 right-0 w-2.5 h-2.5 bg-rose-500 rounded-full border-2 border-white dark:border-slate-800"></span>
+                )}
+              </div>
+            )}
+
+            <div className="flex items-center gap-2 cursor-pointer" onClick={() => {setActiveTab('home'); setViewMode('list');}}>
+              <span className="font-black text-xl text-indigo-600 dark:text-indigo-400">طريقنا</span>
+              {appSettings?.logo ? ( <img src={appSettings.logo} className="w-8 h-8 object-contain rounded-md" alt="Logo"/> ) : ( <div className="bg-indigo-600 text-white p-1.5 rounded-lg"><Car size={20}/></div> )}
+            </div>
           </div>
+          {/* -------------------------------------- */}
         </div>
       </header>
+
+      {/* --- التعديل: نافذة عرض الإشعارات --- */}
+      {showNotificationsModal && (
+        <div className="fixed inset-0 bg-slate-900/80 backdrop-blur-sm z-[999] flex justify-center items-start p-4 pointer-events-auto" onClick={() => setShowNotificationsModal(false)}>
+          <div className={`${bgCard} w-full max-w-md mt-20 rounded-[2rem] shadow-2xl flex flex-col max-h-[60vh] border dark:border-slate-700 animate-fade-in-up`} onClick={e => e.stopPropagation()}>
+            <div className="p-4 border-b flex justify-between items-center bg-slate-50 dark:bg-slate-800 dark:border-slate-700 shrink-0 rounded-t-[2rem]">
+              <h2 className="text-lg font-black flex items-center gap-2"><Bell className="text-indigo-500"/> التنبيهات الذكية</h2>
+              <button onClick={() => setShowNotificationsModal(false)} className="p-2 bg-slate-200 dark:bg-slate-700 rounded-full hover:bg-rose-100 hover:text-rose-500 transition-colors"><X size={20}/></button>
+            </div>
+            <div className="flex-1 overflow-y-auto p-4 [&::-webkit-scrollbar]:hidden [-ms-overflow-style:none] [scrollbar-width:none]">
+              {notifications.length === 0 ? (
+                <div className="text-center py-10 text-slate-500">
+                   <Bell size={40} className="mx-auto mb-3 opacity-30"/>
+                   <p className="font-bold">لا توجد إشعارات جديدة</p>
+                   <p className="text-xs mt-2 opacity-70">فعل التنبيهات من البحث وهيوصلك إشعار هنا</p>
+                </div>
+              ) : (
+                notifications.map(notif => (
+                  <div key={notif.id} onClick={async () => {
+                     if (!notif.read) {
+                       try { await updateDoc(doc(db, 'notifications', notif.id), {read: true}); } catch(e){}
+                     }
+                     setShowNotificationsModal(false);
+                     setActiveTab('home');
+                  }} className={`p-4 rounded-xl mb-3 cursor-pointer border transition-colors ${!notif.read ? 'bg-indigo-50/50 border-indigo-200 dark:bg-indigo-900/20 dark:border-indigo-800' : 'bg-slate-50 border-slate-200 dark:bg-slate-800 dark:border-slate-700'}`}>
+                    <div className="flex items-start gap-3">
+                       <div className={`p-2 rounded-full shrink-0 ${!notif.read ? 'bg-indigo-100 text-indigo-600 dark:bg-indigo-800 dark:text-indigo-300' : 'bg-slate-200 text-slate-500 dark:bg-slate-700'}`}>
+                          <Car size={18}/>
+                       </div>
+                       <div>
+                          <h4 className={`font-bold text-sm ${!notif.read ? 'text-indigo-700 dark:text-indigo-400' : textPrimary}`}>{notif.title}</h4>
+                          <p className={`text-xs mt-1 ${textSecondary} leading-relaxed`}>{notif.body}</p>
+                       </div>
+                    </div>
+                  </div>
+                ))
+              )}
+            </div>
+          </div>
+        </div>
+      )}
+      {/* -------------------------------------- */}
 
       {activeTab === 'home' && !isGuest && (
         <button onClick={() => setShowAddModal(true)} className="fixed bottom-[90px] right-5 bg-indigo-600 text-white w-14 h-14 rounded-full shadow-lg flex items-center justify-center z-50 hover:bg-indigo-700 transition-transform"><Plus size={28} /></button>
@@ -345,7 +452,6 @@ export default function App() {
                  <button onClick={() => setNewTrip({...newTrip, category: 'parcel'})} className={`flex-1 py-2.5 rounded-xl text-xs font-bold transition-all ${newTrip.category === 'parcel' ? 'bg-white text-indigo-600 shadow-sm dark:bg-slate-700 dark:text-white' : 'text-slate-500'}`}>أمانات</button>
               </div>
               <form id="addTripForm" onSubmit={handleAddTrip} className="space-y-4">
-                
                 <div className="flex gap-3 mb-2">
                   <label className={`flex-1 flex items-center gap-2 p-3 rounded-xl border cursor-pointer ${newTrip.type === 'offer' ? 'bg-indigo-50 border-indigo-500 text-indigo-700' : 'bg-transparent border-slate-200 dark:border-slate-700'}`}>
                     <input type="radio" name="tripType" value="offer" checked={newTrip.type === 'offer'} onChange={() => setNewTrip({...newTrip, type: 'offer'})} className="hidden"/>
@@ -360,37 +466,31 @@ export default function App() {
                 <div className="space-y-2">
                   <div className="flex justify-between items-center px-1">
                     <label className="text-[10px] font-bold text-slate-500">نقطة الانطلاق</label>
-                    <button 
-                      type="button" 
-                      onClick={() => getMyCity((locationData) => setNewTrip({...newTrip, from: locationData.city, fromDetails: locationData.details}))} 
-                      disabled={isLocating} 
-                      className="text-[10px] font-bold text-indigo-600 dark:text-indigo-400 flex items-center gap-1 hover:underline bg-indigo-50 dark:bg-indigo-900/30 px-2 py-0.5 rounded-lg"
-                    >
-                      {isLocating ? <Loader2 size={12} className="animate-spin"/> : <MapPin size={12}/>} 
-                      تحديد تلقائي
+                    <button type="button" onClick={() => getMyCity((locationData) => setNewTrip({...newTrip, from: locationData.city, fromDetails: locationData.details}))} disabled={isLocating} className="text-[10px] font-bold text-indigo-600 dark:text-indigo-400 flex items-center gap-1 hover:underline bg-indigo-50 dark:bg-indigo-900/30 px-2 py-0.5 rounded-lg">
+                      {isLocating ? <Loader2 size={12} className="animate-spin"/> : <MapPin size={12}/>} تحديد تلقائي
                     </button>
                   </div>
                   {locationError && <p className="text-[10px] text-rose-500 px-1">{locationError}</p>}
                   
                   <select required value={newTrip.from} onChange={e => setNewTrip({...newTrip, from: e.target.value})} className={`w-full p-3.5 rounded-xl border font-bold text-sm outline-none ${bgInput}`}><option value="" disabled>محافظة التحرك *</option>{EGYPT_CITIES.map(c => <option key={c} value={c}>{c}</option>)}</select>
-                  <input type="text" placeholder="مكان التحرك بالتفصيل (مثال: الحصري، شارع 75)" value={newTrip.fromDetails} onChange={e => setNewTrip({...newTrip, fromDetails: e.target.value})} className={`w-full p-3.5 rounded-xl border font-medium text-xs outline-none ${bgInput}`}/>
+                  <input type="text" placeholder="مكان التحرك بالتفصيل" value={newTrip.fromDetails} onChange={e => setNewTrip({...newTrip, fromDetails: e.target.value})} className={`w-full p-3.5 rounded-xl border font-medium text-xs outline-none ${bgInput}`}/>
                 </div>
 
                 <div className="space-y-2 pt-1">
                   <label className="text-[10px] font-bold text-slate-500 px-1">نقطة الوصول</label>
                   <select required value={newTrip.to} onChange={e => setNewTrip({...newTrip, to: e.target.value})} className={`w-full p-3.5 rounded-xl border font-bold text-sm outline-none ${bgInput}`}><option value="" disabled>محافظة الوصول *</option>{EGYPT_CITIES.map(c => <option key={c} value={c}>{c}</option>)}</select>
-                  <input type="text" placeholder="مكان الوصول بالتفصيل (مثال: الهرم - مشعل)" value={newTrip.toDetails} onChange={e => setNewTrip({...newTrip, toDetails: e.target.value})} className={`w-full p-3.5 rounded-xl border font-medium text-xs outline-none ${bgInput}`}/>
+                  <input type="text" placeholder="مكان الوصول بالتفصيل" value={newTrip.toDetails} onChange={e => setNewTrip({...newTrip, toDetails: e.target.value})} className={`w-full p-3.5 rounded-xl border font-medium text-xs outline-none ${bgInput}`}/>
                 </div>
 
                 <div className="grid grid-cols-2 gap-3 pt-2">
                   <input type="date" required value={newTrip.date} onChange={e => setNewTrip({...newTrip, date: e.target.value})} className={`p-4 rounded-xl border font-bold text-sm outline-none ${bgInput}`}/>
                   <input type="time" required value={newTrip.time} onChange={e => setNewTrip({...newTrip, time: e.target.value})} className={`p-4 rounded-xl border font-bold text-sm outline-none ${bgInput}`}/>
                   <div className="space-y-1">
-                    <label className="text-[10px] text-slate-500 px-1">{newTrip.category === 'parcel' ? 'حجم / عدد الطرود' : 'عدد المقاعد'}</label>
+                    <label className="text-[10px] text-slate-500 px-1">عدد المقاعد</label>
                     <input type="number" min="1" required placeholder="العدد" value={newTrip.seats} onChange={e => setNewTrip({...newTrip, seats: e.target.value})} className={`w-full p-4 rounded-xl border font-bold text-sm outline-none ${bgInput}`}/>
                   </div>
                   <div className="space-y-1">
-                    <label className="text-[10px] text-slate-500 px-1">تكلفة المقعد / المشوار (جنيه)</label>
+                    <label className="text-[10px] text-slate-500 px-1">التكلفة (جنيه)</label>
                     <input type="number" required placeholder="التكلفة (ج)" value={newTrip.cost} onChange={e => setNewTrip({...newTrip, cost: e.target.value})} className={`w-full p-4 rounded-xl border font-bold text-sm outline-none ${bgInput}`}/>
                   </div>
                 </div>
@@ -416,29 +516,15 @@ export default function App() {
       )}
 
       {selectedStation && (
-        <StationModal 
-          station={selectedStation} user={user} isAdmin={isAdmin} isGuest={isGuest} isDarkMode={isDarkMode} 
-          onClose={() => setSelectedStation(null)} triggerToast={triggerToast}
-        />
+        <StationModal station={selectedStation} user={user} isAdmin={isAdmin} isGuest={isGuest} isDarkMode={isDarkMode} onClose={() => setSelectedStation(null)} triggerToast={triggerToast}/>
       )}
 
       {activeTab === 'profile' && (
-        <ProfileScreen 
-          user={user} userData={userData} isGuest={isGuest} isAdmin={isAdmin} isDarkMode={isDarkMode} toggleTheme={toggleTheme} handleLogout={handleLogout}
-          handleEditName={handleEditName} setShowVerifyModal={setShowVerifyModal} setShowAdminPanel={setShowAdminPanel} forceSignUpScreen={forceSignUpScreen}
-        />
+        <ProfileScreen user={user} userData={userData} isGuest={isGuest} isAdmin={isAdmin} isDarkMode={isDarkMode} toggleTheme={toggleTheme} handleLogout={handleLogout} handleEditName={handleEditName} setShowVerifyModal={setShowVerifyModal} setShowAdminPanel={setShowAdminPanel} forceSignUpScreen={forceSignUpScreen}/>
       )}
 
       {activeChat && !isGuest && ( 
-        <ChatModal 
-          baseChatData={activeChat} 
-          user={user} 
-          userData={userData} 
-          isDarkMode={isDarkMode} 
-          onClose={() => setActiveChat(null)} 
-          triggerToast={triggerToast} 
-          handleTripAction={handleTripAction} 
-        /> 
+        <ChatModal baseChatData={activeChat} user={user} userData={userData} isDarkMode={isDarkMode} onClose={() => setActiveChat(null)} triggerToast={triggerToast} handleTripAction={handleTripAction} /> 
       )}
       
       {showVerifyModal && ( <VerifyModal user={user} isDarkMode={isDarkMode} onClose={() => setShowVerifyModal(false)} triggerToast={triggerToast} setUserData={setUserData} /> )}
@@ -469,15 +555,7 @@ export default function App() {
       )}
 
       {!isGuest && activeTrackers.length > 0 && (!activeChat || activeChat.chatId !== (activeTrackers[0]?.type === 'normal' ? activeTrackers[0].data.chatId : activeTrackers[0]?.data.id)) && (
-        <LiveTrackerBar 
-          activeTrackers={activeTrackers} 
-          isDarkMode={isDarkMode} 
-          user={user}
-          setActiveChat={setActiveChat} 
-          setActiveTab={setActiveTab} 
-          setViewMode={setViewMode} 
-          handleTripAction={(chatInfo, actionType) => handleTripAction(chatInfo, actionType)}
-        />
+        <LiveTrackerBar activeTrackers={activeTrackers} isDarkMode={isDarkMode} user={user} setActiveChat={setActiveChat} setActiveTab={setActiveTab} setViewMode={setViewMode} handleTripAction={(chatInfo, actionType) => handleTripAction(chatInfo, actionType)}/>
       )}
 
       <nav className={`fixed bottom-0 w-full z-[100] border-t ${isDarkMode ? 'bg-slate-950 border-slate-800' : 'bg-white border-slate-100'} pointer-events-auto`}>
@@ -500,7 +578,7 @@ export default function App() {
             </div>
             {alertMsg && <div className="mb-4 bg-rose-100 text-rose-600 p-3 rounded-xl text-xs font-bold text-center border border-rose-200">{alertMsg}</div>}
             <form onSubmit={handleAuth} className="space-y-4">
-              {!isLoginMode && (<input type="text" required placeholder="ادخل الاسم  " value={authForm.name} onChange={e => setAuthForm({...authForm, name: e.target.value})} className={`w-full border rounded-xl py-3.5 px-4 outline-none font-bold ${bgInput}`} />)}
+              {!isLoginMode && (<input type="text" required placeholder="ادخل الاسم" value={authForm.name} onChange={e => setAuthForm({...authForm, name: e.target.value})} className={`w-full border rounded-xl py-3.5 px-4 outline-none font-bold ${bgInput}`} />)}
               <input type="text" required placeholder="رقم الموبايل أو الإيميل" value={authForm.identifier || ''} onChange={e => setAuthForm({...authForm, identifier: e.target.value})} className={`w-full border rounded-xl py-3.5 px-4 outline-none font-bold text-left ${bgInput}`} dir="ltr" />
               <input type="password" required placeholder="كلمة المرور" value={authForm.password} onChange={e => setAuthForm({...authForm, password: e.target.value})} className={`w-full border rounded-xl py-3.5 px-4 outline-none font-bold text-left ${bgInput}`} dir="ltr" />
               <button type="submit" disabled={authLoading} className="w-full bg-indigo-600 text-white py-4 rounded-xl font-bold hover:bg-indigo-700 active:scale-95 flex justify-center mt-2 shadow-md">{authLoading ? <Loader2 className="animate-spin m-auto"/> : (isLoginMode ? 'تسجيل الدخول' : 'تسجيل حساب جديد')}</button>
