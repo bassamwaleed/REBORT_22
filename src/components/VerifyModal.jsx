@@ -1,12 +1,13 @@
 import React, { useState } from 'react';
 import { doc, updateDoc } from 'firebase/firestore';
-import { X, Upload, ShieldCheck, Loader2, CheckCircle } from 'lucide-react';
+import { X, Upload, ShieldCheck, Loader2, CheckCircle, Car } from 'lucide-react';
 import { db, USERS_COLLECTION } from '../firebase';
 import { resizeAndConvertToBase64 } from '../utils/helpers';
 
 const VerifyModal = ({ user, isDarkMode, onClose, triggerToast, setUserData }) => {
   const [frontImage, setFrontImage] = useState(null);
   const [backImage, setBackImage] = useState(null);
+  const [licenseImage, setLicenseImage] = useState(null); // إضافة حالة صورة الرخصة
   const [isSubmitting, setIsSubmitting] = useState(false);
 
   const bgCard = isDarkMode ? 'bg-slate-900 border-slate-800' : 'bg-white border-slate-200';
@@ -19,7 +20,8 @@ const VerifyModal = ({ user, isDarkMode, onClose, triggerToast, setUserData }) =
     try {
       const base64 = await resizeAndConvertToBase64(file, 800, 800, 0.8);
       if (side === 'front') setFrontImage(base64);
-      else setBackImage(base64);
+      else if (side === 'back') setBackImage(base64);
+      else setLicenseImage(base64); // حفظ الرخصة
     } catch (error) {
       triggerToast('حدث خطأ أثناء معالجة الصورة');
     }
@@ -27,6 +29,7 @@ const VerifyModal = ({ user, isDarkMode, onClose, triggerToast, setUserData }) =
 
   const handleSubmit = async (e) => {
     e.preventDefault();
+    // إجبار المستخدم يرفع البطاقة على الأقل
     if (!frontImage || !backImage) {
       triggerToast('برجاء رفع صورة البطاقة (الوجهين) للمتابعة');
       return;
@@ -38,6 +41,7 @@ const VerifyModal = ({ user, isDarkMode, onClose, triggerToast, setUserData }) =
         verificationStatus: 'pending',
         idFront: frontImage,
         idBack: backImage,
+        licenseImage: licenseImage || null, // حفظ الرخصة لو رفعها
         verificationRequestedAt: Date.now()
       });
       
@@ -45,10 +49,11 @@ const VerifyModal = ({ user, isDarkMode, onClose, triggerToast, setUserData }) =
         ...prev, 
         verificationStatus: 'pending',
         idFront: frontImage,
-        idBack: backImage
+        idBack: backImage,
+        licenseImage: licenseImage || null
       }));
       
-      triggerToast('تم إرسال طلب التوثيق بنجاح! جاري المراجعة.');
+      triggerToast('تم إرسال طلب التوثيق بنجاح! جاري المراجعة من الإدارة.');
       onClose();
     } catch (error) {
       triggerToast('تعذر إرسال الطلب، حاول مرة أخرى');
@@ -72,7 +77,7 @@ const VerifyModal = ({ user, isDarkMode, onClose, triggerToast, setUserData }) =
         
         <div className="flex-1 overflow-y-auto p-6 custom-scrollbar">
           <p className={`text-sm mb-6 ${textSecondary} leading-relaxed`}>
-            لضمان أمان مجتمع "طريقنا"، نرجو منك رفع صورة واضحة لبطاقة الرقم القومي (الوجهين). البيانات سرية ولن يتم مشاركتها.
+            لضمان أمان مجتمع "طريقنا"، نرجو منك رفع صورة واضحة لبطاقة الرقم القومي (الوجهين). وإذا كنت <span className="font-bold text-indigo-500">كابتن سيارة</span>، يرجى رفع صورة رخصة القيادة. البيانات سرية تماماً.
           </p>
 
           <form id="verifyForm" onSubmit={handleSubmit} className="space-y-5">
@@ -129,6 +134,36 @@ const VerifyModal = ({ user, isDarkMode, onClose, triggerToast, setUserData }) =
                 )}
               </div>
             </div>
+
+            {/* رخصة القيادة */}
+            <div className="pt-2 border-t border-slate-100 dark:border-slate-800 mt-2">
+              <label className={`block text-sm font-bold mb-2 flex items-center gap-2 ${textPrimary}`}>
+                <Car size={16} className="text-indigo-500"/> صورة رخصة القيادة (للكباتن فقط)
+              </label>
+              <div className="relative">
+                {licenseImage ? (
+                  <div className="relative w-full h-40 rounded-2xl overflow-hidden border-2 border-emerald-500">
+                    <img src={licenseImage} alt="رخصة القيادة" className="w-full h-full object-cover" />
+                    <div className="absolute inset-0 bg-black/40 flex items-center justify-center opacity-0 hover:opacity-100 transition-opacity">
+                      <label className="cursor-pointer bg-white text-slate-900 px-4 py-2 rounded-xl font-bold text-sm">
+                        تغيير الصورة
+                        <input type="file" accept="image/*" className="hidden" onChange={(e) => handleImageUpload(e, 'license')} />
+                      </label>
+                    </div>
+                    <div className="absolute top-2 right-2 bg-emerald-500 text-white p-1 rounded-full"><CheckCircle size={16}/></div>
+                  </div>
+                ) : (
+                  <label className={`flex flex-col items-center justify-center w-full h-40 border-2 border-dashed rounded-2xl cursor-pointer transition-colors ${isDarkMode ? 'border-slate-700 hover:border-indigo-500 bg-slate-800/50' : 'border-slate-300 hover:border-indigo-500 bg-slate-50'}`}>
+                    <div className="flex flex-col items-center justify-center pt-5 pb-6">
+                      <Upload className="w-8 h-8 mb-3 text-slate-400" />
+                      <p className={`text-sm font-bold ${textSecondary}`}>اضغط لرفع الرخصة (اختياري)</p>
+                    </div>
+                    <input type="file" accept="image/*" className="hidden" onChange={(e) => handleImageUpload(e, 'license')} />
+                  </label>
+                )}
+              </div>
+            </div>
+
           </form>
         </div>
         

@@ -1,10 +1,10 @@
-import React from 'react';
-import { doc, deleteDoc } from 'firebase/firestore';
-import { Trash2, Share2, User, ShieldCheck, Star, ArrowLeft, Clock, Car, MapPin, Package, CheckCircle2 } from 'lucide-react';
-import { db, APP_COLLECTION_NAME } from '../firebase';
+import React, { useState, useEffect } from 'react';
+import { doc, deleteDoc, getDoc } from 'firebase/firestore';
+import { Trash2, Share2, User, ShieldCheck, Star, ArrowLeft, Clock, Car, MapPin, Package, CheckCircle2, Phone, MessageCircle } from 'lucide-react';
+import { db, APP_COLLECTION_NAME, USERS_COLLECTION } from '../firebase';
 import { formatTripDateTime, getSeatsText } from '../utils/helpers';
 
-const TripCard = ({ trip, user, isAdmin, isDarkMode, openChatFromTrip, triggerToast }) => {
+const TripCard = ({ trip, user, isAdmin, isDarkMode, openChatFromTrip, triggerToast, matchBadge }) => {
   if (!trip) return null; 
 
   const isOwner = user?.uid === trip.userId;
@@ -12,6 +12,36 @@ const TripCard = ({ trip, user, isAdmin, isDarkMode, openChatFromTrip, triggerTo
   const isCompleted = trip?.status === 'completed'; 
   const isFull = trip?.status === 'full'; 
   
+  // جلب رقم الموبايل من بيانات الرحلة أو سحبه تلقائياً من الملف الشخصي لصاحب الرحلة
+  const [contactPhone, setContactPhone] = useState(trip?.userPhone || '');
+
+  useEffect(() => {
+    if (trip?.userPhone) {
+      setContactPhone(trip.userPhone);
+    } else if (trip?.userId && trip?.allowPhoneContact !== false) {
+      let isMounted = true;
+      getDoc(doc(db, USERS_COLLECTION, trip.userId))
+        .then((snap) => {
+          if (isMounted && snap.exists() && snap.data()?.phone) {
+            setContactPhone(snap.data().phone);
+          }
+        })
+        .catch(() => {});
+      return () => { isMounted = false; };
+    }
+  }, [trip?.userPhone, trip?.userId, trip?.allowPhoneContact]);
+
+  // التحقق مما إذا كان صاحب الرحلة يسمح بالمكالمات والواتساب ولديه رقم مسجل
+  const canCallOrWhatsapp = (trip?.allowPhoneContact !== false) && Boolean(contactPhone && String(contactPhone).trim());
+
+  // تنسيق رقم الواتساب لدعم الكود المصري (+20) بشكل سليم
+  const getWhatsAppUrl = (rawPhone) => {
+    const clean = String(rawPhone).replace(/\D/g, '');
+    const intlPhone = clean.startsWith('20') ? clean : clean.startsWith('0') ? `2${clean}` : `20${clean}`;
+    const msg = `مرحباً ${trip?.userName?.split(' ')[0] || 'كابتن'}، تواصلت معك عبر تطبيق (طريقنا) بخصوص رحلة: ${trip?.from} ➔ ${trip?.to}`;
+    return `https://wa.me/${intlPhone}?text=${encodeURIComponent(msg)}`;
+  };
+
   const textPrimary = isDarkMode ? 'text-white' : 'text-slate-900';
   const textSecondary = isDarkMode ? 'text-slate-400' : 'text-slate-500';
   const bgCard = isDarkMode ? 'bg-slate-900 border-slate-800' : 'bg-white border-slate-200';
@@ -38,12 +68,12 @@ const TripCard = ({ trip, user, isAdmin, isDarkMode, openChatFromTrip, triggerTo
     }
   };
 
-  // مصفوفة تعرض التفضيلات بشكل منسق مع أيقوناتها لو كانت موجودة
   const preferencesLabels = { 
     ac: 'تكييف ❄️', 
     noSmoking: 'ممنوع التدخين 🚭', 
     luggage: 'شنط سفر 🧳', 
-    families: 'عائلات 👨‍👩‍👧‍👦' 
+    families: 'عائلات 👨‍👩‍👧‍👦',
+    femalesOnly: 'بنات فقط 👩'
   };
   
   const activePreferences = trip.preferences ? Object.keys(trip.preferences).filter(key => trip.preferences[key]) : [];
@@ -53,6 +83,19 @@ const TripCard = ({ trip, user, isAdmin, isDarkMode, openChatFromTrip, triggerTo
       onClick={() => !isOwner && !isCompleted && !isFull && openChatFromTrip(trip)}
       className={`p-4 sm:p-5 rounded-[1.5rem] border shadow-[0_2px_12px_rgba(0,0,0,0.03)] hover:shadow-md hover:border-indigo-500/50 transition-all flex flex-col gap-3 relative cursor-pointer ${bgCard} mb-4 group ${(isCompleted || isFull) ? 'opacity-70 grayscale-[30%]' : ''}`} 
     >
+      {/* شارة التطابق الذكي أو المنطقة القريبة */}
+      {matchBadge && (
+        <div className="flex items-center justify-between -mt-1 mb-0.5">
+          <span className={`text-[10px] font-black px-2.5 py-0.5 rounded-full border ${
+            matchBadge.includes('مطابق') 
+              ? 'bg-emerald-50 text-emerald-700 border-emerald-200 dark:bg-emerald-950/40 dark:text-emerald-300 dark:border-emerald-800/60' 
+              : 'bg-indigo-50 text-indigo-700 border-indigo-200 dark:bg-indigo-950/40 dark:text-indigo-300 dark:border-indigo-800/60'
+          }`}>
+            {matchBadge}
+          </span>
+        </div>
+      )}
+
       <div className="flex justify-between items-start relative z-10">
          <div className="flex items-center gap-3">
            {trip?.userPhoto ? (
@@ -77,21 +120,33 @@ const TripCard = ({ trip, user, isAdmin, isDarkMode, openChatFromTrip, triggerTo
            </div>
          </div>
 
-         <div className="flex items-center gap-2">
-            {isOwner && (
-              <button onClick={handleShare} className="p-1.5 bg-indigo-50 dark:bg-indigo-900/30 text-indigo-500 rounded-full hover:bg-indigo-100 transition-colors shadow-sm">
-                <Share2 size={14}/>
-              </button>
-            )}
-            {(isAdmin || isOwner) && (
-              <button onClick={handleDelete} className="p-1.5 bg-rose-50 dark:bg-rose-900/30 text-rose-500 rounded-full hover:bg-rose-100 transition-colors shadow-sm">
-                <Trash2 size={14}/>
-              </button>
-            )}
-            <div className="text-left">
-              <span className="font-extrabold text-base text-emerald-500 dark:text-emerald-400 leading-none bg-emerald-50 dark:bg-emerald-900/20 px-2 py-1 rounded-lg border border-emerald-100 dark:border-emerald-800/50">
-                {price !== 'غير محدد' ? `${price} ج` : price}
-              </span>
+         {/* الأزرار العلوية + السعر + المقاعد */}
+         <div className="flex flex-col items-end gap-2">
+            <div className="flex items-center gap-2">
+              {isOwner && (
+                <button onClick={handleShare} className="p-1.5 bg-indigo-50 dark:bg-indigo-900/30 text-indigo-500 rounded-full hover:bg-indigo-100 transition-colors shadow-sm">
+                  <Share2 size={14}/>
+                </button>
+              )}
+              {(isAdmin || isOwner) && (
+                <button onClick={handleDelete} className="p-1.5 bg-rose-50 dark:bg-rose-900/30 text-rose-500 rounded-full hover:bg-rose-100 transition-colors shadow-sm">
+                  <Trash2 size={14}/>
+                </button>
+              )}
+            </div>
+
+            <div className="flex flex-wrap items-center justify-end gap-2">
+              {/* نقل المقاعد هنا بجوار السعر */}
+              <div className={`px-2 py-1 rounded-lg border flex items-center gap-1.5 w-fit ${isFull ? 'bg-rose-50 border-rose-100 text-rose-600 dark:bg-rose-900/20 dark:border-rose-800/50 dark:text-rose-400' : (isDarkMode ? 'bg-indigo-900/20 border-indigo-800/50 text-indigo-300' : 'bg-indigo-50 border-indigo-100 text-indigo-600')}`}>
+                {trip?.category === 'parcel' ? <Package size={12}/> : <Car size={12}/>}
+                <span className="text-[10px] font-bold">{isFull ? 'مكتملة' : getSeatsText(trip?.seats, trip?.category)}</span>
+              </div>
+
+              <div className="text-left">
+                <span className="font-extrabold text-base text-emerald-500 dark:text-emerald-400 leading-none bg-emerald-50 dark:bg-emerald-900/20 px-2 py-1 rounded-lg border border-emerald-100 dark:border-emerald-800/50">
+                  {price !== 'غير محدد' ? `${price} ج` : price}
+                </span>
+              </div>
             </div>
          </div>
       </div>
@@ -110,7 +165,6 @@ const TripCard = ({ trip, user, isAdmin, isDarkMode, openChatFromTrip, triggerTo
            </div>
          )}
 
-         {/* إظهار التفضيلات (تكييف، ممنوع التدخين...) */}
          {activePreferences.length > 0 && (
            <div className="flex flex-wrap gap-1.5 mt-1 border-t border-slate-200/50 dark:border-slate-700/50 pt-2">
              {activePreferences.map(key => (
@@ -122,32 +176,53 @@ const TripCard = ({ trip, user, isAdmin, isDarkMode, openChatFromTrip, triggerTo
          )}
       </div>
 
-      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 mt-1 relative z-10 pointer-events-none">
-         <div className="flex items-center gap-3">
-           <div className={`flex items-center gap-1.5 text-xs font-bold ${textSecondary}`}>
-             <Clock size={12} className="text-indigo-400"/> {formatTripDateTime(trip?.date, trip?.time)}
-           </div>
-           
-           {/* إظهار لون مختلف لو المقاعد خلصت */}
-           <div className={`px-2 py-1 rounded-md flex items-center gap-1.5 w-fit ${isFull ? 'bg-rose-100 text-rose-600 dark:bg-rose-900/30 dark:text-rose-400' : (isDarkMode ? 'bg-indigo-900/30 text-indigo-300' : 'bg-indigo-50 text-indigo-600')}`}>
-             {trip?.category === 'parcel' ? <Package size={12}/> : <Car size={12}/>}
-             <span className="text-[10px] font-bold">{isFull ? 'مكتملة' : getSeatsText(trip?.seats, trip?.category)}</span>
-           </div>
+      {/* الجزء السفلي: الوقت ثم أزرار التواصل */}
+      <div className="flex flex-col gap-3 mt-1 relative z-10 pointer-events-none">
+         <div className={`flex items-center gap-1.5 text-xs font-bold ${textSecondary}`}>
+           <Clock size={12} className="text-indigo-400"/> {formatTripDateTime(trip?.date, trip?.time)}
          </div>
          
          {!isOwner && ( 
            isCompleted ? (
-             <div className="w-full sm:w-auto bg-emerald-50 dark:bg-emerald-900/20 text-emerald-600 dark:text-emerald-400 px-4 py-2 rounded-xl text-xs font-black flex items-center justify-center gap-1.5 border border-emerald-200 dark:border-emerald-800">
+             <div className="w-full bg-emerald-50 dark:bg-emerald-900/20 text-emerald-600 dark:text-emerald-400 px-4 py-2.5 rounded-xl text-xs font-black flex items-center justify-center gap-1.5 border border-emerald-200 dark:border-emerald-800 pointer-events-auto">
                <CheckCircle2 size={14}/> رحلة مكتملة ✅
              </div>
            ) : isFull ? (
-             <div className="w-full sm:w-auto bg-rose-50 dark:bg-rose-900/20 text-rose-600 dark:text-rose-400 px-4 py-2 rounded-xl text-xs font-black flex items-center justify-center gap-1.5 border border-rose-200 dark:border-rose-800">
+             <div className="w-full bg-rose-50 dark:bg-rose-900/20 text-rose-600 dark:text-rose-400 px-4 py-2.5 rounded-xl text-xs font-black flex items-center justify-center gap-1.5 border border-rose-200 dark:border-rose-800 pointer-events-auto">
                الرحلة اكتملت 🔒
              </div>
            ) : (
-             <button className="w-full sm:w-auto bg-indigo-600 text-white px-5 py-2.5 rounded-xl text-xs font-black shadow-md hover:bg-indigo-700 active:scale-95 transition-all relative z-20 pointer-events-auto">
-               تواصل وتنسيق المشوار 💬
-             </button> 
+             <div className="flex flex-row items-stretch justify-between gap-2 w-full relative z-20 pointer-events-auto">
+               {canCallOrWhatsapp && (
+                 <>
+                   <a
+                     href={`tel:${contactPhone}`}
+                     onClick={(e) => e.stopPropagation()}
+                     className={`flex-1 flex justify-center items-center gap-1.5 py-2.5 px-2 rounded-xl text-[11px] sm:text-xs font-black transition-all shadow-sm ${isDarkMode ? 'bg-slate-700 text-white hover:bg-slate-600' : 'bg-slate-100 text-slate-800 hover:bg-slate-200'}`}
+                     title={`اتصال مباشر: ${contactPhone}`}
+                   >
+                     <Phone size={14} /> <span>اتصال</span>
+                   </a>
+                   <a
+                     href={getWhatsAppUrl(contactPhone)}
+                     target="_blank"
+                     rel="noreferrer"
+                     onClick={(e) => e.stopPropagation()}
+                     className="flex-1 flex justify-center items-center gap-1.5 py-2.5 px-2 bg-[#25D366] hover:bg-[#20bd5a] text-white rounded-xl text-[11px] sm:text-xs font-black shadow-sm transition-all"
+                     title="تواصل عبر واتساب"
+                   >
+                     <MessageCircle size={14} /> <span>واتساب</span>
+                   </a>
+                 </>
+               )}
+
+               <button 
+                 onClick={(e) => { e.stopPropagation(); openChatFromTrip(trip); }}
+                 className="flex-1 bg-indigo-600 text-white py-2.5 px-2 rounded-xl text-[11px] sm:text-xs font-black shadow-sm hover:bg-indigo-700 active:scale-95 transition-all flex justify-center items-center gap-1.5"
+               >
+                 <span>تواصل 💬</span>
+               </button> 
+             </div>
            )
          )}
       </div>
