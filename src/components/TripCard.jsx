@@ -10,6 +10,7 @@ const TripCard = ({ trip, user, isAdmin, isDarkMode, openChatFromTrip, triggerTo
   const isOwner = user?.uid === trip.userId;
   const isVerified = trip?.verified;
   const isCompleted = trip?.status === 'completed'; 
+  const isFull = trip?.status === 'full'; 
   
   const textPrimary = isDarkMode ? 'text-white' : 'text-slate-900';
   const textSecondary = isDarkMode ? 'text-slate-400' : 'text-slate-500';
@@ -37,10 +38,20 @@ const TripCard = ({ trip, user, isAdmin, isDarkMode, openChatFromTrip, triggerTo
     }
   };
 
+  // مصفوفة تعرض التفضيلات بشكل منسق مع أيقوناتها لو كانت موجودة
+  const preferencesLabels = { 
+    ac: 'تكييف ❄️', 
+    noSmoking: 'ممنوع التدخين 🚭', 
+    luggage: 'شنط سفر 🧳', 
+    families: 'عائلات 👨‍👩‍👧‍👦' 
+  };
+  
+  const activePreferences = trip.preferences ? Object.keys(trip.preferences).filter(key => trip.preferences[key]) : [];
+
   return (
     <div 
-      onClick={() => !isOwner && !isCompleted && openChatFromTrip(trip)}
-      className={`p-4 sm:p-5 rounded-[1.5rem] border shadow-[0_2px_12px_rgba(0,0,0,0.03)] hover:shadow-md hover:border-indigo-500/50 transition-all flex flex-col gap-3 relative cursor-pointer ${bgCard} mb-4 group`} 
+      onClick={() => !isOwner && !isCompleted && !isFull && openChatFromTrip(trip)}
+      className={`p-4 sm:p-5 rounded-[1.5rem] border shadow-[0_2px_12px_rgba(0,0,0,0.03)] hover:shadow-md hover:border-indigo-500/50 transition-all flex flex-col gap-3 relative cursor-pointer ${bgCard} mb-4 group ${(isCompleted || isFull) ? 'opacity-70 grayscale-[30%]' : ''}`} 
     >
       <div className="flex justify-between items-start relative z-10">
          <div className="flex items-center gap-3">
@@ -98,6 +109,17 @@ const TripCard = ({ trip, user, isAdmin, isDarkMode, openChatFromTrip, triggerTo
               {trip?.toDetails && <span className="truncate flex items-center gap-1"><MapPin size={12}/> إلى: {trip.toDetails}</span>}
            </div>
          )}
+
+         {/* إظهار التفضيلات (تكييف، ممنوع التدخين...) */}
+         {activePreferences.length > 0 && (
+           <div className="flex flex-wrap gap-1.5 mt-1 border-t border-slate-200/50 dark:border-slate-700/50 pt-2">
+             {activePreferences.map(key => (
+               <span key={key} className={`text-[9px] font-bold px-2 py-1 rounded-md ${isDarkMode ? 'bg-indigo-900/30 text-indigo-300' : 'bg-indigo-50 text-indigo-700'}`}>
+                 {preferencesLabels[key]}
+               </span>
+             ))}
+           </div>
+         )}
       </div>
 
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 mt-1 relative z-10 pointer-events-none">
@@ -105,9 +127,11 @@ const TripCard = ({ trip, user, isAdmin, isDarkMode, openChatFromTrip, triggerTo
            <div className={`flex items-center gap-1.5 text-xs font-bold ${textSecondary}`}>
              <Clock size={12} className="text-indigo-400"/> {formatTripDateTime(trip?.date, trip?.time)}
            </div>
-           <div className={`px-2 py-1 rounded-md flex items-center gap-1.5 w-fit ${isDarkMode ? 'bg-indigo-900/30 text-indigo-300' : 'bg-indigo-50 text-indigo-600'}`}>
+           
+           {/* إظهار لون مختلف لو المقاعد خلصت */}
+           <div className={`px-2 py-1 rounded-md flex items-center gap-1.5 w-fit ${isFull ? 'bg-rose-100 text-rose-600 dark:bg-rose-900/30 dark:text-rose-400' : (isDarkMode ? 'bg-indigo-900/30 text-indigo-300' : 'bg-indigo-50 text-indigo-600')}`}>
              {trip?.category === 'parcel' ? <Package size={12}/> : <Car size={12}/>}
-             <span className="text-[10px] font-bold">{getSeatsText(trip?.seats, trip?.category)}</span>
+             <span className="text-[10px] font-bold">{isFull ? 'مكتملة' : getSeatsText(trip?.seats, trip?.category)}</span>
            </div>
          </div>
          
@@ -115,6 +139,10 @@ const TripCard = ({ trip, user, isAdmin, isDarkMode, openChatFromTrip, triggerTo
            isCompleted ? (
              <div className="w-full sm:w-auto bg-emerald-50 dark:bg-emerald-900/20 text-emerald-600 dark:text-emerald-400 px-4 py-2 rounded-xl text-xs font-black flex items-center justify-center gap-1.5 border border-emerald-200 dark:border-emerald-800">
                <CheckCircle2 size={14}/> رحلة مكتملة ✅
+             </div>
+           ) : isFull ? (
+             <div className="w-full sm:w-auto bg-rose-50 dark:bg-rose-900/20 text-rose-600 dark:text-rose-400 px-4 py-2 rounded-xl text-xs font-black flex items-center justify-center gap-1.5 border border-rose-200 dark:border-rose-800">
+               الرحلة اكتملت 🔒
              </div>
            ) : (
              <button className="w-full sm:w-auto bg-indigo-600 text-white px-5 py-2.5 rounded-xl text-xs font-black shadow-md hover:bg-indigo-700 active:scale-95 transition-all relative z-20 pointer-events-auto">
