@@ -37,10 +37,8 @@ export default function App() {
   const [myInbox, setMyInbox] = useState([]);
   const [appSettings, setAppSettings] = useState({ logo: null, banners: [], bannerText: '' });
   
-  // --- التعديل: متغيرات حالة الإشعارات ---
   const [notifications, setNotifications] = useState([]);
   const [showNotificationsModal, setShowNotificationsModal] = useState(false);
-  // ----------------------------------------
 
   const [selectedStation, setSelectedStation] = useState(null);
   const [activeChat, setActiveChat] = useState(null);
@@ -53,7 +51,11 @@ export default function App() {
   const [authLoading, setAuthLoading] = useState(false);
   const [authForm, setAuthForm] = useState({ name: '', identifier: '', password: '' });
   
-  const [newTrip, setNewTrip] = useState({ type: 'offer', category: 'travel', from: '', fromDetails: '', to: '', toDetails: '', date: '', time: '', seats: 1, cost: '', notes: '' });
+  const [newTrip, setNewTrip] = useState({ 
+    type: 'offer', category: 'travel', from: '', fromDetails: '', to: '', toDetails: '', 
+    date: '', time: '', seats: 1, cost: '', notes: '',
+    preferences: { ac: false, noSmoking: false, luggage: false, families: false }
+  });
   
   const [toastMsg, setToastMsg] = useState('');
   const [alertMsg, setAlertMsg] = useState('');
@@ -131,7 +133,6 @@ export default function App() {
     return () => unsubscribe();
   }, [user, isGuest]);
 
-  // --- التعديل: جلب الإشعارات من الداتا بيز ---
   useEffect(() => {
     if (!user || isGuest) return;
     const q = query(collection(db, 'notifications'), where('userId', '==', user.uid));
@@ -142,7 +143,6 @@ export default function App() {
     });
     return () => unsubscribe();
   }, [user, isGuest]);
-  // ----------------------------------------------
 
   const handleAuth = async (e) => {
     e.preventDefault(); setAuthLoading(true); setAlertMsg('');
@@ -203,10 +203,8 @@ export default function App() {
         price: newTrip.cost 
       };
       
-      // حفظ الرحلة واستلام الـ ID بتاعها
       const docRef = await addDoc(collection(db, APP_COLLECTION_NAME), tripData);
 
-      // --- التعديل: فحص التنبيهات وإرسال إشعارات للناس المهتمة بالرحلة دي ---
       try {
         const alertsQuery = query(
           collection(db, 'trip_alerts'),
@@ -220,7 +218,6 @@ export default function App() {
            const batch = writeBatch(db);
            alertsSnap.forEach(alertDoc => {
               const alertData = alertDoc.data();
-              // متبعتش إشعار للشخص اللي بينزل الرحلة نفسه
               if (alertData.userId !== user.uid) { 
                  const notifRef = doc(collection(db, 'notifications'));
                  batch.set(notifRef, {
@@ -238,11 +235,10 @@ export default function App() {
       } catch (err) {
         console.error("خطأ أثناء إرسال التنبيهات:", err);
       }
-      // ------------------------------------------------------------------------
 
       setShowAddModal(false); triggerToast('تم النشر بنجاح!');
       setActiveTab('home'); setHomeCategory(newTrip.category);
-      setNewTrip({ type: 'offer', category: 'travel', from: '', fromDetails: '', to: '', toDetails: '', date: '', time: '', seats: 1, cost: '', notes: '' });
+      setNewTrip({ type: 'offer', category: 'travel', from: '', fromDetails: '', to: '', toDetails: '', date: '', time: '', seats: 1, cost: '', notes: '', preferences: { ac: false, noSmoking: false, luggage: false, families: false } });
     } catch (error) { triggerToast('حدث خطأ.'); } finally { setIsSubmitting(false); }
   };
 
@@ -298,7 +294,28 @@ export default function App() {
 
       if (actionType === 'request') { newStatus = 'pending'; systemText = `قام ${myName} بطلب الانضمام لرحلة (${chatInfo.tripInfo}) الخاصة بـ ${ownerName} 🙋‍♂️`; } 
       else if (actionType === 'cancel_request') { newStatus = 'none'; systemText = `قام ${myName} بإلغاء الطلب 🔙`; } 
-      else if (actionType === 'accept') { newStatus = 'accepted'; systemText = 'تم قبول طلبك! سيتم التواصل معك 🚗'; } 
+      else if (actionType === 'accept') { 
+        newStatus = 'accepted'; 
+        systemText = 'تم قبول طلبك! سيتم التواصل معك 🚗'; 
+        
+        if (chatInfo.tripId && chatInfo.tripId !== 'system') {
+          try {
+            const tripRef = doc(db, APP_COLLECTION_NAME, chatInfo.tripId);
+            const tripSnap = await getDoc(tripRef);
+            if (tripSnap.exists()) {
+              const currentSeats = Number(tripSnap.data().seats) || 0;
+              if (currentSeats > 0) {
+                const newSeats = currentSeats - 1;
+                const tripUpdate = { seats: newSeats };
+                if (newSeats === 0) tripUpdate.status = 'full';
+                await updateDoc(tripRef, tripUpdate);
+              }
+            }
+          } catch (err) {
+            console.error("Error updating seats", err);
+          }
+        }
+      } 
       else if (actionType === 'reject') { newStatus = 'rejected'; systemText = 'عذراً، تم رفض الطلب ❌'; } 
       else if (actionType === 'block') { newStatus = 'blocked'; systemText = 'تم حظر التعامل في هذا الشات 🚫'; }
       else if (actionType === 'start_moving') { newStatus = 'moving'; systemText = 'تنبيه: الكابتن في الطريق 🚙'; } 
@@ -368,7 +385,6 @@ export default function App() {
             </div>
           </div>
           
-          {/* --- التعديل: قسم اللوجو وبجانبه الجرس --- */}
           <div className="flex items-center gap-4">
             
             {!isGuest && (
@@ -388,11 +404,9 @@ export default function App() {
               {appSettings?.logo ? ( <img src={appSettings.logo} className="w-8 h-8 object-contain rounded-md" alt="Logo"/> ) : ( <div className="bg-indigo-600 text-white p-1.5 rounded-lg"><Car size={20}/></div> )}
             </div>
           </div>
-          {/* -------------------------------------- */}
         </div>
       </header>
 
-      {/* --- التعديل: نافذة عرض الإشعارات --- */}
       {showNotificationsModal && (
         <div className="fixed inset-0 bg-slate-900/80 backdrop-blur-sm z-[999] flex justify-center items-start p-4 pointer-events-auto" onClick={() => setShowNotificationsModal(false)}>
           <div className={`${bgCard} w-full max-w-md mt-20 rounded-[2rem] shadow-2xl flex flex-col max-h-[60vh] border dark:border-slate-700 animate-fade-in-up`} onClick={e => e.stopPropagation()}>
@@ -432,7 +446,6 @@ export default function App() {
           </div>
         </div>
       )}
-      {/* -------------------------------------- */}
 
       {activeTab === 'home' && !isGuest && (
         <button onClick={() => setShowAddModal(true)} className="fixed bottom-[90px] right-5 bg-indigo-600 text-white w-14 h-14 rounded-full shadow-lg flex items-center justify-center z-50 hover:bg-indigo-700 transition-transform"><Plus size={28} /></button>
@@ -494,6 +507,19 @@ export default function App() {
                     <input type="number" required placeholder="التكلفة (ج)" value={newTrip.cost} onChange={e => setNewTrip({...newTrip, cost: e.target.value})} className={`w-full p-4 rounded-xl border font-bold text-sm outline-none ${bgInput}`}/>
                   </div>
                 </div>
+
+                <div className="flex gap-2 flex-wrap pt-2">
+                  {Object.keys(newTrip.preferences).map(key => {
+                    const labels = { ac: 'تكييف ❄️', noSmoking: 'ممنوع التدخين 🚭', luggage: 'شنط سفر 🧳', families: 'عائلات فقط 👨‍👩‍👧‍👦' };
+                    return (
+                      <label key={key} className={`flex items-center gap-2 p-2 rounded-xl border cursor-pointer text-xs font-bold transition-colors ${newTrip.preferences[key] ? 'bg-indigo-50 border-indigo-500 text-indigo-700' : 'bg-transparent border-slate-200 dark:border-slate-700 text-slate-500'}`}>
+                        <input type="checkbox" className="hidden" checked={newTrip.preferences[key]} onChange={(e) => setNewTrip({...newTrip, preferences: {...newTrip.preferences, [key]: e.target.checked}})} />
+                        {labels[key]}
+                      </label>
+                    );
+                  })}
+                </div>
+
                 <textarea rows="3" placeholder="ملاحظات إضافية..." value={newTrip.notes} onChange={e => setNewTrip({...newTrip, notes: e.target.value})} className={`w-full p-4 rounded-2xl border font-bold text-sm outline-none resize-none ${bgInput}`}></textarea>
               </form>
             </div>
