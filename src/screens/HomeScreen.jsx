@@ -1,29 +1,89 @@
 import React, { useState, useEffect } from 'react';
-import { Bell, BusFront, MapPinned, List, X, ChevronRight, ChevronLeft, Route, Plus, Loader2, ChevronLeft as ChevronLeftIcon, Search } from 'lucide-react';
+import { Bell, BusFront, MapPinned, List, X, ChevronRight, ChevronLeft, Route, Plus, Loader2, ChevronLeft as ChevronLeftIcon, Search, MapPin, Sparkles, Compass, Car } from 'lucide-react';
 import TripCard from '../components/TripCard';
-import { EGYPT_CITIES } from '../utils/helpers';
 import { collection, addDoc } from 'firebase/firestore';
 import { db, STATIONS_COLLECTION } from '../firebase';
+// استدعاء المناطق المدعومة وخريطة المناطق القريبة ودالة التطبيع من App
+import { SUPPORTED_AREAS, NEARBY_AREAS_MAP, normalizeArabic } from '../App';
 
 const HomeScreen = ({
   user, isAdmin, isDarkMode, realTrips, stations, isGuest,
   homeCategory, setHomeCategory, viewMode, setViewMode, filterType, setFilterType,
   filterFrom, setFilterFrom, filterTo, setFilterTo, openChatFromTrip,
-  setSelectedStation, triggerToast, appSettings
+  setSelectedStation, triggerToast, appSettings, userArea, onOpenAreaModal
 }) => {
   
   const [stationSearchQuery, setStationSearchQuery] = useState('');
 
-  const visibleTrips = (realTrips || []).filter(t => {
-    if (!t || t.status === 'cancelled') return false; 
+  // 1. تصفية الرحلات حسب القسم (سفريات أو أمانات) ونوع الطلب (سائق أو راكب)
+  const categoryTrips = (realTrips || []).filter(t => {
+    if (!t || t.status === 'cancelled') return false;
     if (homeCategory === 'travel') {
-       return t.category === 'travel' && t.type === filterType && (!filterFrom || t.from === filterFrom) && (!filterTo || t.to === filterTo);
+      return t.category === 'travel' && (!t.type || t.type === filterType);
     }
     if (homeCategory === 'parcel') {
-       return (t.category === 'parcel' || t.type === 'delivery') && (!filterFrom || t.from === filterFrom) && (!filterTo || t.to === filterTo);
+      return (t.category === 'parcel' || t.type === 'delivery');
     }
     return false;
   });
+
+  // دالة مقارنة ذكية للمناطق
+  const isAreaMatch = (tripArea, targetArea) => {
+    if (!targetArea) return true;
+    if (!tripArea) return false;
+    const normTrip = normalizeArabic(tripArea);
+    const normTarget = normalizeArabic(targetArea);
+    return normTrip === normTarget || normTrip.includes(normTarget) || normTarget.includes(normTrip);
+  };
+
+  // دالة فحص هل المنطقة قريبة جغرافياً
+  const isNearbyArea = (tripArea, targetArea) => {
+    if (!tripArea || !targetArea) return false;
+    const nearbyList = NEARBY_AREAS_MAP[targetArea] || [];
+    return nearbyList.some(near => isAreaMatch(tripArea, near));
+  };
+
+  // حساب درجة التطابق والأولوية
+  const getTripRelevanceScore = (trip) => {
+    let score = 0;
+    const activeOrigin = filterFrom || userArea;
+
+    if (activeOrigin) {
+      if (isAreaMatch(trip.from, activeOrigin)) score += 100;
+      else if (isAreaMatch(trip.fromDetails, activeOrigin)) score += 80;
+      else if (isNearbyArea(trip.from, activeOrigin)) score += 50;
+      else if (isAreaMatch(trip.to, activeOrigin)) score += 30;
+    }
+
+    if (filterTo) {
+      if (isAreaMatch(trip.to, filterTo)) score += 90;
+      else if (isAreaMatch(trip.toDetails, filterTo)) score += 70;
+      else if (isNearbyArea(trip.to, filterTo)) score += 45;
+    }
+
+    return score;
+  };
+
+  // 2. الرحلات المطابقة تماماً للبحث الحالي
+  const exactMatchedTrips = categoryTrips.filter(t => {
+    const matchFrom = !filterFrom || isAreaMatch(t.from, filterFrom) || isAreaMatch(t.fromDetails, filterFrom);
+    const matchTo = !filterTo || isAreaMatch(t.to, filterTo) || isAreaMatch(t.toDetails, filterTo);
+    return matchFrom && matchTo;
+  }).sort((a, b) => getTripRelevanceScore(b) - getTripRelevanceScore(a));
+
+  // 3. الرحلات المشابهة والبديلة 
+  const similarTrips = categoryTrips.filter(t => {
+    if (exactMatchedTrips.some(exact => exact.id === t.id)) return false;
+    
+    const activeOrigin = filterFrom || userArea;
+    if (!activeOrigin && !filterTo) return false;
+
+    const fromNearby = activeOrigin && (isNearbyArea(t.from, activeOrigin) || isAreaMatch(t.to, activeOrigin));
+    const toNearby = filterTo && (isAreaMatch(t.to, filterTo) || isNearbyArea(t.to, filterTo));
+    const sameCategoryFallback = categoryTrips.length > 0;
+
+    return fromNearby || toNearby || sameCategoryFallback;
+  }).sort((a, b) => getTripRelevanceScore(b) - getTripRelevanceScore(a));
 
   const visibleStations = (stations || []).filter(s => {
     const isApprovedOrAdmin = isAdmin ? true : (s.status === 'approved' || !s.status);
@@ -98,7 +158,6 @@ const HomeScreen = ({
     }
   };
 
-  // --- التعديل الجديد: دالة تفعيل التنبيه ---
   const handleSetAlert = async () => {
     if (isGuest || !user) return triggerToast('يجب تسجيل الدخول أولاً لتفعيل التنبيهات');
     if (!filterFrom || !filterTo) return triggerToast('يرجى تحديد المحافظة والوجهة أولاً');
@@ -118,7 +177,6 @@ const HomeScreen = ({
       triggerToast('حدث خطأ أثناء تفعيل التنبيه');
     }
   };
-  // ------------------------------------------
 
   const bgInput = isDarkMode ? 'bg-slate-800 border-slate-700 text-white placeholder-slate-400 focus:border-indigo-500' : 'bg-white border-slate-200 text-slate-900 focus:border-indigo-500';
   const textPrimary = isDarkMode ? 'text-white' : 'text-slate-900';
@@ -179,9 +237,9 @@ const HomeScreen = ({
          </div>
          {viewMode === 'list' && (
            <div className={`flex p-1.5 rounded-2xl shadow-sm border overflow-x-auto flex-nowrap whitespace-nowrap [&::-webkit-scrollbar]:hidden [-ms-overflow-style:none] [scrollbar-width:none] ${isDarkMode ? 'bg-slate-900 border-slate-800' : 'bg-white/80 border-slate-200/60'}`}>
-             <button onClick={() => {setHomeCategory('travel'); setFilterFrom(''); setFilterTo('');}} className={`shrink-0 px-4 py-2 rounded-xl text-xs font-bold transition-all ${homeCategory === 'travel' ? 'bg-white text-indigo-600 shadow-sm dark:bg-slate-700 dark:text-white' : 'text-slate-500'}`}>سفريات 🚗</button>
-             <button onClick={() => {setHomeCategory('parcel'); setFilterFrom(''); setFilterTo('');}} className={`shrink-0 px-4 py-2 rounded-xl text-xs font-bold transition-all ${homeCategory === 'parcel' ? 'bg-white text-indigo-600 shadow-sm dark:bg-slate-700 dark:text-white' : 'text-slate-500'}`}>أمانات 📦</button>
-             <button onClick={() => {setHomeCategory('stations'); setFilterFrom(''); setFilterTo('');}} className={`shrink-0 px-4 py-2 rounded-xl text-xs font-bold transition-all ${homeCategory === 'stations' ? 'bg-white text-indigo-600 shadow-sm dark:bg-slate-700 dark:text-white' : 'text-slate-500'}`}>مواقف مصر 🚏</button>
+             <button onClick={() => {setHomeCategory('travel'); setFilterTo('');}} className={`shrink-0 px-4 py-2 rounded-xl text-xs font-bold transition-all ${homeCategory === 'travel' ? 'bg-white text-indigo-600 shadow-sm dark:bg-slate-700 dark:text-white' : 'text-slate-500'}`}>سفريات 🚗</button>
+             <button onClick={() => {setHomeCategory('parcel'); setFilterTo('');}} className={`shrink-0 px-4 py-2 rounded-xl text-xs font-bold transition-all ${homeCategory === 'parcel' ? 'bg-white text-indigo-600 shadow-sm dark:bg-slate-700 dark:text-white' : 'text-slate-500'}`}>أمانات 📦</button>
+             <button onClick={() => {setHomeCategory('stations'); setFilterTo('');}} className={`shrink-0 px-4 py-2 rounded-xl text-xs font-bold transition-all ${homeCategory === 'stations' ? 'bg-white text-indigo-600 shadow-sm dark:bg-slate-700 dark:text-white' : 'text-slate-500'}`}>مواقف مصر 🚏</button>
            </div>
          )}
       </div>
@@ -189,7 +247,35 @@ const HomeScreen = ({
       {viewMode === 'list' && (
         <div className="animate-fade-in-up">
           {(homeCategory === 'travel' || homeCategory === 'parcel') && (
-            <div className="mb-6 space-y-4">
+            <div className="mb-6 space-y-3">
+              
+              <div className="flex items-center justify-between px-3.5 py-2.5 rounded-2xl bg-indigo-50/70 dark:bg-indigo-950/30 border border-indigo-100 dark:border-indigo-900/50">
+                <div className="flex items-center gap-2">
+                  <MapPin size={16} className="text-indigo-600 dark:text-indigo-400 shrink-0" />
+                  <span className="text-xs font-bold text-slate-600 dark:text-slate-300">
+                    منطقتك الحالية: <strong className="font-black text-indigo-600 dark:text-indigo-400">{userArea || 'جميع المناطق'}</strong>
+                  </span>
+                </div>
+                <div className="flex items-center gap-2">
+                  {filterFrom && (
+                    <button 
+                      onClick={() => setFilterFrom('')} 
+                      className="text-[11px] font-bold text-slate-500 hover:text-indigo-600 dark:text-slate-400 underline"
+                    >
+                      عرض كل المدن
+                    </button>
+                  )}
+                  {onOpenAreaModal && (
+                    <button 
+                      onClick={onOpenAreaModal} 
+                      className="text-[11px] font-black bg-white dark:bg-slate-800 text-indigo-600 dark:text-indigo-400 px-2.5 py-1 rounded-lg border border-indigo-200 dark:border-slate-700 shadow-sm hover:scale-105 transition-transform"
+                    >
+                      تغيير المنطقة
+                    </button>
+                  )}
+                </div>
+              </div>
+
               {homeCategory === 'travel' && (
                 <div className="flex gap-2">
                   <button onClick={() => setFilterType('offer')} className={`flex-1 py-2.5 rounded-xl text-xs font-bold border transition-colors ${filterType === 'offer' ? 'bg-indigo-600 text-white border-indigo-600' : (isDarkMode ? 'bg-slate-800 text-slate-300 border-slate-700' : 'bg-white text-slate-600 border-slate-200')}`}>عربيات متاحة (سائق)</button>
@@ -198,12 +284,18 @@ const HomeScreen = ({
               )}
               <div className={`flex gap-2 p-3 rounded-2xl border ${isDarkMode ? 'bg-slate-800 border-slate-700' : 'bg-slate-50 border-slate-200'}`}>
                 <select value={filterFrom} onChange={(e) => setFilterFrom(e.target.value)} className={`flex-1 p-2.5 rounded-xl border text-xs font-bold outline-none ${bgInput}`}>
-                  <option value="">من المحافظة</option>{EGYPT_CITIES.map(c => <option key={c} value={c}>{c}</option>)}
+                  <option value="">كل مناطق التحرك</option>
+                  {SUPPORTED_AREAS.map(c => <option key={c} value={c}>{c}</option>)}
                 </select>
                 <select value={filterTo} onChange={(e) => setFilterTo(e.target.value)} className={`flex-1 p-2.5 rounded-xl border text-xs font-bold outline-none ${bgInput}`}>
-                  <option value="">إلى الوجهة</option>{EGYPT_CITIES.map(c => <option key={c} value={c}>{c}</option>)}
+                  <option value="">كل وجهات الوصول</option>
+                  {SUPPORTED_AREAS.map(c => <option key={c} value={c}>{c}</option>)}
                 </select>
-                {(filterFrom || filterTo) && ( <button onClick={() => {setFilterFrom(''); setFilterTo('');}} className="p-2.5 bg-rose-100 text-rose-600 rounded-xl hover:bg-rose-200 transition-colors"><X size={16}/></button> )}
+                {(filterFrom || filterTo) && ( 
+                  <button onClick={() => {setFilterFrom(''); setFilterTo('');}} className="px-3 py-2 bg-rose-100 text-rose-600 dark:bg-rose-900/30 dark:text-rose-400 rounded-xl hover:bg-rose-200 transition-colors text-xs font-black flex items-center gap-1 shrink-0" title="إلغاء الفلتر وعرض الكل">
+                    <X size={15}/> الكل
+                  </button> 
+                )}
               </div>
             </div>
           )}
@@ -316,29 +408,84 @@ const HomeScreen = ({
                  )}
                </>
              ) : (
-               visibleTrips.length === 0 ? (
-                 <div className={`text-center py-16 px-4 rounded-[2rem] border-2 border-dashed col-span-1 md:col-span-2 ${isDarkMode ? 'border-slate-800 bg-slate-900/50' : 'border-slate-200 bg-slate-50'}`}>
-                   <Bell size={48} className="mx-auto text-indigo-400 mb-4 opacity-50"/>
-                   <h3 className="font-bold text-lg text-slate-700 dark:text-slate-300 mb-2">لا توجد رحلات متاحة حالياً</h3>
-                   
-                   {/* التعديل الجديد: إظهار زر التنبيه لو مفيش نتائج */}
-                   {filterFrom && filterTo ? (
-                      <div className="mt-4 space-y-3 animate-fade-in-up">
-                         <p className="text-sm text-slate-500">فعل التنبيه وهنبعتلك إشعار فوراً أول ما حد ينزل رحلة من <span className="font-bold text-indigo-500">{filterFrom}</span> إلى <span className="font-bold text-indigo-500">{filterTo}</span></p>
-                         <button 
-                           onClick={handleSetAlert} 
-                           className="inline-flex items-center justify-center gap-2 bg-indigo-600 hover:bg-indigo-700 text-white font-bold py-2.5 px-6 rounded-xl transition-transform active:scale-95 shadow-md hover:shadow-lg"
-                         >
-                            <Bell size={18} className="animate-bounce" /> أعلمني عند توفر رحلة
-                         </button>
-                      </div>
-                   ) : (
-                      <p className="text-sm text-slate-500 mt-2">حدد "من المحافظة" و "إلى الوجهة" للبحث أو لتفعيل التنبيهات الذكية</p>
-                   )}
-                 </div>
-               ) : (
-                 visibleTrips.map(trip => <TripCard key={trip.id} trip={trip} user={user} isAdmin={isAdmin} isDarkMode={isDarkMode} openChatFromTrip={openChatFromTrip} triggerToast={triggerToast} />)
-               )
+               <>
+                 {/* 1. الرحلات المطابقة تماماً */}
+                 {exactMatchedTrips.length > 0 && (
+                   <>
+                     {(filterFrom || filterTo || userArea) && (
+                       <div className="col-span-1 md:col-span-2 flex items-center justify-between px-2 pt-1 mb-2">
+                         <span className="text-xs font-black text-emerald-600 dark:text-emerald-400 flex items-center gap-1.5">
+                           <Sparkles size={15}/> رحلات مطابقة لبحثك ومنطقتك ({exactMatchedTrips.length})
+                         </span>
+                       </div>
+                     )}
+                     {exactMatchedTrips.map(trip => (
+                       <TripCard 
+                         key={trip.id} 
+                         trip={trip} 
+                         user={user} 
+                         isAdmin={isAdmin} 
+                         isDarkMode={isDarkMode} 
+                         openChatFromTrip={openChatFromTrip} 
+                         triggerToast={triggerToast} 
+                         matchBadge={(filterFrom || userArea) && isAreaMatch(trip.from, filterFrom || userArea) ? 'مطابق لمنطقتك ⭐' : null}
+                       />
+                     ))}
+                   </>
+                 )}
+
+                 {/* 2. تنبيه سلس في حال عدم وجود رحلات مطابقة - تظهر مع باقي الرحلات دون حظر */}
+                 {exactMatchedTrips.length === 0 && categoryTrips.length > 0 && (filterFrom || filterTo) && (
+                   <div className="col-span-1 md:col-span-2 flex flex-col sm:flex-row items-center justify-between gap-3 px-4 py-3 mb-3 rounded-2xl bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-800/50">
+                     <span className="text-xs font-bold text-amber-700 dark:text-amber-400 flex items-center gap-1.5 text-center sm:text-right leading-relaxed">
+                       <Compass size={16} className="shrink-0"/> 
+                       لم نجد رحلات مطابقة لـ "{filterFrom || filterTo}"، نعرض لك أحدث الرحلات المتاحة بدلاً من ذلك:
+                     </span>
+                     {filterFrom && filterTo && (
+                       <button onClick={handleSetAlert} className="shrink-0 text-[11px] font-black bg-white dark:bg-slate-800 text-amber-600 dark:text-amber-400 px-3 py-2 rounded-xl shadow-sm flex items-center gap-1.5 hover:scale-105 transition-transform border border-amber-200 dark:border-slate-700">
+                         <Bell size={14} className="animate-pulse" /> بلّغني عند توفرها
+                       </button>
+                     )}
+                   </div>
+                 )}
+
+                 {/* 3. في حال كان النظام بالكامل فارغاً من أي رحلات في القسم المختار */}
+                 {categoryTrips.length === 0 && (
+                    <div className={`text-center py-10 px-4 rounded-[2rem] border-2 border-dashed col-span-1 md:col-span-2 ${isDarkMode ? 'border-slate-800 bg-slate-900/50' : 'border-slate-200 bg-slate-50'}`}>
+                      <Car size={40} className="mx-auto text-slate-400 mb-3 opacity-50"/>
+                      <h3 className="font-bold text-sm text-slate-500">لا توجد رحلات متاحة في هذا القسم حالياً</h3>
+                    </div>
+                 )}
+
+                 {/* 4. عرض الرحلات الأخرى (البديلة، المشابهة، والقريبة) */}
+                 {similarTrips.length > 0 && (
+                   <>
+                     {exactMatchedTrips.length > 0 && (
+                       <div className="col-span-1 md:col-span-2 flex items-center justify-between px-2 mt-4 pt-3 border-t border-slate-200 dark:border-slate-800">
+                         <span className="text-xs font-black text-indigo-600 dark:text-indigo-400 flex items-center gap-1.5">
+                           <Compass size={16}/> رحلات أخرى متاحة قد تهمك ({similarTrips.length})
+                         </span>
+                       </div>
+                     )}
+                     {similarTrips.map(trip => {
+                       const activeOrigin = filterFrom || userArea;
+                       const isNear = activeOrigin && isNearbyArea(trip.from, activeOrigin);
+                       return (
+                         <TripCard 
+                           key={trip.id} 
+                           trip={trip} 
+                           user={user} 
+                           isAdmin={isAdmin} 
+                           isDarkMode={isDarkMode} 
+                           openChatFromTrip={openChatFromTrip} 
+                           triggerToast={triggerToast} 
+                           matchBadge={isNear ? 'منطقة قريبة منك 📍' : (exactMatchedTrips.length === 0 && (filterFrom || filterTo) ? 'مقترح لك 💡' : null)}
+                         />
+                       );
+                     })}
+                   </>
+                 )}
+               </>
              )}
           </div>
         </div>
@@ -357,10 +504,12 @@ const HomeScreen = ({
              </div>
              <form onSubmit={handleAddStation} className="space-y-4">
                 <input type="text" required placeholder="اسم الموقف (مثال: موقف عبود)" value={newStationName} onChange={e => setNewStationName(e.target.value)} className={`w-full p-3.5 rounded-xl border text-sm font-bold outline-none ${bgInput}`}/>
+                
                 <select required value={newStationLoc} onChange={e => setNewStationLoc(e.target.value)} className={`w-full p-3.5 rounded-xl border text-sm font-bold outline-none ${bgInput}`}>
-                  <option value="" disabled>المحافظة</option>
-                  {EGYPT_CITIES.map(c => <option key={c} value={c}>{c}</option>)}
+                  <option value="" disabled>المنطقة</option>
+                  {SUPPORTED_AREAS.map(c => <option key={c} value={c}>{c}</option>)}
                 </select>
+
                 <input type="url" placeholder="رابط لوكيشن جوجل ماب (اختياري)" value={newStationMapUrl} onChange={e => setNewStationMapUrl(e.target.value)} className={`w-full p-3.5 rounded-xl border text-sm font-bold outline-none ${bgInput}`} dir="ltr"/>
                 <button type="submit" disabled={isSubmittingStation} className="w-full bg-indigo-600 text-white py-3.5 rounded-xl font-bold flex justify-center items-center gap-2 mt-2 hover:bg-indigo-700 active:scale-95 transition-transform">
                   {isSubmittingStation ? <Loader2 size={18} className="animate-spin"/> : 'حفظ الموقف'}
@@ -374,4 +523,4 @@ const HomeScreen = ({
   );
 };
 
-export default HomeScreen;;
+export default HomeScreen;
