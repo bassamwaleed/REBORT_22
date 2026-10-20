@@ -1,10 +1,11 @@
 import React, { useState, useEffect } from 'react';
-import { MapPin, Loader2, MessageCircle, ChevronDown, Check, X, Navigation, Car, ShieldAlert, Share2 } from 'lucide-react';
+import { MapPin, Loader2, MessageCircle, ChevronDown, Check, X, Navigation, Car, Share2, Phone, AlertCircle } from 'lucide-react';
 import { safeMillis } from '../utils/helpers';
 
-const LiveTrackerBar = ({ activeTrackers, isDarkMode, setActiveChat, handleTripAction, user }) => {
+export default function LiveTrackerBar({ activeTrackers, isDarkMode, setActiveChat, handleTripAction, user }) {
   const [isMinimized, setIsMinimized] = useState(false);
   const [liveTimer, setLiveTimer] = useState('00:00:00');
+  const [showCancelConfirm, setShowCancelConfirm] = useState(false);
 
   useEffect(() => {
     let interval;
@@ -32,7 +33,6 @@ const LiveTrackerBar = ({ activeTrackers, isDarkMode, setActiveChat, handleTripA
 
   const currentTracker = activeTrackers[0];
   const data = currentTracker.data;
-  
   if (!data) return null;
 
   const reqStatus = data.requestStatus || 'none';
@@ -43,31 +43,37 @@ const LiveTrackerBar = ({ activeTrackers, isDarkMode, setActiveChat, handleTripA
   let statusText = 'جاري التتبع...';
   let statusColor = 'text-indigo-100';
   let pulseIcon = <Loader2 size={20} className="animate-spin text-white"/>;
+  let currentStepIndex = 0;
 
   if (reqStatus === 'pending') {
     statusText = isRequestSender ? 'بانتظار موافقة الطرف الآخر...' : 'يوجد طلب جديد يرجى مراجعته';
     statusColor = 'text-amber-200';
+    currentStepIndex = -1;
   } else if (reqStatus === 'accepted') {
     statusText = isActualDriver ? 'تم القبول، متى ستتحرك؟' : 'تم التأكيد، بانتظار تحرك الكابتن';
     statusColor = 'text-emerald-200';
     pulseIcon = <Check size={20} className="text-white"/>;
+    currentStepIndex = 0;
   } else if (reqStatus === 'moving') {
     statusText = 'الكابتن في الطريق الآن 🚙';
     statusColor = 'text-blue-200';
     pulseIcon = <Car size={20} className="animate-pulse text-white"/>;
+    currentStepIndex = 1;
   } else if (reqStatus === 'arrived') {
     statusText = 'الكابتن وصل نقطة الالتقاء 📍';
     statusColor = 'text-orange-200';
     pulseIcon = <MapPin size={20} className="animate-bounce text-white"/>;
+    currentStepIndex = 2;
   } else if (reqStatus === 'in_progress_trip') {
     statusText = 'الرحلة جارية.. طريق آمن 🛣️';
     statusColor = 'text-emerald-300';
     pulseIcon = <Navigation size={20} className="animate-pulse text-white"/>;
+    currentStepIndex = 3;
   }
 
   const handleShareSafety = (e) => {
     e.stopPropagation();
-    const text = `أنا الآن في رحلة عبر (طريقنا).\nمسار الرحلة: ${data.tripInfo}\nاسم الكابتن: ${data.otherPersonName}\nللاطمئنان عليّ، يرجى المتابعة.`;
+    const text = `أنا الآن في رحلة عبر (طريقنا).\nمسار الرحلة: ${data.tripInfo}\nمع: ${data.otherPersonName}\nللاطمئنان عليّ، يرجى المتابعة.`;
     if (navigator.share) {
       navigator.share({ title: 'مشاركة الرحلة للأمان', text: text }).catch(() => {});
     } else {
@@ -75,11 +81,19 @@ const LiveTrackerBar = ({ activeTrackers, isDarkMode, setActiveChat, handleTripA
     }
   };
 
+  const steps = [
+    { id: 'accepted', label: 'قبول' },
+    { id: 'moving', label: 'في الطريق' },
+    { id: 'arrived', label: 'وصول' },
+    { id: 'in_progress_trip', label: 'بدء' }
+  ];
+
   if (isMinimized) {
     return (
       <div className="fixed bottom-[85px] left-4 z-[150] animate-fade-in-up">
         <button onClick={() => setIsMinimized(false)} className="bg-indigo-600 text-white p-3.5 rounded-full shadow-lg flex items-center justify-center hover:scale-105 transition-transform border-2 border-white/20">
            {pulseIcon}
+           {reqStatus === 'pending' && <span className="absolute -top-1 -right-1 flex h-3 w-3"><span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-rose-400 opacity-75"></span><span className="relative inline-flex rounded-full h-3 w-3 bg-rose-500"></span></span>}
         </button>
       </div>
     );
@@ -88,11 +102,11 @@ const LiveTrackerBar = ({ activeTrackers, isDarkMode, setActiveChat, handleTripA
   return (
     <div className="fixed bottom-[85px] left-0 right-0 z-[150] px-4 pointer-events-none animate-fade-in-up">
       <div className="max-w-md mx-auto w-full pointer-events-auto">
-        <div className={`p-4 rounded-[1.5rem] shadow-2xl flex flex-col border relative overflow-hidden ${isDarkMode ? 'bg-slate-900 border-indigo-500/50' : 'bg-indigo-600 border-indigo-500'}`}>
+        <div className={`p-4 rounded-[1.5rem] shadow-2xl flex flex-col border relative overflow-hidden transition-colors duration-300 ${isDarkMode ? 'bg-slate-900 border-indigo-500/50' : 'bg-indigo-600 border-indigo-500'}`}>
           
           <div className="absolute top-0 right-0 w-32 h-32 bg-white/5 rounded-full blur-3xl -mr-10 -mt-10 pointer-events-none"></div>
 
-          <button onClick={(e) => { e.stopPropagation(); setIsMinimized(true); }} className={`absolute -top-3 left-4 p-1 rounded-full shadow-md z-10 transition-colors ${isDarkMode ? 'bg-slate-800 text-slate-300 hover:bg-slate-700' : 'bg-white text-indigo-600 hover:bg-slate-100'}`}>
+          <button onClick={(e) => { e.stopPropagation(); setIsMinimized(true); setShowCancelConfirm(false); }} className={`absolute -top-3 left-4 p-1 rounded-full shadow-md z-10 transition-colors ${isDarkMode ? 'bg-slate-800 text-slate-300 hover:bg-slate-700' : 'bg-white text-indigo-600 hover:bg-slate-100'}`}>
             <ChevronDown size={16} />
           </button>
 
@@ -111,36 +125,84 @@ const LiveTrackerBar = ({ activeTrackers, isDarkMode, setActiveChat, handleTripA
                 )}
               </div>
             </div>
-            <button className={`p-2.5 rounded-xl shrink-0 transition-colors ${isDarkMode ? 'bg-slate-800 text-indigo-400 hover:bg-slate-700' : 'bg-white/20 text-white hover:bg-white/30'}`}>
-              <MessageCircle size={18} />
-            </button>
+            
+            <div className="flex items-center gap-1 shrink-0">
+               {reqStatus !== 'pending' && (
+                  <button onClick={(e) => { e.stopPropagation(); window.location.href = `tel:`; }} className={`p-2.5 rounded-xl transition-colors ${isDarkMode ? 'bg-slate-800 text-emerald-400 hover:bg-slate-700' : 'bg-white/20 text-white hover:bg-white/30'}`} title="اتصال هاتفي">
+                    <Phone size={18} />
+                  </button>
+               )}
+               <button className={`p-2.5 rounded-xl transition-colors ${isDarkMode ? 'bg-slate-800 text-indigo-400 hover:bg-slate-700' : 'bg-white/20 text-white hover:bg-white/30'}`}>
+                 <MessageCircle size={18} />
+               </button>
+            </div>
           </div>
 
-          <div className="flex gap-2 relative z-10 pt-2 border-t border-white/10">
-             {reqStatus === 'pending' && !isRequestSender && (
-                <>
-                  <button onClick={() => handleTripAction(data, 'accept')} className="flex-1 bg-emerald-500 hover:bg-emerald-600 text-white py-2.5 rounded-xl text-xs font-black flex items-center justify-center gap-1.5 transition-colors"><Check size={14}/> قبول</button>
-                  <button onClick={() => handleTripAction(data, 'reject')} className="flex-1 bg-rose-500 hover:bg-rose-600 text-white py-2.5 rounded-xl text-xs font-black flex items-center justify-center gap-1.5 transition-colors"><X size={14}/> رفض</button>
-                </>
-             )}
-             
-             {reqStatus === 'accepted' && isActualDriver && (
-                <button onClick={() => handleTripAction(data, 'start_moving')} className={`w-full py-2.5 rounded-xl text-xs font-black transition-colors ${isDarkMode ? 'bg-indigo-500 text-white hover:bg-indigo-600' : 'bg-white text-indigo-600 hover:bg-slate-50'}`}>إبلاغ بالتحرك 🚙</button>
-             )}
-             {reqStatus === 'moving' && isActualDriver && (
-                <button onClick={() => handleTripAction(data, 'arrive')} className="w-full bg-orange-500 hover:bg-orange-600 text-white py-2.5 rounded-xl text-xs font-black transition-colors">إبلاغ بالوصول 📍</button>
-             )}
-             {reqStatus === 'arrived' && isActualDriver && (
-                <button onClick={() => handleTripAction(data, 'start_trip')} className="w-full bg-emerald-500 hover:bg-emerald-600 text-white py-2.5 rounded-xl text-xs font-black transition-colors">بدء الرحلة 🛣️</button>
-             )}
-             {reqStatus === 'in_progress_trip' && isActualDriver && (
-                <button onClick={() => handleTripAction(data, 'complete')} className="w-full bg-rose-600 hover:bg-rose-700 text-white py-2.5 rounded-xl text-xs font-black transition-colors">إنهاء بنجاح ✅</button>
-             )}
+          {          reqStatus !== 'pending' && (
+            <div className="relative z-10 mb-4 px-2">
+              <div className="flex items-center justify-between relative">
+                 <div className="absolute left-0 right-0 top-1/2 -translate-y-1/2 h-1 bg-white/10 rounded-full z-0"></div>
+                 <div className="absolute left-0 top-1/2 -translate-y-1/2 h-1 bg-white/40 rounded-full z-0 transition-all duration-500" style={{ right: `${100 - ((currentStepIndex) / (steps.length - 1)) * 100}%` }}></div>
+                 
+                 {steps.map((step, idx) => {
+                    const isCompleted = idx <= currentStepIndex;
+                    const isCurrent = idx === currentStepIndex;
+                    return (
+                      <div key={step.id} className="relative z-10 flex flex-col items-center gap-1">
+                        <div className={`w-4 h-4 rounded-full flex items-center justify-center transition-all duration-300 ${isCompleted ? 'bg-emerald-400 shadow-[0_0_8px_rgba(52,211,153,0.8)]' : 'bg-slate-300/30'} ${isCurrent ? 'scale-125 ring-2 ring-white/50' : ''}`}></div>
+                        <span className={`text-[9px] font-bold absolute -bottom-4 whitespace-nowrap transition-colors ${isCurrent ? 'text-white' : 'text-white/60'}`}>{step.label}</span>
+                      </div>
+                    );
+                 })}
+              </div>
+            </div>
+          )}
 
-             {!isActualDriver && ['accepted', 'moving', 'arrived', 'in_progress_trip'].includes(reqStatus) && (
-               <button onClick={handleShareSafety} className={`w-full py-2.5 rounded-xl text-xs font-black flex justify-center items-center gap-2 transition-colors ${isDarkMode ? 'bg-slate-800 text-white hover:bg-slate-700 border border-slate-700' : 'bg-indigo-700 text-white hover:bg-indigo-800'}`}>
-                 <Share2 size={14}/> شارك الرحلة للأمان
-               </button>
+          {}
+          <div className="flex gap-2 relative z-10 pt-4 border-t border-white/10 mt-2">
+             
+             {showCancelConfirm ? (
+                <div className="w-full flex items-center gap-2 bg-rose-500/10 p-2 rounded-xl">
+                  <span className="text-xs font-bold text-white flex-1 text-center">تأكيد الإلغاء؟</span>
+                  <button onClick={() => handleTripAction(data, 'cancel_request')} className="bg-rose-500 hover:bg-rose-600 text-white px-3 py-1.5 rounded-lg text-xs font-bold transition-colors">نعم</button>
+                  <button onClick={() => setShowCancelConfirm(false)} className="bg-white/20 hover:bg-white/30 text-white px-3 py-1.5 rounded-lg text-xs font-bold transition-colors">تراجع</button>
+                </div>
+             ) : (
+                <>
+                   {reqStatus === 'pending' && !isRequestSender && (
+                      <>
+                        <button onClick={() => handleTripAction(data, 'accept')} className="flex-1 bg-emerald-500 hover:bg-emerald-600 text-white py-2.5 rounded-xl text-xs font-black flex items-center justify-center gap-1.5 transition-colors shadow-lg"><Check size={14}/> قبول</button>
+                        <button onClick={() => handleTripAction(data, 'reject')} className="flex-1 bg-rose-500 hover:bg-rose-600 text-white py-2.5 rounded-xl text-xs font-black flex items-center justify-center gap-1.5 transition-colors"><X size={14}/> رفض</button>
+                      </>
+                   )}
+                   
+                   {reqStatus === 'pending' && isRequestSender && (
+                      <button onClick={() => setShowCancelConfirm(true)} className="w-full bg-white/20 hover:bg-white/30 text-white py-2.5 rounded-xl text-xs font-black transition-colors flex justify-center items-center gap-1"><X size={14}/> إلغاء الطلب</button>
+                   )}
+                   
+                   {reqStatus === 'accepted' && isActualDriver && (
+                      <button onClick={() => handleTripAction(data, 'start_moving')} className={`w-full py-2.5 rounded-xl text-xs font-black transition-colors shadow-lg ${isDarkMode ? 'bg-indigo-500 text-white hover:bg-indigo-600' : 'bg-white text-indigo-600 hover:bg-slate-50'}`}>أنا في الطريق الآن 🚙</button>
+                   )}
+                   {reqStatus === 'moving' && isActualDriver && (
+                      <button onClick={() => handleTripAction(data, 'arrive')} className="w-full bg-orange-500 hover:bg-orange-600 text-white py-2.5 rounded-xl text-xs font-black transition-colors shadow-lg">لقد وصلت لنقطة الالتقاء 📍</button>
+                   )}
+                   {reqStatus === 'arrived' && isActualDriver && (
+                      <button onClick={() => handleTripAction(data, 'start_trip')} className="w-full bg-emerald-500 hover:bg-emerald-600 text-white py-2.5 rounded-xl text-xs font-black transition-colors shadow-lg">بدء الرحلة رسمياً 🛣️</button>
+                   )}
+                   {reqStatus === 'in_progress_trip' && isActualDriver && (
+                      <button onClick={() => handleTripAction(data, 'complete')} className="w-full bg-rose-600 hover:bg-rose-700 text-white py-2.5 rounded-xl text-xs font-black transition-colors shadow-lg">إنهاء الرحلة بنجاح ✅</button>
+                   )}
+
+                   {['accepted'].includes(reqStatus) && !isActualDriver && (
+                      <button onClick={() => setShowCancelConfirm(true)} className="bg-rose-500/80 hover:bg-rose-600 text-white px-3 py-2.5 rounded-xl text-xs font-black transition-colors flex justify-center items-center" title="إلغاء"><X size={16}/></button>
+                   )}
+
+                   {!isActualDriver && ['accepted', 'moving', 'arrived', 'in_progress_trip'].includes(reqStatus) && (
+                     <button onClick={handleShareSafety} className={`flex-1 py-2.5 rounded-xl text-xs font-black flex justify-center items-center gap-2 transition-colors ${isDarkMode ? 'bg-slate-800 text-white hover:bg-slate-700 border border-slate-700' : 'bg-indigo-700 text-white hover:bg-indigo-800'}`}>
+                       <Share2 size={14}/> شارك للتتبع والأمان
+                     </button>
+                   )}
+                </>
              )}
           </div>
 
@@ -148,6 +210,4 @@ const LiveTrackerBar = ({ activeTrackers, isDarkMode, setActiveChat, handleTripA
       </div>
     </div>
   );
-};
-
-export default LiveTrackerBar;
+}
