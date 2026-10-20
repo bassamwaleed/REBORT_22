@@ -1,10 +1,10 @@
 import React, { useState, useEffect } from 'react';
 import { onAuthStateChanged, signInWithEmailAndPassword, createUserWithEmailAndPassword, signInAnonymously, updateProfile, signOut } from 'firebase/auth';
 import { collection, onSnapshot, doc, getDoc, setDoc, addDoc, updateDoc, serverTimestamp, increment, writeBatch, query, where, getDocs } from 'firebase/firestore';
-import { Loader2, Car, MessageCircle, User, Home, CheckCircle2, Plus, X, Lock, MapPin, Bell } from 'lucide-react';
+import { Loader2, Car, MessageCircle, User, Home, CheckCircle2, Plus, X, Lock, MapPin, Bell, Search } from 'lucide-react';
 
 import { auth, db, APP_COLLECTION_NAME, USERS_COLLECTION, STATIONS_COLLECTION, ADMIN_EMAIL } from './firebase';
-import { safeMillis, EGYPT_CITIES, useEgyptianLocation } from './utils/helpers';
+import { safeMillis, useEgyptianLocation } from './utils/helpers';
 
 import HomeScreen from './screens/HomeScreen';
 import ProfileScreen from './screens/ProfileScreen';
@@ -13,6 +13,46 @@ import LiveTrackerBar from './components/LiveTrackerBar';
 import VerifyModal from './components/VerifyModal'; 
 import AdminPanel from './components/AdminPanel';   
 import StationModal from './components/StationModal'; 
+
+export const SUPPORTED_AREAS = [
+  'حدائق أكتوبر', 'حدائق الأهرام', 'مدينة 6 أكتوبر', 'الشيخ زايد', 
+  'فيصل', 'الهرم', 'القرية الذكية', 'الدقي', 'المهندسين', 'وسط البلد', 
+  'المعادي', 'حلوان', 'مدينة نصر', 'مصر الجديدة', 'القاهرة الجديدة', 
+  'مدينة السادات', 'شبين الكوم'
+];
+
+// خريطة النطاقات الجغرافية القريبة لاقتراح الرحلات البديلة بذكاء
+export const NEARBY_AREAS_MAP = {
+  'حدائق أكتوبر': ['مدينة 6 أكتوبر', 'حدائق الأهرام', 'الشيخ زايد', 'الهرم', 'فيصل'],
+  'حدائق الأهرام': ['الهرم', 'فيصل', 'حدائق أكتوبر', 'مدينة 6 أكتوبر', 'الشيخ زايد'],
+  'مدينة 6 أكتوبر': ['الشيخ زايد', 'حدائق أكتوبر', 'القرية الذكية', 'حدائق الأهرام', 'الهرم'],
+  'الشيخ زايد': ['مدينة 6 أكتوبر', 'القرية الذكية', 'حدائق أكتوبر', 'المهندسين', 'الدقي'],
+  'القرية الذكية': ['الشيخ زايد', 'مدينة 6 أكتوبر', 'المهندسين', 'الدقي'],
+  'فيصل': ['الهرم', 'حدائق الأهرام', 'الدقي', 'المهندسين', 'وسط البلد'],
+  'الهرم': ['فيصل', 'حدائق الأهرام', 'الدقي', 'المهندسين', 'مدينة 6 أكتوبر'],
+  'الدقي': ['المهندسين', 'وسط البلد', 'فيصل', 'الهرم', 'الشيخ زايد'],
+  'المهندسين': ['الدقي', 'وسط البلد', 'الشيخ زايد', 'القرية الذكية', 'فيصل'],
+  'وسط البلد': ['الدقي', 'المهندسين', 'مدينة نصر', 'مصر الجديدة', 'المعادي'],
+  'المعادي': ['حلوان', 'وسط البلد', 'القاهرة الجديدة', 'مدينة نصر'],
+  'حلوان': ['المعادي', 'وسط البلد', 'القاهرة الجديدة'],
+  'مدينة نصر': ['مصر الجديدة', 'القاهرة الجديدة', 'وسط البلد', 'المعادي'],
+  'مصر الجديدة': ['مدينة نصر', 'القاهرة الجديدة', 'وسط البلد'],
+  'القاهرة الجديدة': ['مدينة نصر', 'مصر الجديدة', 'المعادي'],
+  'مدينة السادات': ['شبين الكوم', 'الشيخ زايد', 'مدينة 6 أكتوبر'],
+  'شبين الكوم': ['مدينة السادات', 'القاهرة الجديدة', 'وسط البلد']
+};
+
+// دالة توحيد الحروف العربية لضمان تطابق البحث والمدن بنسبة 100%
+export const normalizeArabic = (str) => {
+  if (!str) return '';
+  return String(str)
+    .trim()
+    .replace(/[أإآ]/g, 'ا')
+    .replace(/ة/g, 'ه')
+    .replace(/ى/g, 'ي')
+    .replace(/\s+/g, ' ')
+    .toLowerCase();
+};
 
 export default function App() {
   const [user, setUser] = useState(null);
@@ -25,9 +65,14 @@ export default function App() {
   const [homeCategory, setHomeCategory] = useState('travel'); 
   const [viewMode, setViewMode] = useState('list'); 
   const [filterType, setFilterType] = useState('offer'); 
-  const [filterFrom, setFilterFrom] = useState('');
-  const [filterTo, setFilterTo] = useState('');
   
+  const [userArea, setUserArea] = useState(() => localStorage.getItem('khodnimaak_area') || '');
+  const [filterFrom, setFilterFrom] = useState(() => localStorage.getItem('khodnimaak_area') || '');
+  const [filterTo, setFilterTo] = useState('');
+  const [showAreaModal, setShowAreaModal] = useState(false);
+  const [areaSearchQuery, setAreaSearchQuery] = useState('');
+  const [hideAreaModalFuture, setHideAreaModalFuture] = useState(false);
+
   const [isDarkMode, setIsDarkMode] = useState(() => {
     try { const stored = localStorage.getItem('khodnimaak_theme'); return stored !== 'light'; } catch (e) { return true; }
   });
@@ -51,10 +96,11 @@ export default function App() {
   const [authLoading, setAuthLoading] = useState(false);
   const [authForm, setAuthForm] = useState({ name: '', identifier: '', password: '' });
   
+  // التعديل: إضافة femalesOnly و allowPhoneContact
   const [newTrip, setNewTrip] = useState({ 
     type: 'offer', category: 'travel', from: '', fromDetails: '', to: '', toDetails: '', 
-    date: '', time: '', seats: 1, cost: '', notes: '',
-    preferences: { ac: false, noSmoking: false, luggage: false, families: false }
+    date: '', time: '', seats: 1, cost: '', notes: '', allowPhoneContact: true,
+    preferences: { ac: false, noSmoking: false, luggage: false, families: false, femalesOnly: false }
   });
   
   const [toastMsg, setToastMsg] = useState('');
@@ -63,22 +109,35 @@ export default function App() {
   
   const triggerToast = (msg) => { setToastMsg(msg); setTimeout(() => setToastMsg(''), 3500); };
 
-  const { getMyCity, isLocating, locationError, setLocationError } = useEgyptianLocation();
+  const { getMyCity, isLocating, locationError } = useEgyptianLocation();
 
   useEffect(() => {
     const unsubscribe = onAuthStateChanged(auth, async (currentUser) => {
       try {
         if (currentUser) {
           setUser(currentUser);
-          if (currentUser.isAnonymous) { setIsGuest(true); setUserData(null); setIsAdmin(false); } 
+          if (currentUser.isAnonymous) { 
+            setIsGuest(true); setUserData(null); setIsAdmin(false); 
+            if (localStorage.getItem('khodnimaak_hide_area_modal') !== 'true') setShowAreaModal(true);
+          } 
           else {
             setIsGuest(false); setIsAdmin(currentUser.email && currentUser.email.toLowerCase() === ADMIN_EMAIL);
             const userDoc = await getDoc(doc(db, USERS_COLLECTION, currentUser.uid));
-            if (userDoc.exists()) { setUserData(userDoc.data()); } 
+            if (userDoc.exists()) { 
+              const data = userDoc.data();
+              setUserData(data); 
+              if (data.preferredArea) {
+                setUserArea(data.preferredArea);
+                setFilterFrom(data.preferredArea);
+                localStorage.setItem('khodnimaak_area', data.preferredArea);
+              } 
+              if (localStorage.getItem('khodnimaak_hide_area_modal') !== 'true') setShowAreaModal(true);
+            } 
             else {
               const initialData = { name: currentUser.displayName || 'مستخدم', photoURL: null, isVerified: false, verificationStatus: 'none', completedTripsCount: 0, phone: currentUser.email?.split('@')[0] || '', createdAt: Date.now() };
               await setDoc(doc(db, USERS_COLLECTION, currentUser.uid), initialData, { merge: true });
               setUserData(initialData);
+              if (localStorage.getItem('khodnimaak_hide_area_modal') !== 'true') setShowAreaModal(true);
             }
           }
         } else {
@@ -144,6 +203,52 @@ export default function App() {
     return () => unsubscribe();
   }, [user, isGuest]);
 
+  const handleSaveArea = async (area) => {
+    const cleanArea = area ? area.trim() : '';
+    setUserArea(cleanArea);
+    setFilterFrom(cleanArea);
+    localStorage.setItem('khodnimaak_area', cleanArea);
+    
+    if (hideAreaModalFuture) {
+      localStorage.setItem('khodnimaak_hide_area_modal', 'true');
+    }
+
+    setShowAreaModal(false);
+    triggerToast(cleanArea ? `تم ضبط منطقتك: ${cleanArea} (تظهر رحلاتها في الأعلى) 📍` : 'تم عرض جميع المناطق 🌍');
+    if (user && !isGuest && cleanArea) {
+        try { await updateDoc(doc(db, USERS_COLLECTION, user.uid), { preferredArea: cleanArea }); } catch(e){}
+    }
+  };
+
+  // ترتيب ذكي للمناطق: المطابق تماماً أولاً، ثم الذي يبدأ بالحروف، ثم الذي يحتوي على الحروف
+  const filteredAreas = SUPPORTED_AREAS.filter(area => {
+    if (!areaSearchQuery.trim()) return true;
+    return normalizeArabic(area).includes(normalizeArabic(areaSearchQuery));
+  }).sort((a, b) => {
+    const q = normalizeArabic(areaSearchQuery);
+    if (!q) {
+      // وضع منطقة المستخدم المختارة حالياً في أعلى القائمة دائماً
+      if (normalizeArabic(a) === normalizeArabic(userArea)) return -1;
+      if (normalizeArabic(b) === normalizeArabic(userArea)) return 1;
+      return 0;
+    }
+    const normA = normalizeArabic(a);
+    const normB = normalizeArabic(b);
+
+    // 1. التطابق التام في الأعلى
+    if (normA === q && normB !== q) return -1;
+    if (normB === q && normA !== q) return 1;
+
+    // 2. الاسم الذي يبدأ بحروف البحث
+    const aStarts = normA.startsWith(q);
+    const bStarts = normB.startsWith(q);
+    if (aStarts && !bStarts) return -1;
+    if (!aStarts && bStarts) return 1;
+
+    // 3. ترتيب حسب أقرب موضع للكلمة
+    return normA.indexOf(q) - normB.indexOf(q);
+  });
+
   const handleAuth = async (e) => {
     e.preventDefault(); setAuthLoading(true); setAlertMsg('');
     let identifier = authForm.identifier?.trim() || ''; 
@@ -184,9 +289,8 @@ export default function App() {
       await batch.commit(); 
 
       setUserData(prev => ({ ...prev, name: newName.trim() }));
-      triggerToast('تم تحديث الاسم في حسابك وفي جميع رحلاتك السابقة بنجاح');
+      triggerToast('تم تحديث الاسم في حسابك بنجاح');
     } catch (e) { 
-      console.error(e);
       triggerToast('تعذر تحديث الاسم'); 
     }
   };
@@ -238,7 +342,7 @@ export default function App() {
 
       setShowAddModal(false); triggerToast('تم النشر بنجاح!');
       setActiveTab('home'); setHomeCategory(newTrip.category);
-      setNewTrip({ type: 'offer', category: 'travel', from: '', fromDetails: '', to: '', toDetails: '', date: '', time: '', seats: 1, cost: '', notes: '', preferences: { ac: false, noSmoking: false, luggage: false, families: false } });
+      setNewTrip({ type: 'offer', category: 'travel', from: '', fromDetails: '', to: '', toDetails: '', date: '', time: '', seats: 1, cost: '', notes: '', allowPhoneContact: true, preferences: { ac: false, noSmoking: false, luggage: false, families: false, femalesOnly: false } });
     } catch (error) { triggerToast('حدث خطأ.'); } finally { setIsSubmitting(false); }
   };
 
@@ -276,7 +380,6 @@ export default function App() {
       await setDoc(doc(db, `inbox_${user.uid}`, chatId), { ...chatDataMe, createdAt: serverTimestamp(), requestStatus: 'none', tripId: trip.id, tripInfo: tripRouteName }, { merge: true });
       await setDoc(doc(db, `inbox_${trip.userId}`, chatId), { ...chatDataOther, createdAt: serverTimestamp(), requestStatus: 'none', tripId: trip.id, tripInfo: tripRouteName }, { merge: true });
     } catch (err) {
-      console.error("Chat Creation Error:", err);
       triggerToast('حدث خطأ في النظام أثناء محاولة فتح الشات.');
       setActiveChat(null); 
     }
@@ -311,9 +414,7 @@ export default function App() {
                 await updateDoc(tripRef, tripUpdate);
               }
             }
-          } catch (err) {
-            console.error("Error updating seats", err);
-          }
+          } catch (err) {}
         }
       } 
       else if (actionType === 'reject') { newStatus = 'rejected'; systemText = 'عذراً، تم رفض الطلب ❌'; } 
@@ -349,7 +450,6 @@ export default function App() {
       
       triggerToast('تم تحديث الحالة.');
     } catch (error) { 
-      console.error(error);
       triggerToast('حدث خطأ أثناء التحديث.'); 
     }
   };
@@ -375,6 +475,58 @@ export default function App() {
     <div dir="rtl" className={`min-h-screen flex flex-col relative transition-colors duration-300 ${bgMain} overflow-x-hidden pb-0`}>
       {toastMsg && ( <div className="fixed top-24 left-1/2 transform -translate-x-1/2 z-[999] bg-slate-900 text-white px-6 py-3 rounded-full shadow-2xl flex items-center gap-3 border border-slate-700"><CheckCircle2 size={18} className="text-emerald-400" /><p className="text-sm font-bold whitespace-nowrap">{toastMsg}</p></div> )}
 
+      {showAreaModal && (
+        <div className="fixed inset-0 bg-slate-900/95 backdrop-blur-md z-[9999] flex justify-center items-center p-4 pointer-events-auto">
+          <div className={`${bgCard} w-full max-w-md rounded-[2rem] p-6 shadow-2xl flex flex-col border animate-fade-in-up dark:border-slate-700`}>
+            
+            <div className="flex justify-between items-center mb-4">
+              <h2 className={`text-xl font-black text-indigo-600 dark:text-indigo-400 flex items-center gap-2`}>
+                <MapPin size={24} /> أين أنت الآن؟
+              </h2>
+              <button onClick={() => setShowAreaModal(false)} className="p-1.5 bg-slate-100 dark:bg-slate-800 rounded-full hover:bg-rose-100 hover:text-rose-500 transition-colors"><X size={18}/></button>
+            </div>
+            
+            <p className={`${textSecondary} text-xs font-bold mb-4`}>لعرض أقرب الرحلات المتاحة في منطقتك، يرجى تحديد موقعك من القائمة المدعومة حالياً:</p>
+            
+            <div className={`flex items-center gap-2 px-3 py-2.5 rounded-xl border mb-4 ${bgInput}`}>
+               <Search size={18} className="text-slate-400" />
+               <input 
+                 type="text" 
+                 placeholder="ابحث عن منطقتك..." 
+                 value={areaSearchQuery}
+                 onChange={(e) => setAreaSearchQuery(e.target.value)}
+                 className="w-full bg-transparent outline-none text-sm font-bold"
+               />
+            </div>
+
+            <div className="grid grid-cols-2 gap-2 max-h-[40vh] overflow-y-auto p-1 [&::-webkit-scrollbar]:hidden">
+              {filteredAreas.length > 0 ? filteredAreas.map(area => (
+                <button
+                  key={area}
+                  onClick={() => handleSaveArea(area)}
+                  className={`p-3 rounded-xl text-xs font-black border transition-all hover:scale-105 active:scale-95 ${userArea === area ? 'bg-indigo-600 text-white border-indigo-600 shadow-md' : 'bg-slate-50 text-slate-700 border-slate-200 hover:bg-indigo-50 hover:border-indigo-300 dark:bg-slate-800 dark:text-slate-300 dark:border-slate-700 dark:hover:bg-indigo-900/50'}`}
+                >
+                  {area}
+                </button>
+              )) : (
+                <div className="col-span-2 text-center py-4 text-slate-500 text-xs font-bold">عذراً، هذه المنطقة غير مدعومة حالياً.</div>
+              )}
+            </div>
+
+            <div className="mt-6 pt-4 border-t border-slate-200 dark:border-slate-700 flex items-center gap-2">
+               <input 
+                 type="checkbox" 
+                 id="hideModal" 
+                 checked={hideAreaModalFuture} 
+                 onChange={(e) => setHideAreaModalFuture(e.target.checked)}
+                 className="w-4 h-4 rounded text-indigo-600 focus:ring-indigo-500"
+               />
+               <label htmlFor="hideModal" className={`text-xs font-bold cursor-pointer ${textSecondary}`}>لا تظهر هذه الرسالة مرة أخرى عند فتح التطبيق</label>
+            </div>
+          </div>
+        </div>
+      )}
+
       <header className={`sticky top-0 z-40 border-b ${isDarkMode ? 'bg-slate-950/90 border-slate-800' : 'bg-white/90 border-slate-100 shadow-sm'} backdrop-blur-xl pointer-events-auto`}>
         <div className="max-w-3xl mx-auto px-5 h-16 flex justify-between items-center w-full">
           <div className="flex items-center gap-3 cursor-pointer" onClick={() => setActiveTab('profile')}>
@@ -386,19 +538,12 @@ export default function App() {
           </div>
           
           <div className="flex items-center gap-4">
-            
             {!isGuest && (
-              <div 
-                className="relative cursor-pointer bg-slate-100 dark:bg-slate-800 p-2 rounded-full hover:bg-slate-200 dark:hover:bg-slate-700 transition-colors" 
-                onClick={() => setShowNotificationsModal(true)}
-              >
+              <div className="relative cursor-pointer bg-slate-100 dark:bg-slate-800 p-2 rounded-full hover:bg-slate-200 dark:hover:bg-slate-700 transition-colors" onClick={() => setShowNotificationsModal(true)}>
                 <Bell size={20} className={textSecondary} />
-                {notifications.filter(n => !n.read).length > 0 && (
-                  <span className="absolute top-0 right-0 w-2.5 h-2.5 bg-rose-500 rounded-full border-2 border-white dark:border-slate-800"></span>
-                )}
+                {notifications.filter(n => !n.read).length > 0 && (<span className="absolute top-0 right-0 w-2.5 h-2.5 bg-rose-500 rounded-full border-2 border-white dark:border-slate-800"></span>)}
               </div>
             )}
-
             <div className="flex items-center gap-2 cursor-pointer" onClick={() => {setActiveTab('home'); setViewMode('list');}}>
               <span className="font-black text-xl text-indigo-600 dark:text-indigo-400">طريقنا</span>
               {appSettings?.logo ? ( <img src={appSettings.logo} className="w-8 h-8 object-contain rounded-md" alt="Logo"/> ) : ( <div className="bg-indigo-600 text-white p-1.5 rounded-lg"><Car size={20}/></div> )}
@@ -447,6 +592,7 @@ export default function App() {
         </div>
       )}
 
+      {}
       {activeTab === 'home' && !isGuest && (
         <button onClick={() => setShowAddModal(true)} className="fixed bottom-[90px] right-5 bg-indigo-600 text-white w-14 h-14 rounded-full shadow-lg flex items-center justify-center z-50 hover:bg-indigo-700 transition-transform"><Plus size={28} /></button>
       )}
@@ -485,13 +631,19 @@ export default function App() {
                   </div>
                   {locationError && <p className="text-[10px] text-rose-500 px-1">{locationError}</p>}
                   
-                  <select required value={newTrip.from} onChange={e => setNewTrip({...newTrip, from: e.target.value})} className={`w-full p-3.5 rounded-xl border font-bold text-sm outline-none ${bgInput}`}><option value="" disabled>محافظة التحرك *</option>{EGYPT_CITIES.map(c => <option key={c} value={c}>{c}</option>)}</select>
-                  <input type="text" placeholder="مكان التحرك بالتفصيل" value={newTrip.fromDetails} onChange={e => setNewTrip({...newTrip, fromDetails: e.target.value})} className={`w-full p-3.5 rounded-xl border font-medium text-xs outline-none ${bgInput}`}/>
+                  <select required value={newTrip.from} onChange={e => setNewTrip({...newTrip, from: e.target.value})} className={`w-full p-3.5 rounded-xl border font-bold text-sm outline-none ${bgInput}`}>
+                    <option value="" disabled>المنطقة / المحافظة *</option>
+                    {SUPPORTED_AREAS.map(c => <option key={c} value={c}>{c}</option>)}
+                  </select>
+                  <input type="text" placeholder="مكان التحرك بالتفصيل (مثل: أمام مول العرب)" value={newTrip.fromDetails} onChange={e => setNewTrip({...newTrip, fromDetails: e.target.value})} className={`w-full p-3.5 rounded-xl border font-medium text-xs outline-none ${bgInput}`}/>
                 </div>
 
                 <div className="space-y-2 pt-1">
                   <label className="text-[10px] font-bold text-slate-500 px-1">نقطة الوصول</label>
-                  <select required value={newTrip.to} onChange={e => setNewTrip({...newTrip, to: e.target.value})} className={`w-full p-3.5 rounded-xl border font-bold text-sm outline-none ${bgInput}`}><option value="" disabled>محافظة الوصول *</option>{EGYPT_CITIES.map(c => <option key={c} value={c}>{c}</option>)}</select>
+                  <select required value={newTrip.to} onChange={e => setNewTrip({...newTrip, to: e.target.value})} className={`w-full p-3.5 rounded-xl border font-bold text-sm outline-none ${bgInput}`}>
+                    <option value="" disabled>الوجهة / المحافظة *</option>
+                    {SUPPORTED_AREAS.map(c => <option key={c} value={c}>{c}</option>)}
+                  </select>
                   <input type="text" placeholder="مكان الوصول بالتفصيل" value={newTrip.toDetails} onChange={e => setNewTrip({...newTrip, toDetails: e.target.value})} className={`w-full p-3.5 rounded-xl border font-medium text-xs outline-none ${bgInput}`}/>
                 </div>
 
@@ -510,7 +662,7 @@ export default function App() {
 
                 <div className="flex gap-2 flex-wrap pt-2">
                   {Object.keys(newTrip.preferences).map(key => {
-                    const labels = { ac: 'تكييف ❄️', noSmoking: 'ممنوع التدخين 🚭', luggage: 'شنط سفر 🧳', families: 'عائلات فقط 👨‍👩‍👧‍👦' };
+                    const labels = { ac: 'تكييف ❄️', noSmoking: 'ممنوع التدخين 🚭', luggage: 'شنط سفر 🧳', families: 'عائلات 👨‍👩‍👧‍👦', femalesOnly: 'بنات فقط 👩' };
                     return (
                       <label key={key} className={`flex items-center gap-2 p-2 rounded-xl border cursor-pointer text-xs font-bold transition-colors ${newTrip.preferences[key] ? 'bg-indigo-50 border-indigo-500 text-indigo-700' : 'bg-transparent border-slate-200 dark:border-slate-700 text-slate-500'}`}>
                         <input type="checkbox" className="hidden" checked={newTrip.preferences[key]} onChange={(e) => setNewTrip({...newTrip, preferences: {...newTrip.preferences, [key]: e.target.checked}})} />
@@ -518,6 +670,30 @@ export default function App() {
                       </label>
                     );
                   })}
+                </div>
+
+                {}
+                {/* زر السماح بالتواصل الهاتفي والواتساب مع تنبيه حالة الرقم */}
+                <div className={`p-3.5 rounded-2xl border transition-all mt-2 ${newTrip.allowPhoneContact ? (isDarkMode ? 'bg-emerald-950/20 border-emerald-800/60' : 'bg-emerald-50/70 border-emerald-200') : (isDarkMode ? 'bg-slate-800/40 border-slate-700' : 'bg-slate-50 border-slate-200')}`}>
+                  <div className="flex items-center justify-between gap-2">
+                    <label htmlFor="allowPhoneContact" className="text-xs font-black text-slate-800 dark:text-slate-200 cursor-pointer flex items-center gap-2">
+                      <span>📞 السماح بالمكالمات والواتساب المباشر على الكارت</span>
+                    </label>
+                    <input 
+                      type="checkbox" 
+                      id="allowPhoneContact" 
+                      checked={newTrip.allowPhoneContact} 
+                      onChange={(e) => setNewTrip({...newTrip, allowPhoneContact: e.target.checked})} 
+                      className="w-4 h-4 rounded text-emerald-600 focus:ring-emerald-500 cursor-pointer" 
+                    />
+                  </div>
+                  <p className="text-[10px] font-bold mt-1.5 text-slate-500 dark:text-slate-400">
+                    {newTrip.allowPhoneContact 
+                      ? (userData?.phone 
+                          ? `سيظهر زر اتصال وواتساب برقمك المسجل (${userData.phone}) لتسهيل التواصل السريع.` 
+                          : '⚠️ تنبيه: لم تقم بإضافة رقم هاتفك في (حسابي) بعد! أضفه ليظهر للمستخدمين.')
+                      : 'لن يظهر رقمك على الكارت، وسيقتصر التواصل على الشات الداخلي فقط.'}
+                  </p>
                 </div>
 
                 <textarea rows="3" placeholder="ملاحظات إضافية..." value={newTrip.notes} onChange={e => setNewTrip({...newTrip, notes: e.target.value})} className={`w-full p-4 rounded-2xl border font-bold text-sm outline-none resize-none ${bgInput}`}></textarea>
@@ -532,12 +708,14 @@ export default function App() {
         </div>
       )}
 
+      {}
       {activeTab === 'home' && (
         <HomeScreen 
           user={user} isAdmin={isAdmin} isDarkMode={isDarkMode} realTrips={realTrips} stations={stations} isGuest={isGuest}
           homeCategory={homeCategory} setHomeCategory={setHomeCategory} viewMode={viewMode} setViewMode={setViewMode} filterType={filterType} setFilterType={setFilterType}
           filterFrom={filterFrom} setFilterFrom={setFilterFrom} filterTo={filterTo} setFilterTo={setFilterTo} openChatFromTrip={openChatFromTrip}
           setSelectedStation={setSelectedStation} triggerToast={triggerToast} appSettings={appSettings} 
+          userArea={userArea} onOpenAreaModal={() => setShowAreaModal(true)}
         />
       )}
 
@@ -546,7 +724,20 @@ export default function App() {
       )}
 
       {activeTab === 'profile' && (
-        <ProfileScreen user={user} userData={userData} isGuest={isGuest} isAdmin={isAdmin} isDarkMode={isDarkMode} toggleTheme={toggleTheme} handleLogout={handleLogout} handleEditName={handleEditName} setShowVerifyModal={setShowVerifyModal} setShowAdminPanel={setShowAdminPanel} forceSignUpScreen={forceSignUpScreen}/>
+        <ProfileScreen 
+          user={user} 
+          userData={userData} 
+          setUserData={setUserData} 
+          isGuest={isGuest} 
+          isAdmin={isAdmin} 
+          isDarkMode={isDarkMode} 
+          toggleTheme={toggleTheme} 
+          handleLogout={handleLogout} 
+          handleEditName={handleEditName} 
+          setShowVerifyModal={setShowVerifyModal} 
+          setShowAdminPanel={setShowAdminPanel} 
+          forceSignUpScreen={forceSignUpScreen}
+        />
       )}
 
       {activeChat && !isGuest && ( 
@@ -594,6 +785,7 @@ export default function App() {
         </div>
       </nav>
 
+      {}
       {!user && (
         <div dir="rtl" className={`fixed inset-0 flex items-center justify-center p-4 z-[1000] ${bgMain}`}>
           <div className={`${bgCard} p-8 rounded-[2rem] shadow-xl max-w-sm w-full border relative`}>
