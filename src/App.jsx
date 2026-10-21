@@ -480,6 +480,27 @@ export default function App() {
     }
   };
 
+  const openAdminChat = async (targetUser) => {
+    if (!user || isGuest) return;
+    try {
+      const user1 = user.uid < targetUser.id ? user.uid : targetUser.id;
+      const user2 = user.uid < targetUser.id ? targetUser.id : user.uid;
+      const chatId = `${user1}_${user2}`;
+
+      const chatDataMe = { chatId, tripId: 'system', tripType: 'support', tripOwnerId: 'system', otherPersonId: targetUser.id, otherPersonName: targetUser.name || 'مستخدم', otherPersonPhoto: targetUser.photoURL || null, otherPersonVerified: targetUser.isVerified || false, tripInfo: 'الدعم الفني / الإدارة' };
+      const chatDataOther = { chatId, tripId: 'system', tripType: 'support', tripOwnerId: 'system', otherPersonId: user.uid, otherPersonName: 'الإدارة (الدعم الفني)', otherPersonPhoto: appSettings?.logo || null, otherPersonVerified: true, tripInfo: 'الدعم الفني / الإدارة' };
+
+      setActiveChat(chatDataMe); 
+
+      await setDoc(doc(db, `inbox_${user.uid}`, chatId), { ...chatDataMe, createdAt: serverTimestamp(), requestStatus: 'none', tripId: 'system', tripInfo: 'الدعم الفني / الإدارة' }, { merge: true });
+      await setDoc(doc(db, `inbox_${targetUser.id}`, chatId), { ...chatDataOther, createdAt: serverTimestamp(), requestStatus: 'none', tripId: 'system', tripInfo: 'الدعم الفني / الإدارة' }, { merge: true });
+      
+      setShowAdminPanel(false); // قفل لوحة الإدارة عشان الشات يظهر بوضوح
+    } catch (err) {
+      triggerToast('حدث خطأ في فتح الشات.');
+    }
+  };
+
   const handleTripAction = async (chatInfo, actionType) => {
     if (!chatInfo || typeof chatInfo !== 'object' || !chatInfo.chatId || !user) return;
     if (checkUserRestriction('chat')) return;
@@ -997,7 +1018,7 @@ export default function App() {
       )}
       
       {showVerifyModal && ( <VerifyModal user={user} isDarkMode={isDarkMode} onClose={() => setShowVerifyModal(false)} triggerToast={triggerToast} setUserData={setUserData} /> )}
-      {showAdminPanel && isAdmin && ( <AdminPanel isDarkMode={isDarkMode} onClose={() => setShowAdminPanel(false)} triggerToast={triggerToast} appSettings={appSettings} /> )}
+      {showAdminPanel && isAdmin && ( <AdminPanel isDarkMode={isDarkMode} onClose={() => setShowAdminPanel(false)} triggerToast={triggerToast} appSettings={appSettings} user={user} openAdminChat={openAdminChat} /> )}
 
       {activeTab === 'inbox' && (
         <div className="pb-[100px] flex-1 w-full max-w-2xl mx-auto px-4 py-6 mt-4 relative z-10 animate-fade-in-up">
