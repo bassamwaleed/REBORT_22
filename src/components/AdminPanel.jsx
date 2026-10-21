@@ -1,178 +1,534 @@
 import React, { useState, useEffect } from 'react';
-import { collection, getDocs, doc, updateDoc, setDoc } from 'firebase/firestore';
-import { X, ShieldAlert, ShieldCheck, Check, XCircle, ImageIcon, Loader2, LayoutTemplate, Save, Type, Trash2, Plus, BusFront, Route, Edit3 } from 'lucide-react';
-import { db, USERS_COLLECTION, STATIONS_COLLECTION } from '../firebase';
+import { 
+  collection, onSnapshot, doc, updateDoc, setDoc, query, where, getDocs, writeBatch 
+} from 'firebase/firestore';
+import { 
+  X, ShieldCheck, ShieldAlert, Users, BusFront, Settings, Search, CheckCircle2, 
+  XCircle, Ban, Award, Crown, Star, Zap, Clock, Eye, Image as ImageIcon, 
+  Plus, Trash2, Check, Loader2, Lock, MessageSquareOff, Car 
+} from 'lucide-react';
+import { db, USERS_COLLECTION, APP_COLLECTION_NAME, STATIONS_COLLECTION } from '../firebase';
 import { resizeAndConvertToBase64 } from '../utils/helpers';
- 
+
+export const ADMIN_BADGE_OPTIONS = [
+  { id: '', label: 'بدون شارة إضافية', color: 'bg-slate-100 text-slate-600' },
+  { id: 'كابتن مبادر 🌱', label: 'كابتن مبادر 🌱', color: 'bg-emerald-100 text-emerald-700 border-emerald-300' },
+  { id: 'كابتن نشيط ⭐', label: 'كابتن نشيط ⭐', color: 'bg-amber-100 text-amber-700 border-amber-300' },
+  { id: 'كابتن خبير 🏆', label: 'كابتن خبير 🏆', color: 'bg-purple-100 text-purple-700 border-purple-300' },
+  { id: 'سفير طريقنا 👑', label: 'سفير طريقنا 👑', color: 'bg-indigo-100 text-indigo-700 border-indigo-300' },
+  { id: 'كابتن ذهبي 💎', label: 'كابتن ذهبي 💎', color: 'bg-cyan-100 text-cyan-700 border-cyan-300' }
+];
+
+const BAN_DURATIONS = [
+  { label: '24 ساعة', hours: 24 },
+  { label: '3 أيام', hours: 72 },
+  { label: 'أسبوع (7 أيام)', hours: 168 },
+  { label: 'شهر (30 يوم)', hours: 720 },
+  { label: 'حظر دائم ♾️', hours: 876000 }
+];
+
 const AdminPanel = ({ isDarkMode, onClose, triggerToast, appSettings }) => {
-  const [activeTab, setActiveTab] = useState('verifications'); 
-  const [pendingRequests, setPendingRequests] = useState([]);
-  const [pendingStationsData, setPendingStationsData] = useState([]);
-  const [isLoading, setIsLoading] = useState(true);
-  
-  const [localSettings, setLocalSettings] = useState({ logo: null, banners: [], bannerText: '' });
+  const [activeTab, setActiveTab] = useState('users'); // 'users' | 'verifications' | 'stations' | 'settings'
+  const [usersList, setUsersList] = useState([]);
+  const [stationsList, setStationsList] = useState([]);
+  const [loadingUsers, setLoadingUsers] = useState(true);
+  const [searchQuery, setSearchQuery] = useState('');
+  const [userFilter, setUserFilter] = useState('all'); // 'all' | 'verified' | 'Restricted' | 'badged'
+
+  // المستخدم المفتوح حالياً للتحكم الدقيق أو مراجعة الوثائق
+  const [selectedUser, setSelectedUser] = useState(null);
+  const [previewImage, setPreviewImage] = useState(null);
+  const [isUpdatingUser, setIsUpdatingUser] = useState(false);
+
+  // إعدادات التطبيق (اللوجو والبانرات والنص)
+  const [bannerText, setBannerText] = useState(appSettings?.bannerText || '');
+  const [banners, setBanners] = useState(Array.isArray(appSettings?.banners) ? appSettings.banners : []);
+  const [logo, setLogo] = useState(appSettings?.logo || null);
   const [isSavingSettings, setIsSavingSettings] = useState(false);
 
   const bgCard = isDarkMode ? 'bg-slate-900 border-slate-800' : 'bg-white border-slate-200';
   const textPrimary = isDarkMode ? 'text-white' : 'text-slate-900';
   const textSecondary = isDarkMode ? 'text-slate-400' : 'text-slate-500';
+  const bgInput = isDarkMode ? 'bg-slate-800 border-slate-700 text-white' : 'bg-slate-50 border-slate-200 text-slate-900';
 
   useEffect(() => {
-    fetchAdminData();
-  }, []);
+    const unsubUsers = onSnapshot(collection(db, USERS_COLLECTION), (snap) => {
+      const list = snap.docs.map(d => ({ id: d.id, ...d.data() }));
+      list.sort((a, b) => (b.createdAt || 0) - (a.createdAt || 0));
+      setUsersList(list);
+      setLoadingUsers(false);
+      if (selectedUser) {
+        const updated = list.find(u => u.id === selectedUser.id);
+        if (updated) setSelectedUser(updated);
+      }
+    });
 
-  useEffect(() => {
-    if(appSettings) {
-      const bannersArray = Array.isArray(appSettings.banners) ? appSettings.banners : (appSettings.banner ? [appSettings.banner] : []);
-      setLocalSettings({ ...appSettings, banners: bannersArray });
-    }
-  }, [appSettings]);
+    const unsubStations = onSnapshot(collection(db, STATIONS_COLLECTION), (snap) => {
+      setStationsList(snap.docs.map(d => ({ id: d.id, ...d.data() })));
+    });
 
-  const fetchAdminData = async () => {
-    setIsLoading(true);
+    return () => {
+      unsubUsers();
+      unsubStations();
+    };
+  }, [selectedUser?.id]);
+
+  // تحديث بيانات المستخدم ومزامنتها مع رحلاته المنشورة
+  const updateUserAndSyncTrips = async (userId, userUpdates, tripUpdates = null) => {
+    setIsUpdatingUser(true);
     try {
-      const usersSnap = await getDocs(collection(db, USERS_COLLECTION));
-      const reqs = [];
-      usersSnap.forEach(doc => {
-        const data = doc.data();
-        if (data.verificationStatus === 'pending') reqs.push({ id: doc.id, ...data });
-      });
-      setPendingRequests(reqs);
-
-      const statSnap = await getDocs(collection(db, STATIONS_COLLECTION));
-      const pStats = [];
-      statSnap.forEach(doc => {
-        const data = doc.data();
-        const hasPendingStation = data.status === 'pending';
-        const hasPendingRoutes = data.routes?.some(r => r.status === 'pending');
-        const hasEditRequests = data.routes?.some(r => r.editRequest);
-        
-        if (hasPendingStation || hasPendingRoutes || hasEditRequests) {
-          pStats.push({ id: doc.id, ...data });
+      await updateDoc(doc(db, USERS_COLLECTION, userId), userUpdates);
+      
+      if (tripUpdates) {
+        const q = query(collection(db, APP_COLLECTION_NAME), where('userId', '==', userId));
+        const snap = await getDocs(q);
+        if (!snap.empty) {
+          const batch = writeBatch(db);
+          snap.forEach(d => batch.update(d.ref, tripUpdates));
+          await batch.commit();
         }
-      });
-      setPendingStationsData(pStats);
-
-    } catch (error) {
-      triggerToast('تعذر جلب البيانات');
+      }
+      triggerToast('تم حفظ التعديلات وتطبيقها بنجاح ✅');
+    } catch (e) {
+      triggerToast('حدث خطأ أثناء التحديث ❌');
     } finally {
-      setIsLoading(false);
+      setIsUpdatingUser(false);
     }
   };
 
-  const handleVerificationAction = async (userId, action) => {
-    try {
-      const updateData = action === 'approve' ? { isVerified: true, verificationStatus: 'approved' } : { isVerified: false, verificationStatus: 'rejected', idFront: null, idBack: null };
-      await updateDoc(doc(db, USERS_COLLECTION, userId), updateData);
-      triggerToast(action === 'approve' ? 'تم قبول التوثيق ✅' : 'تم رفض التوثيق ❌');
-      setPendingRequests(prev => prev.filter(req => req.id !== userId));
-    } catch (error) { triggerToast('حدث خطأ'); }
+  // تبديل علامة التوثيق (إضافة / سحب)
+  const handleToggleVerify = async (targetUser, forceState = null) => {
+    const newVerified = forceState !== null ? forceState : !targetUser.isVerified;
+    const newStatus = newVerified ? 'approved' : 'none';
+    await updateUserAndSyncTrips(
+      targetUser.id,
+      { isVerified: newVerified, verificationStatus: newStatus },
+      { verified: newVerified }
+    );
+  };
+
+  // منح أو سحب شارة البونص والتميز
+  const handleSetBadge = async (targetUser, badgeTitle) => {
+    await updateUserAndSyncTrips(
+      targetUser.id,
+      { customBadge: badgeTitle || null },
+      { userBadge: badgeTitle || null }
+    );
+  };
+
+  // تعديل عدد الرحلات المكتملة (البونص)
+  const handleAdjustTripsCount = async (targetUser, delta) => {
+    const current = Number(targetUser.completedTripsCount || 0);
+    const nextCount = Math.max(0, current + delta);
+    await updateUserAndSyncTrips(targetUser.id, { completedTripsCount: nextCount });
+  };
+
+  // تطبيق حظر جزئي أو كلي لمدة زمنية
+  const handleApplyRestriction = async (targetUser, restrictionType, durationHours) => {
+    const untilTimestamp = durationHours > 0 ? Date.now() + durationHours * 3600 * 1000 : null;
+    let updates = {};
+
+    if (restrictionType === 'trips') {
+      updates = { tripBanUntil: untilTimestamp };
+    } else if (restrictionType === 'chat') {
+      updates = { chatBanUntil: untilTimestamp };
+    } else if (restrictionType === 'full') {
+      updates = { 
+        fullBanUntil: untilTimestamp,
+        tripBanUntil: untilTimestamp,
+        chatBanUntil: untilTimestamp,
+        isBanned: durationHours > 0
+      };
+    } else if (restrictionType === 'unban_all') {
+      updates = {
+        fullBanUntil: null,
+        tripBanUntil: null,
+        chatBanUntil: null,
+        isBanned: false
+      };
+    }
+
+    await updateUserAndSyncTrips(targetUser.id, updates);
+  };
+
+  const isRestrictionActive = (timestamp) => {
+    return timestamp && Number(timestamp) > Date.now();
+  };
+
+  const formatRemainingBan = (timestamp) => {
+    if (!timestamp || Number(timestamp) <= Date.now()) return null;
+    const diffHours = Math.ceil((Number(timestamp) - Date.now()) / (1000 * 3600));
+    if (diffHours > 80000) return 'حظر دائم ♾️';
+    if (diffHours >= 24) return `متبقي ${Math.ceil(diffHours / 24)} يوم`;
+    return `متبقي ${diffHours} ساعة`;
   };
 
   const handleApproveStation = async (stationId) => {
     try {
       await updateDoc(doc(db, STATIONS_COLLECTION, stationId), { status: 'approved' });
       triggerToast('تم اعتماد الموقف بنجاح ✅');
-      fetchAdminData(); 
-    } catch (error) {}
+    } catch (e) {
+      triggerToast('تعذر اعتماد الموقف');
+    }
   };
 
-  const handleApproveRoute = async (stationId, routeIndex, stationRoutes) => {
+  const handleApproveRoute = async (station, routeIndex) => {
     try {
-      const updatedRoutes = [...stationRoutes];
+      const updatedRoutes = [...(station.routes || [])];
       updatedRoutes[routeIndex].status = 'approved';
-      await updateDoc(doc(db, STATIONS_COLLECTION, stationId), { routes: updatedRoutes });
-      triggerToast('تم اعتماد خط السير بنجاح ✅');
-      fetchAdminData();
-    } catch (error) {}
-  };
-
-  const handleApproveFareEdit = async (stationId, routeIndex, stationRoutes, newFare) => {
-    try {
-      const updatedRoutes = [...stationRoutes];
-      updatedRoutes[routeIndex].fare = newFare;
-      updatedRoutes[routeIndex].editRequest = null;
-      await updateDoc(doc(db, STATIONS_COLLECTION, stationId), { routes: updatedRoutes });
-      triggerToast('تم تعديل وتحديث الأجرة بنجاح ✅');
-      fetchAdminData();
-    } catch (error) {}
-  };
-
-  const handleRejectRouteOrEdit = async (stationId, routeIndex, stationRoutes, isEditOnly) => {
-    try {
-      const updatedRoutes = [...stationRoutes];
-      if (isEditOnly) {
-        updatedRoutes[routeIndex].editRequest = null; 
-      } else {
-        updatedRoutes.splice(routeIndex, 1); 
+      if (updatedRoutes[routeIndex].editRequest) {
+        updatedRoutes[routeIndex].fare = updatedRoutes[routeIndex].editRequest.proposedFare;
+        updatedRoutes[routeIndex].editRequest = null;
       }
-      await updateDoc(doc(db, STATIONS_COLLECTION, stationId), { routes: updatedRoutes });
-      triggerToast('تم رفض الطلب ❌');
-      fetchAdminData();
-    } catch(e){}
+      await updateDoc(doc(db, STATIONS_COLLECTION, station.id), { routes: updatedRoutes });
+      triggerToast('تم اعتماد خط السير / التعديل ✅');
+    } catch (e) {
+      triggerToast('حدث خطأ');
+    }
   };
 
-  const handleImageUpload = async (e, type) => {
-    const file = e.target.files[0];
-    if (!file) return;
-    try {
-      const width = type === 'logo' ? 400 : 1200;
-      const height = type === 'logo' ? 400 : 600;
-      const base64 = await resizeAndConvertToBase64(file, width, height, 0.8);
-      if (type === 'logo') setLocalSettings(prev => ({ ...prev, logo: base64 }));
-      else if (type === 'banner') setLocalSettings(prev => ({ ...prev, banners: [...(prev.banners || []), base64] }));
-    } catch (error) {}
-  };
-
-  const handleRemoveBanner = (index) => setLocalSettings(prev => ({...prev, banners: prev.banners.filter((_, i) => i !== index)}));
-  
-  const saveSettings = async () => {
+  const handleSaveAppSettings = async () => {
     setIsSavingSettings(true);
     try {
-      await setDoc(doc(db, 'system', 'settings'), localSettings, { merge: true });
-      triggerToast('تم حفظ إعدادات التطبيق بنجاح!');
-    } catch (error) { triggerToast('تعذر حفظ الإعدادات'); } finally { setIsSavingSettings(false); }
+      await setDoc(doc(db, 'system', 'settings'), {
+        bannerText: bannerText.trim(),
+        banners,
+        logo
+      }, { merge: true });
+      triggerToast('تم حفظ إعدادات التطبيق بنجاح 🎉');
+    } catch (e) {
+      triggerToast('حدث خطأ أثناء حفظ الإعدادات');
+    } finally {
+      setIsSavingSettings(false);
+    }
   };
 
+  const handleUploadBanner = async (e) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    try {
+      const base64 = await resizeAndConvertToBase64(file, 1000, 500, 0.8);
+      setBanners(prev => [...prev, base64]);
+    } catch (err) {
+      triggerToast('تعذر رفع الصورة');
+    }
+  };
+
+  const handleUploadLogo = async (e) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    try {
+      const base64 = await resizeAndConvertToBase64(file, 300, 300, 0.85);
+      setLogo(base64);
+    } catch (err) {
+      triggerToast('تعذر رفع اللوجو');
+    }
+  };
+
+  const pendingVerifications = usersList.filter(u => u.verificationStatus === 'pending');
+  const pendingStations = stationsList.filter(s => s.status === 'pending' || (s.routes && s.routes.some(r => r.status === 'pending' || r.editRequest)));
+
+  const filteredUsers = usersList.filter(u => {
+    const q = searchQuery.toLowerCase().trim();
+    const matchSearch = !q || 
+      (u.name && u.name.toLowerCase().includes(q)) || 
+      (u.phone && String(u.phone).includes(q)) || 
+      (u.email && u.email.toLowerCase().includes(q));
+
+    if (!matchSearch) return false;
+
+    const hasAnyBan = u.isBanned || isRestrictionActive(u.fullBanUntil) || isRestrictionActive(u.tripBanUntil) || isRestrictionActive(u.chatBanUntil);
+
+    if (userFilter === 'verified') return Boolean(u.isVerified);
+    if (userFilter === 'restricted') return Boolean(hasAnyBan);
+    if (userFilter === 'badged') return Boolean(u.customBadge);
+    return true;
+  });
+
   return (
-    <div className="fixed inset-0 bg-slate-900/95 backdrop-blur-md z-[500] flex justify-center items-start sm:items-center p-0 sm:p-4 pointer-events-auto">
-      <div className={`${bgCard} w-full sm:max-w-3xl h-[100vh] sm:h-[85vh] rounded-none sm:rounded-[2rem] shadow-2xl flex flex-col overflow-hidden animate-fade-in-up border dark:border-slate-700`}>
+    <div className="fixed inset-0 bg-slate-950/90 backdrop-blur-md z-[600] flex justify-center items-end sm:items-center p-0 sm:p-4 pointer-events-auto">
+      <div className={`${bgCard} w-full sm:max-w-4xl h-[94vh] sm:h-[88vh] rounded-t-[2rem] sm:rounded-[2rem] shadow-2xl flex flex-col overflow-hidden border dark:border-slate-800 animate-fade-in-up`}>
         
-        <div className="p-4 border-b flex justify-between items-center bg-indigo-900 text-white shrink-0">
-          <h2 className="text-xl font-black flex items-center gap-2">👑 لوحة تحكم الإدارة</h2>
-          <button onClick={onClose} className="p-2 bg-indigo-800 rounded-full hover:bg-indigo-700 transition-colors"><X size={20} /></button>
+        {/* الهيدر العلوي للوحة التحكم */}
+        <div className="p-4 sm:p-5 bg-gradient-to-r from-indigo-950 via-slate-900 to-indigo-950 text-white flex justify-between items-center shrink-0 border-b border-indigo-800/50">
+          <div className="flex items-center gap-3">
+            <div className="p-2.5 bg-amber-400/20 border border-amber-400/40 rounded-2xl text-amber-300">
+              <Crown size={24} />
+            </div>
+            <div>
+              <h2 className="text-lg sm:text-xl font-black flex items-center gap-2">
+                لوحة تحكم الإدارة الشاملة
+              </h2>
+              <p className="text-[11px] text-indigo-200 font-bold">
+                إدارة الأعضاء، التوثيق، الحظر المؤقت، وشارات البونص
+              </p>
+            </div>
+          </div>
+          <button onClick={onClose} className="p-2 bg-white/10 hover:bg-rose-500 rounded-full transition-colors">
+            <X size={20} />
+          </button>
         </div>
 
-        <div className="flex border-b dark:border-slate-800 shrink-0 bg-slate-50 dark:bg-slate-900">
-          <button onClick={() => setActiveTab('verifications')} className={`flex-1 py-4 text-sm font-bold flex flex-col items-center justify-center gap-1 transition-colors ${activeTab === 'verifications' ? 'border-b-2 border-indigo-600 text-indigo-600 dark:text-indigo-400' : textSecondary}`}>
-            <div className="relative"><ShieldAlert size={18}/>{pendingRequests.length > 0 && <span className="absolute -top-2 -right-2 bg-rose-500 text-white text-[10px] w-4 h-4 rounded-full flex items-center justify-center">{pendingRequests.length}</span>}</div> التوثيق
+        {/* شريط التبويبات */}
+        <div className="flex overflow-x-auto bg-slate-100 dark:bg-slate-900/90 p-1.5 gap-1.5 border-b dark:border-slate-800 shrink-0 [&::-webkit-scrollbar]:hidden">
+          <button 
+            onClick={() => setActiveTab('users')} 
+            className={`flex-1 min-w-[125px] py-2.5 px-3 rounded-xl text-xs font-black flex items-center justify-center gap-1.5 transition-all ${activeTab === 'users' ? 'bg-indigo-600 text-white shadow-md' : textSecondary}`}
+          >
+            <Users size={16}/> الأعضاء والتحكم ({usersList.length})
           </button>
-          <button onClick={() => setActiveTab('stations')} className={`flex-1 py-4 text-sm font-bold flex flex-col items-center justify-center gap-1 transition-colors ${activeTab === 'stations' ? 'border-b-2 border-indigo-600 text-indigo-600 dark:text-indigo-400' : textSecondary}`}>
-            <div className="relative"><BusFront size={18}/>{pendingStationsData.length > 0 && <span className="absolute -top-2 -right-2 bg-amber-500 text-white text-[10px] w-4 h-4 rounded-full flex items-center justify-center">{pendingStationsData.length}</span>}</div> المواقف
+          <button 
+            onClick={() => setActiveTab('verifications')} 
+            className={`flex-1 min-w-[130px] py-2.5 px-3 rounded-xl text-xs font-black flex items-center justify-center gap-1.5 transition-all relative ${activeTab === 'verifications' ? 'bg-indigo-600 text-white shadow-md' : textSecondary}`}
+          >
+            <ShieldCheck size={16}/> طلبات التوثيق
+            {pendingVerifications.length > 0 && (
+              <span className="bg-rose-500 text-white text-[10px] px-1.5 py-0.5 rounded-full animate-pulse">
+                {pendingVerifications.length}
+              </span>
+            )}
           </button>
-          <button onClick={() => setActiveTab('settings')} className={`flex-1 py-4 text-sm font-bold flex flex-col items-center justify-center gap-1 transition-colors ${activeTab === 'settings' ? 'border-b-2 border-indigo-600 text-indigo-600 dark:text-indigo-400' : textSecondary}`}>
-            <LayoutTemplate size={18}/> الإعدادات
+          <button 
+            onClick={() => setActiveTab('stations')} 
+            className={`flex-1 min-w-[120px] py-2.5 px-3 rounded-xl text-xs font-black flex items-center justify-center gap-1.5 transition-all ${activeTab === 'stations' ? 'bg-indigo-600 text-white shadow-md' : textSecondary}`}
+          >
+            <BusFront size={16}/> مراجعة المواقف
+            {pendingStations.length > 0 && (
+              <span className="bg-amber-500 text-white text-[10px] px-1.5 py-0.5 rounded-full">
+                {pendingStations.length}
+              </span>
+            )}
+          </button>
+          <button 
+            onClick={() => setActiveTab('settings')} 
+            className={`flex-1 min-w-[110px] py-2.5 px-3 rounded-xl text-xs font-black flex items-center justify-center gap-1.5 transition-all ${activeTab === 'settings' ? 'bg-indigo-600 text-white shadow-md' : textSecondary}`}
+          >
+            <Settings size={16}/> واجهة التطبيق
           </button>
         </div>
 
-        <div className="flex-1 overflow-y-auto p-4 sm:p-6 custom-scrollbar bg-slate-100 dark:bg-slate-950">
+        {/* محتوى التبويب النشط */}
+        <div className="flex-1 overflow-y-auto p-4 sm:p-5 [&::-webkit-scrollbar]:hidden">
           
+          {activeTab === 'users' && (
+            <div className="space-y-4">
+              {/* البحث والفلترة السريعة */}
+              <div className="flex flex-col sm:flex-row gap-2">
+                <div className={`flex-1 flex items-center gap-2 px-3.5 py-2.5 rounded-xl border ${bgInput}`}>
+                  <Search size={18} className="text-slate-400 shrink-0" />
+                  <input 
+                    type="text" 
+                    placeholder="ابحث بالاسم أو رقم الموبايل أو الإيميل..." 
+                    value={searchQuery}
+                    onChange={(e) => setSearchQuery(e.target.value)}
+                    className="w-full bg-transparent outline-none text-xs sm:text-sm font-bold"
+                  />
+                  {searchQuery && <button onClick={() => setSearchQuery('')}><X size={15} className="text-slate-400"/></button>}
+                </div>
+                <div className="flex gap-1.5 overflow-x-auto pb-1 sm:pb-0">
+                  {[
+                    { id: 'all', label: 'الكل' },
+                    { id: 'verified', label: 'الموثقين ✅' },
+                    { id: 'badged', label: 'حاملي الشارات 🏆' },
+                    { id: 'restricted', label: 'المحظورين 🚫' }
+                  ].map(f => (
+                    <button
+                      key={f.id}
+                      onClick={() => setUserFilter(f.id)}
+                      className={`px-3 py-2 rounded-xl text-[11px] font-black border shrink-0 transition-all ${
+                        userFilter === f.id 
+                          ? 'bg-indigo-600 text-white border-indigo-600' 
+                          : 'bg-slate-100 dark:bg-slate-800 text-slate-500 border-slate-200 dark:border-slate-700'
+                      }`}
+                    >
+                      {f.label}
+                    </button>
+                  ))}
+                </div>
+              </div>
+
+              {loadingUsers ? (
+                <div className="py-20 flex justify-center"><Loader2 className="animate-spin text-indigo-500" size={32}/></div>
+              ) : filteredUsers.length === 0 ? (
+                <div className="text-center py-12 text-slate-400 font-bold text-sm">لا يوجد مستخدمين مطابقين للبحث</div>
+              ) : (
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                  {filteredUsers.map(u => {
+                    const tripBanRem = formatRemainingBan(u.tripBanUntil);
+                    const chatBanRem = formatRemainingBan(u.chatBanUntil);
+                    const fullBanRem = formatRemainingBan(u.fullBanUntil) || (u.isBanned ? 'حظر شامل' : null);
+
+                    return (
+                      <div 
+                        key={u.id} 
+                        className={`p-4 rounded-2xl border transition-all flex flex-col justify-between gap-3 ${
+                          fullBanRem 
+                            ? 'bg-rose-50/40 border-rose-300 dark:bg-rose-950/20 dark:border-rose-800' 
+                            : isDarkMode ? 'bg-slate-800/60 border-slate-700' : 'bg-slate-50/70 border-slate-200'
+                        }`}
+                      >
+                        <div className="flex items-start justify-between gap-2">
+                          <div className="flex items-center gap-3">
+                            {u.photoURL ? (
+                              <img src={u.photoURL} className="w-12 h-12 rounded-full object-cover border border-indigo-300 shrink-0" alt="u"/>
+                            ) : (
+                              <div className="w-12 h-12 rounded-full bg-indigo-100 dark:bg-slate-700 text-indigo-600 dark:text-indigo-300 flex items-center justify-center font-black text-base shrink-0">
+                                {(u.name || 'م').charAt(0)}
+                              </div>
+                            )}
+                            <div>
+                              <div className="flex items-center gap-1.5 flex-wrap">
+                                <h4 className={`font-black text-sm ${textPrimary}`}>{u.name || 'مستخدم'}</h4>
+                                {u.isVerified && <ShieldCheck size={15} className="text-emerald-500 shrink-0" title="موثق"/>}
+                                {u.customBadge && (
+                                  <span className="text-[10px] font-black px-2 py-0.5 rounded-full bg-amber-100 dark:bg-amber-900/40 text-amber-700 dark:text-amber-300 border border-amber-300 dark:border-amber-700">
+                                    {u.customBadge}
+                                  </span>
+                                )}
+                              </div>
+                              <p className={`text-xs font-bold mt-0.5 ${textSecondary}`} dir="ltr">
+                                {u.phone || u.email || 'بدون رقم'}
+                              </p>
+                              <div className="flex items-center gap-2 mt-1">
+                                <span className="text-[10px] font-bold bg-slate-200 dark:bg-slate-700 px-2 py-0.5 rounded-md">
+                                  الرحلات المكتملة: {u.completedTripsCount || 0}
+                                </span>
+                                <span className="text-[10px] font-bold bg-amber-50 dark:bg-amber-900/20 text-amber-600 px-2 py-0.5 rounded-md">
+                                  ⭐ {Number(u.rating || 0).toFixed(1)}
+                                </span>
+                              </div>
+                            </div>
+                          </div>
+
+                          {/* زر فتح نافذة التحكم الكامل في العضو */}
+                          <button 
+                            onClick={() => setSelectedUser(u)}
+                            className="px-3 py-2 bg-indigo-600 hover:bg-indigo-700 text-white rounded-xl text-xs font-black shadow-sm shrink-0 active:scale-95 transition-transform"
+                          >
+                            تحكم كامل ⚙️
+                          </button>
+                        </div>
+
+                        {/* عرض القيود النشطة إن وجدت */}
+                        {(fullBanRem || tripBanRem || chatBanRem) && (
+                          <div className="flex flex-wrap gap-1.5 pt-2 border-t border-rose-200 dark:border-rose-800/60">
+                            {fullBanRem && (
+                              <span className="text-[10px] font-black bg-rose-600 text-white px-2.5 py-0.5 rounded-full flex items-center gap-1">
+                                <Lock size={11}/> موقوف كلياً ({fullBanRem})
+                              </span>
+                            )}
+                            {!fullBanRem && tripBanRem && (
+                              <span className="text-[10px] font-black bg-orange-500 text-white px-2.5 py-0.5 rounded-full flex items-center gap-1">
+                                <Car size={11}/> ممنوع من نشر رحلات ({tripBanRem})
+                              </span>
+                            )}
+                            {!fullBanRem && chatBanRem && (
+                              <span className="text-[10px] font-black bg-amber-600 text-white px-2.5 py-0.5 rounded-full flex items-center gap-1">
+                                <MessageSquareOff size={11}/> ممنوع من الشات ({chatBanRem})
+                              </span>
+                            )}
+                          </div>
+                        )}
+
+                        {/* أزرار سريعة للتوثيق والشارات */}
+                        <div className="flex items-center justify-between gap-2 pt-2 border-t border-slate-200/70 dark:border-slate-700/70">
+                          <button
+                            onClick={() => handleToggleVerify(u)}
+                            className={`flex-1 py-1.5 px-2 rounded-lg text-[11px] font-black border flex items-center justify-center gap-1 transition-colors ${
+                              u.isVerified 
+                                ? 'bg-rose-50 text-rose-600 border-rose-200 dark:bg-rose-900/20 dark:border-rose-800' 
+                                : 'bg-emerald-50 text-emerald-600 border-emerald-200 dark:bg-emerald-900/20 dark:border-emerald-800'
+                            }`}
+                          >
+                            <ShieldCheck size={13}/>
+                            {u.isVerified ? 'سحب التوثيق' : 'توثيق فوري ✅'}
+                          </button>
+
+                          {(u.idFront || u.idBack || u.licenseImage) && (
+                            <button
+                              onClick={() => setSelectedUser(u)}
+                              className="py-1.5 px-2.5 rounded-lg text-[11px] font-black bg-blue-50 text-blue-600 dark:bg-blue-900/30 dark:text-blue-300 border border-blue-200 dark:border-blue-800 flex items-center gap-1"
+                            >
+                              <Eye size={13}/> المستندات
+                            </button>
+                          )}
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+              )}
+            </div>
+          )}
+
           {activeTab === 'verifications' && (
             <div className="space-y-4">
-              {isLoading ? ( <div className="flex justify-center py-20"><Loader2 className="animate-spin text-indigo-500" size={40}/></div> ) : pendingRequests.length === 0 ? ( <div className="text-center py-20 bg-white dark:bg-slate-900 rounded-[2rem] border dark:border-slate-800"><ShieldCheck size={48} className="mx-auto mb-4 text-slate-300"/><h3 className={`font-bold text-lg ${textPrimary}`}>لا يوجد طلبات توثيق</h3></div> ) : (
-                pendingRequests.map(req => (
-                  <div key={req.id} className={`p-4 rounded-[1.5rem] border shadow-sm ${bgCard} flex flex-col gap-4`}>
-                    <div className="flex justify-between items-center border-b dark:border-slate-800 pb-3">
-                      <div><h4 className={`font-black text-lg ${textPrimary}`}>{req.name}</h4><p className={`text-xs ${textSecondary} mt-1`}>{req.phone || req.email}</p></div>
-                      <span className="text-xs font-bold bg-amber-100 text-amber-600 px-3 py-1 rounded-full">قيد المراجعة</span>
+              {pendingVerifications.length === 0 ? (
+                <div className="text-center py-16 text-slate-400">
+                  <ShieldCheck size={48} className="mx-auto mb-3 opacity-30"/>
+                  <p className="font-black text-base">لا توجد طلبات توثيق معلقة حالياً</p>
+                  <p className="text-xs mt-1">يمكنك أيضاً توثيق أو سحب التوثيق من أي عضو في تبويب (الأعضاء والتحكم)</p>
+                </div>
+              ) : (
+                pendingVerifications.map(u => (
+                  <div key={u.id} className={`p-5 rounded-2xl border shadow-sm space-y-4 ${isDarkMode ? 'bg-slate-800/70 border-slate-700' : 'bg-slate-50 border-slate-200'}`}>
+                    <div className="flex justify-between items-center">
+                      <div>
+                        <h3 className={`font-black text-base ${textPrimary}`}>{u.name}</h3>
+                        <p className={`text-xs font-bold ${textSecondary}`} dir="ltr">{u.phone || u.email}</p>
+                      </div>
+                      <span className="text-xs font-black bg-amber-100 text-amber-700 px-3 py-1 rounded-full">قيد المراجعة ⏳</span>
                     </div>
-                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                      <div><p className="text-xs font-bold mb-2">الوجه الأمامي:</p><img src={req.idFront} alt="الوجه الأمامي" className="w-full h-40 object-cover rounded-xl border" /></div>
-                      <div><p className="text-xs font-bold mb-2">الوجه الخلفي:</p><img src={req.idBack} alt="الوجه الخلفي" className="w-full h-40 object-cover rounded-xl border" /></div>
+
+                    <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+                      {u.idFront && (
+                        <div className="space-y-1">
+                          <span className="text-[11px] font-bold text-slate-400">البطاقة (أمامي)</span>
+                          <img 
+                            src={u.idFront} 
+                            onClick={() => setPreviewImage(u.idFront)} 
+                            className="w-full h-36 object-cover rounded-xl border-2 border-indigo-500/40 cursor-pointer hover:opacity-90" 
+                            alt="ID Front"
+                          />
+                        </div>
+                      )}
+                      {u.idBack && (
+                        <div className="space-y-1">
+                          <span className="text-[11px] font-bold text-slate-400">البطاقة (خلفي)</span>
+                          <img 
+                            src={u.idBack} 
+                            onClick={() => setPreviewImage(u.idBack)} 
+                            className="w-full h-36 object-cover rounded-xl border-2 border-indigo-500/40 cursor-pointer hover:opacity-90" 
+                            alt="ID Back"
+                          />
+                        </div>
+                      )}
+                      {u.licenseImage && (
+                        <div className="space-y-1">
+                          <span className="text-[11px] font-bold text-indigo-400">رخصة القيادة 🚗</span>
+                          <img 
+                            src={u.licenseImage} 
+                            onClick={() => setPreviewImage(u.licenseImage)} 
+                            className="w-full h-36 object-cover rounded-xl border-2 border-emerald-500/40 cursor-pointer hover:opacity-90" 
+                            alt="License"
+                          />
+                        </div>
+                      )}
                     </div>
-                    <div className="flex gap-2 mt-2">
-                      <button onClick={() => handleVerificationAction(req.id, 'approve')} className="flex-1 bg-emerald-500 text-white py-3 rounded-xl font-bold flex items-center justify-center gap-2"><Check size={18}/> قبول</button>
-                      <button onClick={() => handleVerificationAction(req.id, 'reject')} className="flex-1 bg-rose-500 text-white py-3 rounded-xl font-bold flex items-center justify-center gap-2"><XCircle size={18}/> رفض</button>
+
+                    <div className="flex gap-3 pt-2">
+                      <button 
+                        onClick={() => handleToggleVerify(u, true)}
+                        className="flex-1 bg-emerald-600 hover:bg-emerald-700 text-white py-3 rounded-xl font-black text-xs flex items-center justify-center gap-1.5 shadow-md"
+                      >
+                        <CheckCircle2 size={16}/> قبول وتفعيل شارة التوثيق ✅
+                      </button>
+                      <button 
+                        onClick={() => updateUserAndSyncTrips(u.id, { verificationStatus: 'rejected', isVerified: false }, { verified: false })}
+                        className="flex-1 bg-rose-600 hover:bg-rose-700 text-white py-3 rounded-xl font-black text-xs flex items-center justify-center gap-1.5 shadow-md"
+                      >
+                        <XCircle size={16}/> رفض المستندات ❌
+                      </button>
                     </div>
                   </div>
                 ))
@@ -182,56 +538,47 @@ const AdminPanel = ({ isDarkMode, onClose, triggerToast, appSettings }) => {
 
           {activeTab === 'stations' && (
             <div className="space-y-4">
-              {isLoading ? ( <div className="flex justify-center py-20"><Loader2 className="animate-spin text-indigo-500" size={40}/></div> ) : pendingStationsData.length === 0 ? ( <div className="text-center py-20 bg-white dark:bg-slate-900 rounded-[2rem] border dark:border-slate-800"><BusFront size={48} className="mx-auto mb-4 text-slate-300"/><h3 className={`font-bold text-lg ${textPrimary}`}>لا يوجد طلبات أو تعديلات جديدة للمواقف</h3></div> ) : (
-                pendingStationsData.map(station => (
-                  <div key={station.id} className={`p-4 rounded-[1.5rem] border shadow-sm ${bgCard} flex flex-col gap-3`}>
-                    
-                    <div className="flex items-center justify-between border-b dark:border-slate-800 pb-3">
+              {pendingStations.length === 0 ? (
+                <div className="text-center py-16 text-slate-400 font-bold">لا توجد مواقف أو خطوط معلقة للمراجعة 🚏</div>
+              ) : (
+                pendingStations.map(st => (
+                  <div key={st.id} className={`p-4 rounded-2xl border space-y-3 ${isDarkMode ? 'bg-slate-800 border-slate-700' : 'bg-slate-50 border-slate-200'}`}>
+                    <div className="flex justify-between items-center">
                       <div>
-                        <h4 className={`font-black text-lg ${textPrimary}`}>{station.name} <span className="text-sm font-normal text-slate-500">({station.location})</span></h4>
-                        {station.status === 'pending' && <span className="text-[10px] bg-indigo-100 text-indigo-600 px-2 py-1 rounded font-bold mt-1 inline-block">موقف جديد بالكامل</span>}
+                        <h4 className={`font-black text-base ${textPrimary}`}>{st.name}</h4>
+                        <p className={`text-xs font-bold ${textSecondary}`}>{st.location}</p>
                       </div>
-                      {station.status === 'pending' && (
-                        <button onClick={() => handleApproveStation(station.id)} className="bg-emerald-500 text-white px-3 py-1.5 rounded-lg text-xs font-bold hover:bg-emerald-600">قبول الموقف</button>
+                      {st.status === 'pending' && (
+                        <button 
+                          onClick={() => handleApproveStation(st.id)}
+                          className="bg-emerald-600 text-white px-4 py-2 rounded-xl text-xs font-black"
+                        >
+                          اعتماد الموقف ✅
+                        </button>
                       )}
                     </div>
 
-                    <div className="space-y-2 pt-2">
-                      {station.routes?.map((route, rIndex) => {
-                        if (route.status === 'pending') {
-                           return (
-                             <div key={rIndex} className="flex justify-between items-center bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-800 p-3 rounded-xl">
-                               <div>
-                                 <p className="text-sm font-bold text-amber-700 dark:text-amber-400 flex items-center gap-1"><Route size={14}/> إضافة خط سير لـ: {route.destination}</p>
-                                 {route.destinationDetails && <p className="text-[10px] text-amber-600/80 mt-0.5">{route.destinationDetails}</p>}
-                                 <p className="text-xs text-amber-600 dark:text-amber-500 mt-1">الأجرة المقترحة: {route.fare} ج</p>
-                               </div>
-                               <div className="flex gap-2">
-                                 <button onClick={() => handleApproveRoute(station.id, rIndex, station.routes)} className="w-8 h-8 bg-emerald-500 text-white rounded flex justify-center items-center"><Check size={16}/></button>
-                                 <button onClick={() => handleRejectRouteOrEdit(station.id, rIndex, station.routes, false)} className="w-8 h-8 bg-rose-500 text-white rounded flex justify-center items-center"><X size={16}/></button>
-                               </div>
-                             </div>
-                           )
-                        }
-                        
-                        if (route.editRequest) {
-                           return (
-                             <div key={rIndex} className="flex justify-between items-center bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-800 p-3 rounded-xl">
-                               <div>
-                                 <p className="text-sm font-bold text-blue-700 dark:text-blue-400 flex items-center gap-1"><Edit3 size={14}/> تعديل أجرة خط: {route.destination}</p>
-                                 <p className="text-xs text-blue-600 dark:text-blue-500 mt-1">الأجرة الحالية: <span className="line-through opacity-70">{route.fare}ج</span> ➔ التعديل: <span className="font-black text-sm">{route.editRequest.proposedFare}ج</span></p>
-                               </div>
-                               <div className="flex gap-2">
-                                 <button onClick={() => handleApproveFareEdit(station.id, rIndex, station.routes, route.editRequest.proposedFare)} className="w-8 h-8 bg-emerald-500 text-white rounded flex justify-center items-center"><Check size={16}/></button>
-                                 <button onClick={() => handleRejectRouteOrEdit(station.id, rIndex, station.routes, true)} className="w-8 h-8 bg-rose-500 text-white rounded flex justify-center items-center"><X size={16}/></button>
-                               </div>
-                             </div>
-                           )
-                        }
-                        return null;
-                      })}
-                    </div>
-
+                    {st.routes && st.routes.map((r, idx) => {
+                      if (r.status !== 'pending' && !r.editRequest) return null;
+                      return (
+                        <div key={idx} className="p-3 rounded-xl bg-white dark:bg-slate-900 border dark:border-slate-700 flex justify-between items-center">
+                          <div>
+                            <span className={`text-xs font-black ${textPrimary}`}>
+                              خط: {r.destinationDetails || r.destination}
+                            </span>
+                            <p className="text-[11px] font-bold text-amber-500">
+                              {r.editRequest ? `اقتراح تعديل أجرة إلى: ${r.editRequest.proposedFare} ج` : `أجرة جديدة: ${r.fare} ج`}
+                            </p>
+                          </div>
+                          <button 
+                            onClick={() => handleApproveRoute(st, idx)}
+                            className="bg-indigo-600 text-white px-3 py-1.5 rounded-lg text-xs font-black"
+                          >
+                            موافقة 👍
+                          </button>
+                        </div>
+                      );
+                    })}
                   </div>
                 ))
               )}
@@ -239,43 +586,247 @@ const AdminPanel = ({ isDarkMode, onClose, triggerToast, appSettings }) => {
           )}
 
           {activeTab === 'settings' && (
-            <div className="space-y-6">
-              <div className={`p-5 rounded-[1.5rem] border shadow-sm ${bgCard}`}>
-                <h3 className={`font-black text-lg mb-4 ${textPrimary} flex items-center gap-2`}><Type size={20}/> نص تعريفي (فوق البانر)</h3>
-                <input type="text" value={localSettings.bannerText} onChange={(e) => setLocalSettings({...localSettings, bannerText: e.target.value})} placeholder="اكتب النص هنا..." className="w-full p-4 rounded-xl border font-bold text-sm outline-none bg-slate-50 dark:bg-slate-800 dark:border-slate-700 dark:text-white focus:border-indigo-500" />
+            <div className="space-y-5 max-w-xl mx-auto">
+              <div className="space-y-2">
+                <label className={`text-xs font-black ${textPrimary}`}>النص الترحيبي أعلى الصفحة الرئيسية</label>
+                <input 
+                  type="text" 
+                  value={bannerText} 
+                  onChange={(e) => setBannerText(e.target.value)}
+                  placeholder="مثال: شارك طريقك ووفر مصاريف مشوارك بأمان 🚗"
+                  className={`w-full p-3.5 rounded-xl border text-sm font-bold outline-none ${bgInput}`}
+                />
               </div>
-              <div className={`p-5 rounded-[1.5rem] border shadow-sm ${bgCard}`}>
-                <h3 className={`font-black text-lg mb-4 ${textPrimary}`}>تغيير لوجو التطبيق</h3>
+
+              <div className="space-y-2">
+                <label className={`text-xs font-black ${textPrimary}`}>شعار التطبيق (اللوجو)</label>
                 <div className="flex items-center gap-4">
-                  <div className="w-24 h-24 rounded-2xl border-2 border-dashed border-indigo-300 dark:border-slate-700 flex items-center justify-center overflow-hidden bg-slate-50 dark:bg-slate-800">{localSettings.logo ? <img src={localSettings.logo} className="w-full h-full object-cover"/> : <ImageIcon size={30} className="text-slate-300"/>}</div>
-                  <div><label className="bg-indigo-50 text-indigo-600 px-4 py-2 rounded-xl text-sm font-bold cursor-pointer hover:bg-indigo-100 transition-colors inline-block">اختيار لوجو جديد<input type="file" accept="image/*" className="hidden" onChange={(e) => handleImageUpload(e, 'logo')} /></label></div>
+                  {logo && <img src={logo} className="w-14 h-14 rounded-xl object-contain border p-1" alt="Logo"/>}
+                  <label className="px-4 py-2.5 bg-indigo-600 text-white rounded-xl text-xs font-black cursor-pointer">
+                    رفع لوجو جديد
+                    <input type="file" accept="image/*" className="hidden" onChange={handleUploadLogo}/>
+                  </label>
                 </div>
               </div>
-              <div className={`p-5 rounded-[1.5rem] border shadow-sm ${bgCard}`}>
-                <h3 className={`font-black text-lg mb-4 ${textPrimary} flex justify-between items-center`}>
-                  صور البانر الإعلاني
-                  <label className="bg-indigo-600 text-white px-3 py-1.5 rounded-lg text-xs font-bold cursor-pointer hover:bg-indigo-700 flex items-center gap-1"><Plus size={14}/> إضافة صورة<input type="file" accept="image/*" className="hidden" onChange={(e) => handleImageUpload(e, 'banner')} /></label>
-                </h3>
-                {localSettings.banners?.length === 0 ? (
-                  <div className="text-center text-slate-400 py-6 border-2 border-dashed rounded-xl dark:border-slate-700"><LayoutTemplate size={40} className="mx-auto mb-2 opacity-50"/><span className="text-sm font-bold">لا توجد صور للبانر</span></div>
-                ) : (
-                  <div className="space-y-3">
-                    {localSettings.banners.map((banner, index) => (
-                      <div key={index} className="flex items-center gap-3 p-2 border rounded-xl dark:border-slate-700 bg-slate-50 dark:bg-slate-800">
-                        <img src={banner} className="w-24 h-16 object-cover rounded-lg" alt={`Banner ${index + 1}`}/>
-                        <span className="flex-1 text-sm font-bold {textSecondary}">صورة رقم {index + 1}</span>
-                        <button onClick={() => handleRemoveBanner(index)} className="p-2 bg-rose-100 text-rose-600 rounded-lg hover:bg-rose-200"><Trash2 size={18}/></button>
-                      </div>
-                    ))}
-                  </div>
-                )}
+
+              <div className="space-y-2">
+                <div className="flex justify-between items-center">
+                  <label className={`text-xs font-black ${textPrimary}`}>صور البانر الإعلاني المتحرك ({banners.length})</label>
+                  <label className="px-3 py-1.5 bg-emerald-600 text-white rounded-lg text-xs font-black cursor-pointer flex items-center gap-1">
+                    <Plus size={14}/> إضافة بانر
+                    <input type="file" accept="image/*" className="hidden" onChange={handleUploadBanner}/>
+                  </label>
+                </div>
+                <div className="grid grid-cols-2 gap-3">
+                  {banners.map((b, i) => (
+                    <div key={i} className="relative h-28 rounded-xl overflow-hidden border">
+                      <img src={b} className="w-full h-full object-cover" alt="banner"/>
+                      <button 
+                        onClick={() => setBanners(prev => prev.filter((_, idx) => idx !== i))}
+                        className="absolute top-2 left-2 p-1.5 bg-rose-600 text-white rounded-full"
+                      >
+                        <Trash2 size={13}/>
+                      </button>
+                    </div>
+                  ))}
+                </div>
               </div>
-              <button onClick={saveSettings} disabled={isSavingSettings} className="w-full bg-indigo-600 text-white py-4 rounded-2xl font-black shadow-lg hover:bg-indigo-700 active:scale-95 transition-transform flex justify-center items-center gap-2">
-                 {isSavingSettings ? <Loader2 className="animate-spin" size={20}/> : <><Save size={20}/> حفظ التعديلات</>}
+
+              <button 
+                onClick={handleSaveAppSettings} 
+                disabled={isSavingSettings}
+                className="w-full bg-indigo-600 hover:bg-indigo-700 text-white py-4 rounded-2xl font-black text-sm shadow-lg flex justify-center items-center gap-2"
+              >
+                {isSavingSettings ? <Loader2 className="animate-spin" size={18}/> : 'حفظ إعدادات الواجهة ✅'}
               </button>
             </div>
           )}
+
         </div>
+
+        {selectedUser && (
+          <div className="fixed inset-0 bg-black/80 backdrop-blur-sm z-[650] flex justify-center items-center p-4" onClick={() => setSelectedUser(null)}>
+            <div 
+              onClick={(e) => e.stopPropagation()} 
+              className={`${bgCard} w-full max-w-lg max-h-[90vh] rounded-[2rem] p-5 sm:p-6 shadow-2xl overflow-y-auto border dark:border-slate-700 space-y-5 animate-fade-in-up [&::-webkit-scrollbar]:hidden`}
+            >
+              <div className="flex justify-between items-start border-b pb-3 dark:border-slate-800">
+                <div className="flex items-center gap-3">
+                  <div className="w-12 h-12 rounded-full bg-indigo-600 text-white flex items-center justify-center font-black text-lg">
+                    {(selectedUser.name || 'م').charAt(0)}
+                  </div>
+                  <div>
+                    <h3 className={`font-black text-base flex items-center gap-1.5 ${textPrimary}`}>
+                      {selectedUser.name}
+                      {selectedUser.isVerified && <ShieldCheck size={16} className="text-emerald-500"/>}
+                    </h3>
+                    <p className={`text-xs font-bold ${textSecondary}`} dir="ltr">{selectedUser.phone || selectedUser.email}</p>
+                  </div>
+                </div>
+                <button onClick={() => setSelectedUser(null)} className="p-1.5 bg-slate-200 dark:bg-slate-800 rounded-full">
+                  <X size={18}/>
+                </button>
+              </div>
+
+              {/* 1. التحكم في علامة التوثيق */}
+              <div className="p-4 rounded-2xl border border-slate-200 dark:border-slate-800 space-y-3">
+                <div className="flex justify-between items-center">
+                  <span className={`text-xs font-black flex items-center gap-1.5 ${textPrimary}`}>
+                    <ShieldCheck size={16} className="text-emerald-500"/> حالة التوثيق الرسمي
+                  </span>
+                  <button
+                    disabled={isUpdatingUser}
+                    onClick={() => handleToggleVerify(selectedUser)}
+                    className={`px-4 py-2 rounded-xl text-xs font-black transition-all ${
+                      selectedUser.isVerified 
+                        ? 'bg-rose-600 text-white hover:bg-rose-700' 
+                        : 'bg-emerald-600 text-white hover:bg-emerald-700'
+                    }`}
+                  >
+                    {selectedUser.isVerified ? 'سحب علامة التوثيق ❌' : 'منح علامة التوثيق ✅'}
+                  </button>
+                </div>
+
+                {(selectedUser.idFront || selectedUser.idBack || selectedUser.licenseImage) && (
+                  <div className="grid grid-cols-3 gap-2 pt-2">
+                    {selectedUser.idFront && (
+                      <img src={selectedUser.idFront} onClick={() => setPreviewImage(selectedUser.idFront)} className="h-20 w-full object-cover rounded-lg border cursor-pointer" alt="front"/>
+                    )}
+                    {selectedUser.idBack && (
+                      <img src={selectedUser.idBack} onClick={() => setPreviewImage(selectedUser.idBack)} className="h-20 w-full object-cover rounded-lg border cursor-pointer" alt="back"/>
+                    )}
+                    {selectedUser.licenseImage && (
+                      <img src={selectedUser.licenseImage} onClick={() => setPreviewImage(selectedUser.licenseImage)} className="h-20 w-full object-cover rounded-lg border cursor-pointer" alt="license"/>
+                    )}
+                  </div>
+                )}
+              </div>
+
+              {/* 2. التحكم في شارات البونص والتميز وعدد الرحلات */}
+              <div className="p-4 rounded-2xl border border-amber-200/70 dark:border-amber-800/50 bg-amber-50/30 dark:bg-amber-950/10 space-y-3">
+                <div className="flex justify-between items-center">
+                  <span className={`text-xs font-black flex items-center gap-1.5 ${textPrimary}`}>
+                    <Award size={16} className="text-amber-500"/> منح شارة البونص والتميز (تظهر على الكارت)
+                  </span>
+                </div>
+                <div className="grid grid-cols-2 gap-2">
+                  {ADMIN_BADGE_OPTIONS.map(b => (
+                    <button
+                      key={b.id}
+                      disabled={isUpdatingUser}
+                      onClick={() => handleSetBadge(selectedUser, b.id)}
+                      className={`p-2 rounded-xl text-[11px] font-black border transition-all flex items-center justify-between ${
+                        (selectedUser.customBadge || '') === b.id 
+                          ? 'bg-indigo-600 text-white border-indigo-600 shadow-sm' 
+                          : 'bg-white dark:bg-slate-800 text-slate-700 dark:text-slate-200 border-slate-200 dark:border-slate-700'
+                      }`}
+                    >
+                      <span>{b.label}</span>
+                      {(selectedUser.customBadge || '') === b.id && <Check size={13}/>}
+                    </button>
+                  ))}
+                </div>
+
+                {/* التحكم اليدوي في عداد الرحلات المكتملة للبونص */}
+                <div className="flex items-center justify-between pt-2 border-t border-amber-200/60 dark:border-amber-800/50">
+                  <span className="text-xs font-bold text-slate-600 dark:text-slate-300">
+                    رصيد الرحلات المكتملة: <strong className="text-amber-600 font-black">{selectedUser.completedTripsCount || 0}</strong>
+                  </span>
+                  <div className="flex items-center gap-1.5">
+                    <button onClick={() => handleAdjustTripsCount(selectedUser, 1)} className="px-2.5 py-1 bg-emerald-600 text-white rounded-lg text-xs font-black">+1</button>
+                    <button onClick={() => handleAdjustTripsCount(selectedUser, 5)} className="px-2.5 py-1 bg-indigo-600 text-white rounded-lg text-xs font-black">+5</button>
+                    <button onClick={() => handleAdjustTripsCount(selectedUser, -1)} className="px-2.5 py-1 bg-rose-500 text-white rounded-lg text-xs font-black">-1</button>
+                  </div>
+                </div>
+              </div>
+
+              {/* 3. نظام الحظر والقيود المتقدم (رحلات / شات / شامل بمدة) */}
+              <div className="p-4 rounded-2xl border border-rose-200 dark:border-rose-900/60 bg-rose-50/30 dark:bg-rose-950/20 space-y-4">
+                <div className="flex items-center justify-between">
+                  <span className="text-xs font-black text-rose-600 dark:text-rose-400 flex items-center gap-1.5">
+                    <Ban size={16}/> إدارة القيود والحظر المؤقت أو الدائم
+                  </span>
+                  {(selectedUser.isBanned || isRestrictionActive(selectedUser.fullBanUntil) || isRestrictionActive(selectedUser.tripBanUntil) || isRestrictionActive(selectedUser.chatBanUntil)) && (
+                    <button
+                      onClick={() => handleApplyRestriction(selectedUser, 'unban_all', 0)}
+                      className="px-3 py-1 bg-emerald-600 text-white rounded-lg text-[11px] font-black shadow-sm"
+                    >
+                      فك جميع القيود فوراً 🔓
+                    </button>
+                  )}
+                </div>
+
+                {/* أ. منع من نشر رحلات */}
+                <div className="space-y-1.5">
+                  <div className="flex justify-between text-[11px] font-bold">
+                    <span className={textPrimary}>🚗 منع من إضافة رحلات جديدة:</span>
+                    <span className="text-rose-500">{formatRemainingBan(selectedUser.tripBanUntil) || 'غير محظور'}</span>
+                  </div>
+                  <div className="flex flex-wrap gap-1.5">
+                    {BAN_DURATIONS.map(d => (
+                      <button
+                        key={d.hours}
+                        onClick={() => handleApplyRestriction(selectedUser, 'trips', d.hours)}
+                        className="px-2.5 py-1.5 bg-white dark:bg-slate-800 hover:bg-orange-500 hover:text-white border dark:border-slate-700 rounded-lg text-[10px] font-black transition-colors"
+                      >
+                        {d.label}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+
+                {/* ب. منع من التواصل والشات */}
+                <div className="space-y-1.5 pt-2 border-t border-rose-200/50 dark:border-rose-800/40">
+                  <div className="flex justify-between text-[11px] font-bold">
+                    <span className={textPrimary}>💬 منع من التواصل مع العملاء (الشات والطلبات):</span>
+                    <span className="text-rose-500">{formatRemainingBan(selectedUser.chatBanUntil) || 'غير محظور'}</span>
+                  </div>
+                  <div className="flex flex-wrap gap-1.5">
+                    {BAN_DURATIONS.map(d => (
+                      <button
+                        key={d.hours}
+                        onClick={() => handleApplyRestriction(selectedUser, 'chat', d.hours)}
+                        className="px-2.5 py-1.5 bg-white dark:bg-slate-800 hover:bg-amber-600 hover:text-white border dark:border-slate-700 rounded-lg text-[10px] font-black transition-colors"
+                      >
+                        {d.label}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+
+                {/* ج. تجميد وحظر شامل من أي إجراء */}
+                <div className="space-y-1.5 pt-2 border-t border-rose-200/50 dark:border-rose-800/40">
+                  <div className="flex justify-between text-[11px] font-bold">
+                    <span className="text-rose-600 dark:text-rose-400 font-black">🚫 تجميد شامل (منع من اتخاذ أي إجراء بالتطبيق):</span>
+                    <span className="text-rose-600 font-black">{formatRemainingBan(selectedUser.fullBanUntil) || (selectedUser.isBanned ? 'موقوف' : 'غير محظور')}</span>
+                  </div>
+                  <div className="flex flex-wrap gap-1.5">
+                    {BAN_DURATIONS.map(d => (
+                      <button
+                        key={d.hours}
+                        onClick={() => handleApplyRestriction(selectedUser, 'full', d.hours)}
+                        className="px-2.5 py-1.5 bg-rose-600/10 hover:bg-rose-600 text-rose-600 hover:text-white border border-rose-300 dark:border-rose-800 rounded-lg text-[10px] font-black transition-colors"
+                      >
+                        {d.label}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+
+              </div>
+
+            </div>
+          </div>
+        )}
+
+        {/* نافذة تكبير صور البطاقة والرخصة */}
+        {previewImage && (
+          <div className="fixed inset-0 bg-black/95 z-[700] flex items-center justify-center p-4" onClick={() => setPreviewImage(null)}>
+            <img src={previewImage} className="max-w-full max-h-[85vh] rounded-2xl object-contain shadow-2xl" alt="Preview"/>
+            <button className="absolute top-6 right-6 p-3 bg-white/20 text-white rounded-full"><X size={24}/></button>
+          </div>
+        )}
+
       </div>
     </div>
   );

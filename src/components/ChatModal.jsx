@@ -115,6 +115,10 @@ const ChatModal = ({ baseChatData, user, userData, isDarkMode, onClose, triggerT
 
   const sendTextMessage = async (textToSend) => {
     if (!textToSend?.trim() || !baseChatData?.chatId) return;
+    if (userData && (userData.isBanned || (userData.fullBanUntil && Number(userData.fullBanUntil) > Date.now()) || (userData.chatBanUntil && Number(userData.chatBanUntil) > Date.now()))) {
+      triggerToast('🚫 حسابك مقيد حالياً من إرسال الرسائل بقرار من الإدارة');
+      return;
+    }
     const chatId = baseChatData.chatId;
     try {
       await addDoc(collection(db, `chats_${chatId}`), { 
