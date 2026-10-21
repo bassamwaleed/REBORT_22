@@ -1,11 +1,11 @@
 import React, { useState, useEffect } from 'react';
 import { 
-  collection, onSnapshot, doc, updateDoc, setDoc, query, where, getDocs, writeBatch 
+  collection, onSnapshot, doc, updateDoc, setDoc, query, where, getDocs, writeBatch, addDoc, serverTimestamp 
 } from 'firebase/firestore';
 import { 
   X, ShieldCheck, ShieldAlert, Users, BusFront, Settings, Search, CheckCircle2, 
   XCircle, Ban, Award, Crown, Star, Zap, Clock, Eye, Image as ImageIcon, 
-  Plus, Trash2, Check, Loader2, Lock, MessageSquareOff, Car 
+  Plus, Trash2, Check, Loader2, Lock, MessageSquareOff, Car, MessageCircle 
 } from 'lucide-react';
 import { db, USERS_COLLECTION, APP_COLLECTION_NAME, STATIONS_COLLECTION } from '../firebase';
 import { resizeAndConvertToBase64 } from '../utils/helpers';
@@ -27,20 +27,18 @@ const BAN_DURATIONS = [
   { label: 'حظر دائم ♾️', hours: 876000 }
 ];
 
-const AdminPanel = ({ isDarkMode, onClose, triggerToast, appSettings }) => {
-  const [activeTab, setActiveTab] = useState('users'); // 'users' | 'verifications' | 'stations' | 'settings'
+const AdminPanel = ({ isDarkMode, onClose, triggerToast, appSettings, user, openAdminChat }) => {
+  const [activeTab, setActiveTab] = useState('users'); 
   const [usersList, setUsersList] = useState([]);
   const [stationsList, setStationsList] = useState([]);
   const [loadingUsers, setLoadingUsers] = useState(true);
   const [searchQuery, setSearchQuery] = useState('');
-  const [userFilter, setUserFilter] = useState('all'); // 'all' | 'verified' | 'Restricted' | 'badged'
+  const [userFilter, setUserFilter] = useState('all'); 
 
-  // المستخدم المفتوح حالياً للتحكم الدقيق أو مراجعة الوثائق
   const [selectedUser, setSelectedUser] = useState(null);
   const [previewImage, setPreviewImage] = useState(null);
   const [isUpdatingUser, setIsUpdatingUser] = useState(false);
 
-  // إعدادات التطبيق (اللوجو والبانرات والنص)
   const [bannerText, setBannerText] = useState(appSettings?.bannerText || '');
   const [banners, setBanners] = useState(Array.isArray(appSettings?.banners) ? appSettings.banners : []);
   const [logo, setLogo] = useState(appSettings?.logo || null);
@@ -73,7 +71,6 @@ const AdminPanel = ({ isDarkMode, onClose, triggerToast, appSettings }) => {
     };
   }, [selectedUser?.id]);
 
-  // تحديث بيانات المستخدم ومزامنتها مع رحلاته المنشورة
   const updateUserAndSyncTrips = async (userId, userUpdates, tripUpdates = null) => {
     setIsUpdatingUser(true);
     try {
@@ -96,34 +93,80 @@ const AdminPanel = ({ isDarkMode, onClose, triggerToast, appSettings }) => {
     }
   };
 
-  // تبديل علامة التوثيق (إضافة / سحب)
+  // دالة إرسال الرسالة التلقائية في الشات
+  const sendAutomatedMessage = async (targetUserId, text) => {
+    if (!user) return;
+    try {
+      const user1 = user.uid < targetUserId ? user.uid : targetUserId;
+      const user2 = user.uid < targetUserId ? targetUserId : user.uid;
+      const chatId = `${user1}_${user2}`;
+
+      await addDoc(collection(db, `chats_${chatId}`), {
+        text: text,
+        senderId: user.uid,
+        senderName: 'الإدارة (الدعم الفني)',
+        senderPhoto: appSettings?.logo || null,
+        createdAt: serverTimestamp()
+      });
+
+      const inboxUpdateMe = { lastMessage: text, lastSenderId: user.uid, lastMessageTime: Date.now() };
+      const inboxUpdateOther = { 
+        ...inboxUpdateMe, 
+        otherPersonId: user.uid, 
+        otherPersonName: 'الإدارة (الدعم الفني)', 
+        otherPersonPhoto: appSettings?.logo || null, 
+        otherPersonVerified: true,
+        tripInfo: 'الدعم الفني / الإدارة',
+        tripId: 'system',
+        chatId: chatId,
+        requestStatus: 'none'
+      };
+
+      await setDoc(doc(db, `inbox_${user.uid}`, chatId), inboxUpdateMe, { merge: true });
+      await setDoc(doc(db, `inbox_${targetUserId}`, chatId), inboxUpdateOther, { merge: true });
+    } catch (e) {
+      console.error("Error sending auto message:", e);
+    }
+  };
+
   const handleToggleVerify = async (targetUser, forceState = null) => {
     const newVerified = forceState !== null ? forceState : !targetUser.isVerified;
-    const newStatus = newVerified ? 'approved' : 'none';
+    const newStatus = newVerified ? 'approved' : (forceState === false ? 'rejected' : 'none');
+    
     await updateUserAndSyncTrips(
       targetUser.id,
       { isVerified: newVerified, verificationStatus: newStatus },
       { verified: newVerified }
     );
+
+    // إرسال إشعار الشات التلقائي
+    if (newVerified) {
+      await sendAutomatedMessage(targetUser.id, `مرحباً ${targetUser.name?.split(' ')[0]}، تم مراجعة مستنداتك وتوثيق حسابك بنجاح ✅. نتمنى لك رحلات آمنة موفقة!`);
+    } else if (forceState === false) {
+      await sendAutomatedMessage(targetUser.id, `مرحباً ${targetUser.name?.split(' ')[0]}، نأسف لإبلاغك بأنه تم رفض مستندات التوثيق الخاصة بك ❌. يرجى رفع مستندات واضحة مرة أخرى أو الرد هنا للاستفسار.`);
+    } else if (!newVerified && forceState === null) {
+      await sendAutomatedMessage(targetUser.id, `مرحباً ${targetUser.name?.split(' ')[0]}، نلفت انتباهك إلى أنه تم سحب علامة التوثيق من حسابك ❌. يرجى الرد هنا لمعرفة الأسباب.`);
+    }
   };
 
-  // منح أو سحب شارة البونص والتميز
   const handleSetBadge = async (targetUser, badgeTitle) => {
     await updateUserAndSyncTrips(
       targetUser.id,
       { customBadge: badgeTitle || null },
       { userBadge: badgeTitle || null }
     );
+
+    if (badgeTitle) {
+      await sendAutomatedMessage(targetUser.id, `تهانينا! 🎉 تم منحك شارة (${badgeTitle}) تقديراً لنشاطك وتميزك في التطبيق. استمر في التألق! 🌟`);
+    }
   };
 
-  // تعديل عدد الرحلات المكتملة (البونص)
   const handleAdjustTripsCount = async (targetUser, delta) => {
     const current = Number(targetUser.completedTripsCount || 0);
     const nextCount = Math.max(0, current + delta);
     await updateUserAndSyncTrips(targetUser.id, { completedTripsCount: nextCount });
   };
 
-  // تطبيق حظر جزئي أو كلي لمدة زمنية
   const handleApplyRestriction = async (targetUser, restrictionType, durationHours) => {
     const untilTimestamp = durationHours > 0 ? Date.now() + durationHours * 3600 * 1000 : null;
     let updates = {};
@@ -249,7 +292,6 @@ const AdminPanel = ({ isDarkMode, onClose, triggerToast, appSettings }) => {
     <div className="fixed inset-0 bg-slate-950/90 backdrop-blur-md z-[600] flex justify-center items-end sm:items-center p-0 sm:p-4 pointer-events-auto">
       <div className={`${bgCard} w-full sm:max-w-4xl h-[94vh] sm:h-[88vh] rounded-t-[2rem] sm:rounded-[2rem] shadow-2xl flex flex-col overflow-hidden border dark:border-slate-800 animate-fade-in-up`}>
         
-        {/* الهيدر العلوي للوحة التحكم */}
         <div className="p-4 sm:p-5 bg-gradient-to-r from-indigo-950 via-slate-900 to-indigo-950 text-white flex justify-between items-center shrink-0 border-b border-indigo-800/50">
           <div className="flex items-center gap-3">
             <div className="p-2.5 bg-amber-400/20 border border-amber-400/40 rounded-2xl text-amber-300">
@@ -269,13 +311,12 @@ const AdminPanel = ({ isDarkMode, onClose, triggerToast, appSettings }) => {
           </button>
         </div>
 
-        {/* شريط التبويبات */}
         <div className="flex overflow-x-auto bg-slate-100 dark:bg-slate-900/90 p-1.5 gap-1.5 border-b dark:border-slate-800 shrink-0 [&::-webkit-scrollbar]:hidden">
           <button 
             onClick={() => setActiveTab('users')} 
             className={`flex-1 min-w-[125px] py-2.5 px-3 rounded-xl text-xs font-black flex items-center justify-center gap-1.5 transition-all ${activeTab === 'users' ? 'bg-indigo-600 text-white shadow-md' : textSecondary}`}
           >
-            <Users size={16}/> الأعضاء والتحكم ({usersList.length})
+            <Users size={16}/> الأعضاء ({usersList.length})
           </button>
           <button 
             onClick={() => setActiveTab('verifications')} 
@@ -307,12 +348,10 @@ const AdminPanel = ({ isDarkMode, onClose, triggerToast, appSettings }) => {
           </button>
         </div>
 
-        {/* محتوى التبويب النشط */}
         <div className="flex-1 overflow-y-auto p-4 sm:p-5 [&::-webkit-scrollbar]:hidden">
           
           {activeTab === 'users' && (
             <div className="space-y-4">
-              {/* البحث والفلترة السريعة */}
               <div className="flex flex-col sm:flex-row gap-2">
                 <div className={`flex-1 flex items-center gap-2 px-3.5 py-2.5 rounded-xl border ${bgInput}`}>
                   <Search size={18} className="text-slate-400 shrink-0" />
@@ -391,7 +430,7 @@ const AdminPanel = ({ isDarkMode, onClose, triggerToast, appSettings }) => {
                               </p>
                               <div className="flex items-center gap-2 mt-1">
                                 <span className="text-[10px] font-bold bg-slate-200 dark:bg-slate-700 px-2 py-0.5 rounded-md">
-                                  الرحلات المكتملة: {u.completedTripsCount || 0}
+                                  رحلات: {u.completedTripsCount || 0}
                                 </span>
                                 <span className="text-[10px] font-bold bg-amber-50 dark:bg-amber-900/20 text-amber-600 px-2 py-0.5 rounded-md">
                                   ⭐ {Number(u.rating || 0).toFixed(1)}
@@ -400,37 +439,42 @@ const AdminPanel = ({ isDarkMode, onClose, triggerToast, appSettings }) => {
                             </div>
                           </div>
 
-                          {/* زر فتح نافذة التحكم الكامل في العضو */}
-                          <button 
-                            onClick={() => setSelectedUser(u)}
-                            className="px-3 py-2 bg-indigo-600 hover:bg-indigo-700 text-white rounded-xl text-xs font-black shadow-sm shrink-0 active:scale-95 transition-transform"
-                          >
-                            تحكم كامل ⚙️
-                          </button>
+                          <div className="flex flex-col gap-1.5 shrink-0">
+                            <button 
+                              onClick={() => openAdminChat(u)}
+                              className="px-2 py-1.5 bg-indigo-50 dark:bg-indigo-900/40 hover:bg-indigo-100 dark:hover:bg-indigo-800 text-indigo-700 dark:text-indigo-300 rounded-xl text-xs font-black shadow-sm transition-transform active:scale-95 border border-indigo-200 dark:border-indigo-700"
+                            >
+                              مراسلة 💬
+                            </button>
+                            <button 
+                              onClick={() => setSelectedUser(u)}
+                              className="px-2 py-1.5 bg-indigo-600 hover:bg-indigo-700 text-white rounded-xl text-xs font-black shadow-sm transition-transform active:scale-95"
+                            >
+                              تحكم ⚙️
+                            </button>
+                          </div>
                         </div>
 
-                        {/* عرض القيود النشطة إن وجدت */}
                         {(fullBanRem || tripBanRem || chatBanRem) && (
                           <div className="flex flex-wrap gap-1.5 pt-2 border-t border-rose-200 dark:border-rose-800/60">
                             {fullBanRem && (
                               <span className="text-[10px] font-black bg-rose-600 text-white px-2.5 py-0.5 rounded-full flex items-center gap-1">
-                                <Lock size={11}/> موقوف كلياً ({fullBanRem})
+                                <Lock size={11}/> موقوف ({fullBanRem})
                               </span>
                             )}
                             {!fullBanRem && tripBanRem && (
                               <span className="text-[10px] font-black bg-orange-500 text-white px-2.5 py-0.5 rounded-full flex items-center gap-1">
-                                <Car size={11}/> ممنوع من نشر رحلات ({tripBanRem})
+                                <Car size={11}/> منع رحلات ({tripBanRem})
                               </span>
                             )}
                             {!fullBanRem && chatBanRem && (
                               <span className="text-[10px] font-black bg-amber-600 text-white px-2.5 py-0.5 rounded-full flex items-center gap-1">
-                                <MessageSquareOff size={11}/> ممنوع من الشات ({chatBanRem})
+                                <MessageSquareOff size={11}/> منع شات ({chatBanRem})
                               </span>
                             )}
                           </div>
                         )}
 
-                        {/* أزرار سريعة للتوثيق والشارات */}
                         <div className="flex items-center justify-between gap-2 pt-2 border-t border-slate-200/70 dark:border-slate-700/70">
                           <button
                             onClick={() => handleToggleVerify(u)}
@@ -524,7 +568,7 @@ const AdminPanel = ({ isDarkMode, onClose, triggerToast, appSettings }) => {
                         <CheckCircle2 size={16}/> قبول وتفعيل شارة التوثيق ✅
                       </button>
                       <button 
-                        onClick={() => updateUserAndSyncTrips(u.id, { verificationStatus: 'rejected', isVerified: false }, { verified: false })}
+                        onClick={() => handleToggleVerify(u, false)}
                         className="flex-1 bg-rose-600 hover:bg-rose-700 text-white py-3 rounded-xl font-black text-xs flex items-center justify-center gap-1.5 shadow-md"
                       >
                         <XCircle size={16}/> رفض المستندات ❌
@@ -668,7 +712,6 @@ const AdminPanel = ({ isDarkMode, onClose, triggerToast, appSettings }) => {
                 </button>
               </div>
 
-              {/* 1. التحكم في علامة التوثيق */}
               <div className="p-4 rounded-2xl border border-slate-200 dark:border-slate-800 space-y-3">
                 <div className="flex justify-between items-center">
                   <span className={`text-xs font-black flex items-center gap-1.5 ${textPrimary}`}>
@@ -702,11 +745,10 @@ const AdminPanel = ({ isDarkMode, onClose, triggerToast, appSettings }) => {
                 )}
               </div>
 
-              {/* 2. التحكم في شارات البونص والتميز وعدد الرحلات */}
               <div className="p-4 rounded-2xl border border-amber-200/70 dark:border-amber-800/50 bg-amber-50/30 dark:bg-amber-950/10 space-y-3">
                 <div className="flex justify-between items-center">
                   <span className={`text-xs font-black flex items-center gap-1.5 ${textPrimary}`}>
-                    <Award size={16} className="text-amber-500"/> منح شارة البونص والتميز (تظهر على الكارت)
+                    <Award size={16} className="text-amber-500"/> منح شارة البونص والتميز
                   </span>
                 </div>
                 <div className="grid grid-cols-2 gap-2">
@@ -727,7 +769,6 @@ const AdminPanel = ({ isDarkMode, onClose, triggerToast, appSettings }) => {
                   ))}
                 </div>
 
-                {/* التحكم اليدوي في عداد الرحلات المكتملة للبونص */}
                 <div className="flex items-center justify-between pt-2 border-t border-amber-200/60 dark:border-amber-800/50">
                   <span className="text-xs font-bold text-slate-600 dark:text-slate-300">
                     رصيد الرحلات المكتملة: <strong className="text-amber-600 font-black">{selectedUser.completedTripsCount || 0}</strong>
@@ -740,7 +781,6 @@ const AdminPanel = ({ isDarkMode, onClose, triggerToast, appSettings }) => {
                 </div>
               </div>
 
-              {/* 3. نظام الحظر والقيود المتقدم (رحلات / شات / شامل بمدة) */}
               <div className="p-4 rounded-2xl border border-rose-200 dark:border-rose-900/60 bg-rose-50/30 dark:bg-rose-950/20 space-y-4">
                 <div className="flex items-center justify-between">
                   <span className="text-xs font-black text-rose-600 dark:text-rose-400 flex items-center gap-1.5">
@@ -756,7 +796,6 @@ const AdminPanel = ({ isDarkMode, onClose, triggerToast, appSettings }) => {
                   )}
                 </div>
 
-                {/* أ. منع من نشر رحلات */}
                 <div className="space-y-1.5">
                   <div className="flex justify-between text-[11px] font-bold">
                     <span className={textPrimary}>🚗 منع من إضافة رحلات جديدة:</span>
@@ -775,7 +814,6 @@ const AdminPanel = ({ isDarkMode, onClose, triggerToast, appSettings }) => {
                   </div>
                 </div>
 
-                {/* ب. منع من التواصل والشات */}
                 <div className="space-y-1.5 pt-2 border-t border-rose-200/50 dark:border-rose-800/40">
                   <div className="flex justify-between text-[11px] font-bold">
                     <span className={textPrimary}>💬 منع من التواصل مع العملاء (الشات والطلبات):</span>
@@ -794,10 +832,9 @@ const AdminPanel = ({ isDarkMode, onClose, triggerToast, appSettings }) => {
                   </div>
                 </div>
 
-                {/* ج. تجميد وحظر شامل من أي إجراء */}
                 <div className="space-y-1.5 pt-2 border-t border-rose-200/50 dark:border-rose-800/40">
                   <div className="flex justify-between text-[11px] font-bold">
-                    <span className="text-rose-600 dark:text-rose-400 font-black">🚫 تجميد شامل (منع من اتخاذ أي إجراء بالتطبيق):</span>
+                    <span className="text-rose-600 dark:text-rose-400 font-black">🚫 تجميد شامل (منع إجراءات التطبيق):</span>
                     <span className="text-rose-600 font-black">{formatRemainingBan(selectedUser.fullBanUntil) || (selectedUser.isBanned ? 'موقوف' : 'غير محظور')}</span>
                   </div>
                   <div className="flex flex-wrap gap-1.5">
@@ -819,7 +856,6 @@ const AdminPanel = ({ isDarkMode, onClose, triggerToast, appSettings }) => {
           </div>
         )}
 
-        {/* نافذة تكبير صور البطاقة والرخصة */}
         {previewImage && (
           <div className="fixed inset-0 bg-black/95 z-[700] flex items-center justify-center p-4" onClick={() => setPreviewImage(null)}>
             <img src={previewImage} className="max-w-full max-h-[85vh] rounded-2xl object-contain shadow-2xl" alt="Preview"/>
