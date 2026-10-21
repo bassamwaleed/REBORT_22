@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { onAuthStateChanged, signInWithEmailAndPassword, createUserWithEmailAndPassword, signInAnonymously, updateProfile, signOut } from 'firebase/auth';
 import { collection, onSnapshot, doc, getDoc, setDoc, addDoc, updateDoc, serverTimestamp, increment, writeBatch, query, where, getDocs } from 'firebase/firestore';
-import { Loader2, Car, MessageCircle, User, Home, CheckCircle2, Plus, X, Lock, MapPin, Bell, Search } from 'lucide-react';
+import { Loader2, Car, MessageCircle, User, Home, CheckCircle2, Plus, X, Lock, MapPin, Bell, Search, Edit2, Check, Route, Phone } from 'lucide-react';
 
 import { auth, db, APP_COLLECTION_NAME, USERS_COLLECTION, STATIONS_COLLECTION, ADMIN_EMAIL } from './firebase';
 import { safeMillis, useEgyptianLocation } from './utils/helpers';
@@ -21,7 +21,6 @@ export const SUPPORTED_AREAS = [
   'مدينة السادات', 'شبين الكوم'
 ];
 
-// خريطة النطاقات الجغرافية القريبة لاقتراح الرحلات البديلة بذكاء
 export const NEARBY_AREAS_MAP = {
   'حدائق أكتوبر': ['مدينة 6 أكتوبر', 'حدائق الأهرام', 'الشيخ زايد', 'الهرم', 'فيصل'],
   'حدائق الأهرام': ['الهرم', 'فيصل', 'حدائق أكتوبر', 'مدينة 6 أكتوبر', 'الشيخ زايد'],
@@ -42,7 +41,6 @@ export const NEARBY_AREAS_MAP = {
   'شبين الكوم': ['مدينة السادات', 'القاهرة الجديدة', 'وسط البلد']
 };
 
-// دالة توحيد الحروف العربية لضمان تطابق البحث والمدن بنسبة 100%
 export const normalizeArabic = (str) => {
   if (!str) return '';
   return String(str)
@@ -66,7 +64,26 @@ export default function App() {
   const [viewMode, setViewMode] = useState('list'); 
   const [filterType, setFilterType] = useState('offer'); 
   
-  const [userArea, setUserArea] = useState(() => localStorage.getItem('khodnimaak_area') || '');
+  const getInitialAreas = () => {
+    try {
+      const savedList = localStorage.getItem('khodnimaak_areas_list');
+      if (savedList) {
+        const parsed = JSON.parse(savedList);
+        if (Array.isArray(parsed) && parsed.length > 0) return parsed;
+      }
+      const single = localStorage.getItem('khodnimaak_area');
+      if (single) return single.split('، ').filter(Boolean);
+    } catch (e) {}
+    return [];
+  };
+
+  const [userAreas, setUserAreas] = useState(getInitialAreas);
+  const [tempSelectedAreas, setTempSelectedAreas] = useState(getInitialAreas);
+  const [userArea, setUserArea] = useState(() => getInitialAreas().join('، '));
+  const [toastMsg, setToastMsg] = useState('');
+  const [alertMsg, setAlertMsg] = useState('');
+  const [isSubmitting, setIsSubmitting] = useState(false);
+  
   const [filterFrom, setFilterFrom] = useState(() => localStorage.getItem('khodnimaak_area') || '');
   const [filterTo, setFilterTo] = useState('');
   const [showAreaModal, setShowAreaModal] = useState(false);
@@ -96,57 +113,98 @@ export default function App() {
   const [authLoading, setAuthLoading] = useState(false);
   const [authForm, setAuthForm] = useState({ name: '', identifier: '', password: '' });
   
-  // التعديل: إضافة femalesOnly و allowPhoneContact
   const [newTrip, setNewTrip] = useState({ 
     type: 'offer', category: 'travel', from: '', fromDetails: '', to: '', toDetails: '', 
-    date: '', time: '', seats: 1, cost: '', notes: '', allowPhoneContact: true,
+    routeAreas: [], date: '', time: '', seats: 1, cost: '', notes: '', 
+    allowPhoneContact: true, contactMethod: 'both', 
     preferences: { ac: false, noSmoking: false, luggage: false, families: false, femalesOnly: false }
   });
-  
-  const [toastMsg, setToastMsg] = useState('');
-  const [alertMsg, setAlertMsg] = useState('');
-  const [isSubmitting, setIsSubmitting] = useState(false);
-  
+
   const triggerToast = (msg) => { setToastMsg(msg); setTimeout(() => setToastMsg(''), 3500); };
+
+  const getRemainingBanText = (timestamp) => {
+    if (!timestamp || Number(timestamp) <= Date.now()) return null;
+    const diffHours = Math.ceil((Number(timestamp) - Date.now()) / (1000 * 3600));
+    if (diffHours > 80000) return 'بشكل دائم';
+    if (diffHours >= 24) return `لمدة ${Math.ceil(diffHours / 24)} يوم`;
+    return `لمدة ${diffHours} ساعة`;
+  };
+
+  const checkUserRestriction = (actionType = 'any') => {
+    if (!userData || isAdmin) return false;
+    const now = Date.now();
+
+    if (userData.isBanned || (userData.fullBanUntil && Number(userData.fullBanUntil) > now)) {
+      const rem = getRemainingBanText(userData.fullBanUntil) || 'من قِبل الإدارة';
+      triggerToast(`⛔ حسابك موقوف حالياً عن اتخاذ أي إجراء (${rem})`);
+      return true;
+    }
+
+    if (actionType === 'trip' && userData.tripBanUntil && Number(userData.tripBanUntil) > now) {
+      const rem = getRemainingBanText(userData.tripBanUntil);
+      triggerToast(`🚫 تم تقييد حسابك من نشر رحلات جديدة (${rem})`);
+      return true;
+    }
+
+    if (actionType === 'chat' && userData.chatBanUntil && Number(userData.chatBanUntil) > now) {
+      const rem = getRemainingBanText(userData.chatBanUntil);
+      triggerToast(`🚫 تم تقييد حسابك من التواصل مع العملاء (${rem})`);
+      return true;
+    }
+
+    return false;
+  };
 
   const { getMyCity, isLocating, locationError } = useEgyptianLocation();
 
   useEffect(() => {
+    let unsubUserDoc = null;
     const unsubscribe = onAuthStateChanged(auth, async (currentUser) => {
       try {
+        if (unsubUserDoc) { unsubUserDoc(); unsubUserDoc = null; }
         if (currentUser) {
           setUser(currentUser);
           if (currentUser.isAnonymous) { 
             setIsGuest(true); setUserData(null); setIsAdmin(false); 
             if (localStorage.getItem('khodnimaak_hide_area_modal') !== 'true') setShowAreaModal(true);
+            setLoading(false);
           } 
           else {
             setIsGuest(false); setIsAdmin(currentUser.email && currentUser.email.toLowerCase() === ADMIN_EMAIL);
-            const userDoc = await getDoc(doc(db, USERS_COLLECTION, currentUser.uid));
-            if (userDoc.exists()) { 
-              const data = userDoc.data();
-              setUserData(data); 
-              if (data.preferredArea) {
-                setUserArea(data.preferredArea);
-                setFilterFrom(data.preferredArea);
-                localStorage.setItem('khodnimaak_area', data.preferredArea);
-              } 
-              if (localStorage.getItem('khodnimaak_hide_area_modal') !== 'true') setShowAreaModal(true);
-            } 
-            else {
+            const userRef = doc(db, USERS_COLLECTION, currentUser.uid);
+            const userDoc = await getDoc(userRef);
+            if (!userDoc.exists()) {
               const initialData = { name: currentUser.displayName || 'مستخدم', photoURL: null, isVerified: false, verificationStatus: 'none', completedTripsCount: 0, phone: currentUser.email?.split('@')[0] || '', createdAt: Date.now() };
-              await setDoc(doc(db, USERS_COLLECTION, currentUser.uid), initialData, { merge: true });
-              setUserData(initialData);
+              await setDoc(userRef, initialData, { merge: true });
+              if (localStorage.getItem('khodnimaak_hide_area_modal') !== 'true') setShowAreaModal(true);
+            } else {
               if (localStorage.getItem('khodnimaak_hide_area_modal') !== 'true') setShowAreaModal(true);
             }
+
+            unsubUserDoc = onSnapshot(userRef, (snap) => {
+              if (snap.exists()) {
+                const data = snap.data();
+                setUserData(data);
+                if (Array.isArray(data.preferredAreas) && data.preferredAreas.length > 0 && localStorage.getItem('khodnimaak_areas_list') === null) {
+                  setUserAreas(data.preferredAreas);
+                  setTempSelectedAreas(data.preferredAreas);
+                  setUserArea(data.preferredAreas.join('، '));
+                }
+              }
+              setLoading(false);
+            });
           }
         } else {
           setUser(null); setUserData(null); setIsGuest(false); setIsAdmin(false);
           setMyInbox([]); setActiveChat(null); setRealTrips([]); setNotifications([]);
+          setLoading(false);
         }
-      } catch (e) {} finally { setLoading(false); }
+      } catch (e) { setLoading(false); }
     });
-    return () => unsubscribe();
+    return () => {
+      unsubscribe();
+      if (unsubUserDoc) unsubUserDoc();
+    };
   }, []);
 
   useEffect(() => {
@@ -203,49 +261,66 @@ export default function App() {
     return () => unsubscribe();
   }, [user, isGuest]);
 
-  const handleSaveArea = async (area) => {
-    const cleanArea = area ? area.trim() : '';
-    setUserArea(cleanArea);
-    setFilterFrom(cleanArea);
-    localStorage.setItem('khodnimaak_area', cleanArea);
+  const openAreaModalWithSync = () => {
+    setTempSelectedAreas(userAreas);
+    setShowAreaModal(true);
+  };
+
+  const toggleTempArea = (area) => {
+    setTempSelectedAreas(prev => 
+      prev.includes(area) ? prev.filter(a => a !== area) : [...prev, area]
+    );
+  };
+
+  const handleConfirmAreas = async () => {
+    const cleanAreas = tempSelectedAreas.filter(Boolean);
+    const joinedAreas = cleanAreas.join('، ');
+    setUserAreas(cleanAreas);
+    setUserArea(joinedAreas);
+    setFilterFrom(cleanAreas.length === 1 ? cleanAreas[0] : '');
+    
+    localStorage.setItem('khodnimaak_areas_list', JSON.stringify(cleanAreas));
+    localStorage.setItem('khodnimaak_area', joinedAreas);
     
     if (hideAreaModalFuture) {
       localStorage.setItem('khodnimaak_hide_area_modal', 'true');
     }
 
     setShowAreaModal(false);
-    triggerToast(cleanArea ? `تم ضبط منطقتك: ${cleanArea} (تظهر رحلاتها في الأعلى) 📍` : 'تم عرض جميع المناطق 🌍');
-    if (user && !isGuest && cleanArea) {
-        try { await updateDoc(doc(db, USERS_COLLECTION, user.uid), { preferredArea: cleanArea }); } catch(e){}
+    triggerToast(cleanAreas.length > 0 ? `تم تحديد منطقتك: ${joinedAreas} 📍` : 'تم عرض جميع المناطق 🌍');
+    if (user && !isGuest) {
+      try { 
+        await updateDoc(doc(db, USERS_COLLECTION, user.uid), { 
+          preferredArea: joinedAreas,
+          preferredAreas: cleanAreas
+        }); 
+      } catch(e){}
     }
   };
 
-  // ترتيب ذكي للمناطق: المطابق تماماً أولاً، ثم الذي يبدأ بالحروف، ثم الذي يحتوي على الحروف
   const filteredAreas = SUPPORTED_AREAS.filter(area => {
     if (!areaSearchQuery.trim()) return true;
     return normalizeArabic(area).includes(normalizeArabic(areaSearchQuery));
   }).sort((a, b) => {
     const q = normalizeArabic(areaSearchQuery);
     if (!q) {
-      // وضع منطقة المستخدم المختارة حالياً في أعلى القائمة دائماً
-      if (normalizeArabic(a) === normalizeArabic(userArea)) return -1;
-      if (normalizeArabic(b) === normalizeArabic(userArea)) return 1;
+      const aSelected = tempSelectedAreas.includes(a);
+      const bSelected = tempSelectedAreas.includes(b);
+      if (aSelected && !bSelected) return -1;
+      if (!aSelected && bSelected) return 1;
       return 0;
     }
     const normA = normalizeArabic(a);
     const normB = normalizeArabic(b);
 
-    // 1. التطابق التام في الأعلى
     if (normA === q && normB !== q) return -1;
     if (normB === q && normA !== q) return 1;
 
-    // 2. الاسم الذي يبدأ بحروف البحث
     const aStarts = normA.startsWith(q);
     const bStarts = normB.startsWith(q);
     if (aStarts && !bStarts) return -1;
     if (!aStarts && bStarts) return 1;
 
-    // 3. ترتيب حسب أقرب موضع للكلمة
     return normA.indexOf(q) - normB.indexOf(q);
   });
 
@@ -298,12 +373,26 @@ export default function App() {
   const handleAddTrip = async (e) => {
     e.preventDefault();
     if (!user || isGuest) return forceSignUpScreen();
+    if (checkUserRestriction('trip')) return;
     if (!newTrip.from || !newTrip.to) return triggerToast('برجاء تحديد مكان التحرك والوصول');
     setIsSubmitting(true);
     try {
       const typeToSave = newTrip.category === 'parcel' ? 'delivery' : newTrip.type;
+      const allowContact = newTrip.contactMethod !== 'chat';
       const tripData = {
-        ...newTrip, type: typeToSave, userId: user.uid, userName: userData?.name || 'مستخدم', userPhoto: userData?.photoURL || null, userPhone: userData?.phone || '', verified: userData?.isVerified || false, rating: userData?.rating || 0, status: 'open', createdAt: serverTimestamp(), joinedMembers: [],
+        ...newTrip, 
+        allowPhoneContact: allowContact,
+        type: typeToSave, 
+        userId: user.uid, 
+        userName: userData?.name || 'مستخدم', 
+        userPhoto: userData?.photoURL || null, 
+        userPhone: userData?.phone || '', 
+        verified: userData?.isVerified || false, 
+        userBadge: userData?.customBadge || null,
+        rating: userData?.rating || 0, 
+        status: 'open', 
+        createdAt: serverTimestamp(), 
+        joinedMembers: [],
         price: newTrip.cost 
       };
       
@@ -342,7 +431,12 @@ export default function App() {
 
       setShowAddModal(false); triggerToast('تم النشر بنجاح!');
       setActiveTab('home'); setHomeCategory(newTrip.category);
-      setNewTrip({ type: 'offer', category: 'travel', from: '', fromDetails: '', to: '', toDetails: '', date: '', time: '', seats: 1, cost: '', notes: '', allowPhoneContact: true, preferences: { ac: false, noSmoking: false, luggage: false, families: false, femalesOnly: false } });
+      setNewTrip({ 
+        type: 'offer', category: 'travel', from: '', fromDetails: '', to: '', toDetails: '', 
+        routeAreas: [], date: '', time: '', seats: 1, cost: '', notes: '', 
+        allowPhoneContact: true, contactMethod: 'both', 
+        preferences: { ac: false, noSmoking: false, luggage: false, families: false, femalesOnly: false } 
+      });
     } catch (error) { triggerToast('حدث خطأ.'); } finally { setIsSubmitting(false); }
   };
 
@@ -353,6 +447,7 @@ export default function App() {
     }
     
     if (isGuest || !user) { forceSignUpScreen(); return; }
+    if (checkUserRestriction('chat')) return;
     if (user.uid === trip.userId) { triggerToast('هذه رحلتك الخاصة!'); return; }
     
     try {
@@ -387,6 +482,7 @@ export default function App() {
 
   const handleTripAction = async (chatInfo, actionType) => {
     if (!chatInfo || typeof chatInfo !== 'object' || !chatInfo.chatId || !user) return;
+    if (checkUserRestriction('chat')) return;
     try {
       const chatId = chatInfo.chatId;
       let newStatus = ''; let systemText = '';
@@ -479,17 +575,19 @@ export default function App() {
         <div className="fixed inset-0 bg-slate-900/95 backdrop-blur-md z-[9999] flex justify-center items-center p-4 pointer-events-auto">
           <div className={`${bgCard} w-full max-w-md rounded-[2rem] p-6 shadow-2xl flex flex-col border animate-fade-in-up dark:border-slate-700`}>
             
-            <div className="flex justify-between items-center mb-4">
+            <div className="flex justify-between items-center mb-3">
               <h2 className={`text-xl font-black text-indigo-600 dark:text-indigo-400 flex items-center gap-2`}>
-                <MapPin size={24} /> أين أنت الآن؟
+                <MapPin size={24} /> حدد منطقتك الحالية
               </h2>
               <button onClick={() => setShowAreaModal(false)} className="p-1.5 bg-slate-100 dark:bg-slate-800 rounded-full hover:bg-rose-100 hover:text-rose-500 transition-colors"><X size={18}/></button>
             </div>
             
-            <p className={`${textSecondary} text-xs font-bold mb-4`}>لعرض أقرب الرحلات المتاحة في منطقتك، يرجى تحديد موقعك من القائمة المدعومة حالياً:</p>
+            <p className={`${textSecondary} text-xs font-bold mb-3 leading-relaxed`}>
+              يمكنك اختيار <span className="text-indigo-500 font-black">منطقة واحدة أو أكثر</span> لعرض الرحلات المتاحة والمارة بها، ثم اضغط تأكيد:
+            </p>
             
-            <div className={`flex items-center gap-2 px-3 py-2.5 rounded-xl border mb-4 ${bgInput}`}>
-               <Search size={18} className="text-slate-400" />
+            <div className={`flex items-center gap-2 px-3 py-2.5 rounded-xl border mb-3 ${bgInput}`}>
+               <Search size={18} className="text-slate-400 shrink-0" />
                <input 
                  type="text" 
                  placeholder="ابحث عن منطقتك..." 
@@ -497,47 +595,111 @@ export default function App() {
                  onChange={(e) => setAreaSearchQuery(e.target.value)}
                  className="w-full bg-transparent outline-none text-sm font-bold"
                />
+               {areaSearchQuery && (
+                 <button type="button" onClick={() => setAreaSearchQuery('')} className="text-slate-400 hover:text-rose-500">
+                   <X size={16}/>
+                 </button>
+               )}
             </div>
 
-            <div className="grid grid-cols-2 gap-2 max-h-[40vh] overflow-y-auto p-1 [&::-webkit-scrollbar]:hidden">
-              {filteredAreas.length > 0 ? filteredAreas.map(area => (
-                <button
-                  key={area}
-                  onClick={() => handleSaveArea(area)}
-                  className={`p-3 rounded-xl text-xs font-black border transition-all hover:scale-105 active:scale-95 ${userArea === area ? 'bg-indigo-600 text-white border-indigo-600 shadow-md' : 'bg-slate-50 text-slate-700 border-slate-200 hover:bg-indigo-50 hover:border-indigo-300 dark:bg-slate-800 dark:text-slate-300 dark:border-slate-700 dark:hover:bg-indigo-900/50'}`}
+            {tempSelectedAreas.length > 0 && (
+              <div className="flex items-center justify-between px-2 mb-2">
+                <span className="text-[11px] font-bold text-indigo-600 dark:text-indigo-400">
+                  تم تحديد ({tempSelectedAreas.length}): {tempSelectedAreas.slice(0, 2).join('، ')}{tempSelectedAreas.length > 2 ? '...' : ''}
+                </span>
+                <button 
+                  type="button" 
+                  onClick={() => setTempSelectedAreas([])} 
+                  className="text-[11px] font-bold text-rose-500 hover:underline"
                 >
-                  {area}
+                  إلغاء التحديد
                 </button>
-              )) : (
+              </div>
+            )}
+
+            <div className="grid grid-cols-2 gap-2 max-h-[36vh] overflow-y-auto p-1 [&::-webkit-scrollbar]:hidden">
+              {filteredAreas.length > 0 ? filteredAreas.map(area => {
+                const isSelected = tempSelectedAreas.includes(area);
+                return (
+                  <button
+                    key={area}
+                    type="button"
+                    onClick={() => toggleTempArea(area)}
+                    className={`p-3 rounded-xl text-xs font-black border transition-all flex items-center justify-center gap-1.5 active:scale-95 ${
+                      isSelected 
+                        ? 'bg-indigo-600 text-white border-indigo-600 shadow-md' 
+                        : 'bg-slate-50 text-slate-700 border-slate-200 hover:bg-indigo-50 hover:border-indigo-300 dark:bg-slate-800 dark:text-slate-300 dark:border-slate-700 dark:hover:bg-indigo-900/50'
+                    }`}
+                  >
+                    {isSelected && <Check size={14} className="shrink-0" />}
+                    <span className="truncate">{area}</span>
+                  </button>
+                );
+              }) : (
                 <div className="col-span-2 text-center py-4 text-slate-500 text-xs font-bold">عذراً، هذه المنطقة غير مدعومة حالياً.</div>
               )}
             </div>
 
-            <div className="mt-6 pt-4 border-t border-slate-200 dark:border-slate-700 flex items-center gap-2">
-               <input 
-                 type="checkbox" 
-                 id="hideModal" 
-                 checked={hideAreaModalFuture} 
-                 onChange={(e) => setHideAreaModalFuture(e.target.checked)}
-                 className="w-4 h-4 rounded text-indigo-600 focus:ring-indigo-500"
-               />
-               <label htmlFor="hideModal" className={`text-xs font-bold cursor-pointer ${textSecondary}`}>لا تظهر هذه الرسالة مرة أخرى عند فتح التطبيق</label>
+            <div className="mt-4 pt-3 border-t border-slate-200 dark:border-slate-700 space-y-3">
+               <button 
+                 type="button"
+                 onClick={handleConfirmAreas}
+                 className="w-full bg-indigo-600 hover:bg-indigo-700 text-white py-3.5 rounded-xl font-black text-sm shadow-lg active:scale-95 transition-all flex items-center justify-center gap-2"
+               >
+                 <CheckCircle2 size={18}/>
+                 <span>{tempSelectedAreas.length > 0 ? `تأكيد الاختيار (${tempSelectedAreas.length})` : 'عرض جميع المناطق 🌍'}</span>
+               </button>
+
+               <div className="flex items-center justify-center gap-2">
+                 <input 
+                   type="checkbox" 
+                   id="hideModal" 
+                   checked={hideAreaModalFuture} 
+                   onChange={(e) => setHideAreaModalFuture(e.target.checked)}
+                   className="w-4 h-4 rounded text-indigo-600 focus:ring-indigo-500"
+                 />
+                 <label htmlFor="hideModal" className={`text-xs font-bold cursor-pointer ${textSecondary}`}>لا تظهر هذه الرسالة مرة أخرى عند فتح التطبيق</label>
+               </div>
             </div>
           </div>
         </div>
       )}
 
       <header className={`sticky top-0 z-40 border-b ${isDarkMode ? 'bg-slate-950/90 border-slate-800' : 'bg-white/90 border-slate-100 shadow-sm'} backdrop-blur-xl pointer-events-auto`}>
-        <div className="max-w-3xl mx-auto px-5 h-16 flex justify-between items-center w-full">
-          <div className="flex items-center gap-3 cursor-pointer" onClick={() => setActiveTab('profile')}>
-            {userData?.photoURL ? ( <img src={userData.photoURL} className="w-10 h-10 rounded-full object-cover border" alt="user" /> ) : ( <div className={`w-10 h-10 rounded-full flex items-center justify-center border ${isDarkMode ? 'bg-slate-800 border-slate-700' : 'bg-white border-slate-200'}`}><User size={18} className={textSecondary}/></div> )}
-            <div className="flex flex-col text-right">
-              <span className={`text-[10px] font-medium ${textSecondary}`}>مرحباً،</span>
-              <span className={`text-sm font-black ${textPrimary}`}>{isGuest ? 'زائر' : (userData?.name?.split(' ')[0] || 'مستخدم')}</span>
+        <div className="max-w-3xl mx-auto px-4 py-2.5 min-h-[68px] flex justify-between items-center w-full">
+          <div className="flex flex-col items-start gap-1">
+            <div className="flex items-center gap-2.5 cursor-pointer" onClick={() => setActiveTab('profile')}>
+              {userData?.photoURL ? ( 
+                <img src={userData.photoURL} className="w-9 h-9 rounded-full object-cover border border-indigo-200 dark:border-slate-700" alt="user" /> 
+              ) : ( 
+                <div className={`w-9 h-9 rounded-full flex items-center justify-center border ${isDarkMode ? 'bg-slate-800 border-slate-700' : 'bg-white border-slate-200'}`}>
+                  <User size={17} className={textSecondary}/>
+                </div> 
+              )}
+              <div className="flex flex-col text-right">
+                <span className={`text-[10px] font-medium leading-none ${textSecondary}`}>مرحباً،</span>
+                <span className={`text-xs sm:text-sm font-black ${textPrimary} leading-tight mt-0.5`}>{isGuest ? 'زائر' : (userData?.name?.split(' ')[0] || 'مستخدم')}</span>
+              </div>
             </div>
+
+            <button 
+              type="button"
+              onClick={openAreaModalWithSync}
+              className="flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-indigo-50 hover:bg-indigo-100 dark:bg-indigo-950/50 dark:hover:bg-indigo-900/60 border border-indigo-200/80 dark:border-indigo-800/70 transition-all active:scale-95"
+              title="اضغط لتعديل منطقتك الحالية"
+            >
+              <MapPin size={11} className="text-indigo-600 dark:text-indigo-400 shrink-0" />
+              <span className="text-[10px] font-bold text-slate-600 dark:text-slate-300">منطقتك الحالية:</span>
+              <span className="text-[10px] font-black text-indigo-600 dark:text-indigo-400 max-w-[115px] sm:max-w-[180px] truncate">
+                {userAreas.length > 0 ? userAreas.join('، ') : 'جميع المناطق'}
+              </span>
+              <span className="text-[9px] font-black bg-indigo-600 text-white px-1.5 py-0.5 rounded-md flex items-center gap-0.5 mr-0.5">
+                <Edit2 size={8} /> تعديل
+              </span>
+            </button>
           </div>
           
-          <div className="flex items-center gap-4">
+          <div className="flex items-center gap-3">
             {!isGuest && (
               <div className="relative cursor-pointer bg-slate-100 dark:bg-slate-800 p-2 rounded-full hover:bg-slate-200 dark:hover:bg-slate-700 transition-colors" onClick={() => setShowNotificationsModal(true)}>
                 <Bell size={20} className={textSecondary} />
@@ -592,14 +754,34 @@ export default function App() {
         </div>
       )}
 
-      {}
+      {userData && (userData.isBanned || (userData.fullBanUntil && userData.fullBanUntil > Date.now()) || (userData.tripBanUntil && userData.tripBanUntil > Date.now()) || (userData.chatBanUntil && userData.chatBanUntil > Date.now())) && (
+        <div className="bg-rose-600 text-white px-4 py-2 text-center text-xs font-black flex items-center justify-center gap-2 shadow-md z-30">
+          <Lock size={14} className="shrink-0"/>
+          <span>
+            {userData.isBanned || (userData.fullBanUntil && userData.fullBanUntil > Date.now())
+              ? `حسابك موقوف حالياً عن اتخاذ الإجراءات (${getRemainingBanText(userData.fullBanUntil) || 'تواصل مع الإدارة'})`
+              : (userData.tripBanUntil && userData.tripBanUntil > Date.now())
+                ? `حسابك مقيد مؤقتاً من نشر الرحلات (${getRemainingBanText(userData.tripBanUntil)})`
+                : `حسابك مقيد مؤقتاً من المحادثات (${getRemainingBanText(userData.chatBanUntil)})`}
+          </span>
+        </div>
+      )}
+
       {activeTab === 'home' && !isGuest && (
-        <button onClick={() => setShowAddModal(true)} className="fixed bottom-[90px] right-5 bg-indigo-600 text-white w-14 h-14 rounded-full shadow-lg flex items-center justify-center z-50 hover:bg-indigo-700 transition-transform"><Plus size={28} /></button>
+        <button 
+          onClick={() => {
+            if (checkUserRestriction('trip')) return;
+            setShowAddModal(true);
+          }} 
+          className="fixed bottom-[90px] right-5 bg-indigo-600 text-white w-14 h-14 rounded-full shadow-lg flex items-center justify-center z-50 hover:bg-indigo-700 transition-transform"
+        >
+          <Plus size={28} />
+        </button>
       )}
 
       {showAddModal && !isGuest && (
         <div className="fixed inset-0 bg-slate-900/90 backdrop-blur-sm z-[200] flex justify-center items-end sm:items-center p-0 sm:p-4 pointer-events-auto">
-          <div className={`${bgCard} w-full sm:max-w-md h-[90vh] sm:h-[80vh] rounded-t-[2rem] sm:rounded-[2rem] shadow-2xl flex flex-col overflow-hidden animate-fade-in-up border dark:border-slate-700`}>
+          <div className={`${bgCard} w-full sm:max-w-md h-[92vh] sm:h-[85vh] rounded-t-[2rem] sm:rounded-[2rem] shadow-2xl flex flex-col overflow-hidden animate-fade-in-up border dark:border-slate-700`}>
             <div className="p-4 border-b flex justify-between items-center bg-slate-50 dark:bg-slate-800 dark:border-slate-700 shrink-0">
               <h2 className="text-lg font-black flex items-center gap-2"><Car className="text-indigo-500"/> إضافة إعلان</h2>
               <button onClick={() => setShowAddModal(false)} className="p-2 bg-slate-200 dark:bg-slate-700 rounded-full"><X size={20}/></button>
@@ -607,16 +789,16 @@ export default function App() {
             
             <div className="flex-1 overflow-y-auto p-5 [&::-webkit-scrollbar]:hidden [-ms-overflow-style:none] [scrollbar-width:none]">
               <div className="flex bg-slate-100 dark:bg-slate-800 p-1 rounded-2xl mb-6">
-                 <button onClick={() => setNewTrip({...newTrip, category: 'travel'})} className={`flex-1 py-2.5 rounded-xl text-xs font-bold transition-all ${newTrip.category === 'travel' ? 'bg-white text-indigo-600 shadow-sm dark:bg-slate-700 dark:text-white' : 'text-slate-500'}`}>سفر</button>
-                 <button onClick={() => setNewTrip({...newTrip, category: 'parcel'})} className={`flex-1 py-2.5 rounded-xl text-xs font-bold transition-all ${newTrip.category === 'parcel' ? 'bg-white text-indigo-600 shadow-sm dark:bg-slate-700 dark:text-white' : 'text-slate-500'}`}>أمانات</button>
+                 <button type="button" onClick={() => setNewTrip({...newTrip, category: 'travel'})} className={`flex-1 py-2.5 rounded-xl text-xs font-bold transition-all ${newTrip.category === 'travel' ? 'bg-white text-indigo-600 shadow-sm dark:bg-slate-700 dark:text-white' : 'text-slate-500'}`}>سفر</button>
+                 <button type="button" onClick={() => setNewTrip({...newTrip, category: 'parcel'})} className={`flex-1 py-2.5 rounded-xl text-xs font-bold transition-all ${newTrip.category === 'parcel' ? 'bg-white text-indigo-600 shadow-sm dark:bg-slate-700 dark:text-white' : 'text-slate-500'}`}>أمانات</button>
               </div>
               <form id="addTripForm" onSubmit={handleAddTrip} className="space-y-4">
                 <div className="flex gap-3 mb-2">
-                  <label className={`flex-1 flex items-center gap-2 p-3 rounded-xl border cursor-pointer ${newTrip.type === 'offer' ? 'bg-indigo-50 border-indigo-500 text-indigo-700' : 'bg-transparent border-slate-200 dark:border-slate-700'}`}>
+                  <label className={`flex-1 flex items-center gap-2 p-3 rounded-xl border cursor-pointer ${newTrip.type === 'offer' ? 'bg-indigo-50 border-indigo-500 text-indigo-700 dark:bg-indigo-900/30 dark:text-indigo-300' : 'bg-transparent border-slate-200 dark:border-slate-700'}`}>
                     <input type="radio" name="tripType" value="offer" checked={newTrip.type === 'offer'} onChange={() => setNewTrip({...newTrip, type: 'offer'})} className="hidden"/>
                     <Car size={18}/> <span className="text-[11px] font-bold">{newTrip.category === 'parcel' ? 'مسافر ومستعد لنقل طرد' : 'سائق (عربية متاحة)'}</span>
                   </label>
-                  <label className={`flex-1 flex items-center gap-2 p-3 rounded-xl border cursor-pointer ${newTrip.type === 'request' ? 'bg-indigo-50 border-indigo-500 text-indigo-700' : 'bg-transparent border-slate-200 dark:border-slate-700'}`}>
+                  <label className={`flex-1 flex items-center gap-2 p-3 rounded-xl border cursor-pointer ${newTrip.type === 'request' ? 'bg-indigo-50 border-indigo-500 text-indigo-700 dark:bg-indigo-900/30 dark:text-indigo-300' : 'bg-transparent border-slate-200 dark:border-slate-700'}`}>
                     <input type="radio" name="tripType" value="request" checked={newTrip.type === 'request'} onChange={() => setNewTrip({...newTrip, type: 'request'})} className="hidden"/>
                     <User size={18}/> <span className="text-[11px] font-bold">{newTrip.category === 'parcel' ? 'أرغب في إرسال أمانة/طرد' : 'راكب (مطلوب)'}</span>
                   </label>
@@ -636,6 +818,47 @@ export default function App() {
                     {SUPPORTED_AREAS.map(c => <option key={c} value={c}>{c}</option>)}
                   </select>
                   <input type="text" placeholder="مكان التحرك بالتفصيل (مثل: أمام مول العرب)" value={newTrip.fromDetails} onChange={e => setNewTrip({...newTrip, fromDetails: e.target.value})} className={`w-full p-3.5 rounded-xl border font-medium text-xs outline-none ${bgInput}`}/>
+                </div>
+
+                <div className="space-y-2 pt-1">
+                  <div className="flex items-center justify-between px-1">
+                    <label className="text-[11px] font-black text-indigo-600 dark:text-indigo-400 flex items-center gap-1">
+                      <Route size={13}/> خط السير (حدد المناطق التي ستمر عليها في طريقك)
+                    </label>
+                    {newTrip.routeAreas?.length > 0 && (
+                      <button type="button" onClick={() => setNewTrip(prev => ({ ...prev, routeAreas: [] }))} className="text-[10px] font-bold text-rose-500 hover:underline">
+                        مسح الكل
+                      </button>
+                    )}
+                  </div>
+                  <div className="flex flex-wrap gap-1.5 p-3 rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50/70 dark:bg-slate-800/40 max-h-36 overflow-y-auto [&::-webkit-scrollbar]:hidden">
+                    {SUPPORTED_AREAS.filter(a => a !== newTrip.from && a !== newTrip.to).map(area => {
+                      const isSelected = (newTrip.routeAreas || []).includes(area);
+                      return (
+                        <button
+                          key={area}
+                          type="button"
+                          onClick={() => {
+                            setNewTrip(prev => {
+                              const current = prev.routeAreas || [];
+                              return {
+                                ...prev,
+                                routeAreas: current.includes(area) ? current.filter(item => item !== area) : [...current, area]
+                              };
+                            });
+                          }}
+                          className={`px-2.5 py-1.5 text-[10px] font-bold rounded-lg border transition-all flex items-center gap-1 ${
+                            isSelected 
+                              ? 'bg-indigo-600 text-white border-indigo-600 shadow-sm' 
+                              : 'bg-white dark:bg-slate-800 text-slate-600 dark:text-slate-300 border-slate-200 dark:border-slate-700 hover:border-indigo-400'
+                          }`}
+                        >
+                          {isSelected && <Check size={11} />}
+                          <span>{area}</span>
+                        </button>
+                      );
+                    })}
+                  </div>
                 </div>
 
                 <div className="space-y-2 pt-1">
@@ -660,11 +883,31 @@ export default function App() {
                   </div>
                 </div>
 
-                <div className="flex gap-2 flex-wrap pt-2">
-                  {Object.keys(newTrip.preferences).map(key => {
-                    const labels = { ac: 'تكييف ❄️', noSmoking: 'ممنوع التدخين 🚭', luggage: 'شنط سفر 🧳', families: 'عائلات 👨‍👩‍👧‍👦', femalesOnly: 'بنات فقط 👩' };
+                <div 
+                  onClick={() => setNewTrip({...newTrip, preferences: {...newTrip.preferences, femalesOnly: !newTrip.preferences.femalesOnly}})}
+                  className={`p-3.5 rounded-2xl border-2 cursor-pointer transition-all flex items-center justify-between ${
+                    newTrip.preferences.femalesOnly 
+                      ? 'bg-pink-50 border-pink-400 text-pink-800 dark:bg-pink-950/40 dark:border-pink-700 dark:text-pink-200 shadow-sm' 
+                      : 'bg-slate-50/60 border-slate-200 dark:bg-slate-800/40 dark:border-slate-700'
+                  }`}
+                >
+                  <div className="flex items-center gap-2.5">
+                    <span className="text-xl">👩</span>
+                    <div>
+                      <h4 className="text-xs font-black">رحلة سيدات (بنات فقط) 🌸</h4>
+                      <p className="text-[10px] opacity-80 font-bold mt-0.5">سيظهر كارت الرحلة باللون الوردي ومكتوب عليه "بنات فقط"</p>
+                    </div>
+                  </div>
+                  <div className={`w-5 h-5 rounded-md flex items-center justify-center border ${newTrip.preferences.femalesOnly ? 'bg-pink-500 border-pink-500 text-white' : 'border-slate-300 dark:border-slate-600'}`}>
+                    {newTrip.preferences.femalesOnly && <Check size={14} />}
+                  </div>
+                </div>
+
+                <div className="flex gap-2 flex-wrap pt-1">
+                  {Object.keys(newTrip.preferences).filter(k => k !== 'femalesOnly').map(key => {
+                    const labels = { ac: 'تكييف ❄️', noSmoking: 'ممنوع التدخين 🚭', luggage: 'شنط سفر 🧳', families: 'عائلات 👨‍👩‍👧‍👦' };
                     return (
-                      <label key={key} className={`flex items-center gap-2 p-2 rounded-xl border cursor-pointer text-xs font-bold transition-colors ${newTrip.preferences[key] ? 'bg-indigo-50 border-indigo-500 text-indigo-700' : 'bg-transparent border-slate-200 dark:border-slate-700 text-slate-500'}`}>
+                      <label key={key} className={`flex items-center gap-2 p-2.5 rounded-xl border cursor-pointer text-xs font-bold transition-colors ${newTrip.preferences[key] ? 'bg-indigo-50 border-indigo-500 text-indigo-700 dark:bg-indigo-900/40 dark:text-indigo-300' : 'bg-transparent border-slate-200 dark:border-slate-700 text-slate-500'}`}>
                         <input type="checkbox" className="hidden" checked={newTrip.preferences[key]} onChange={(e) => setNewTrip({...newTrip, preferences: {...newTrip.preferences, [key]: e.target.checked}})} />
                         {labels[key]}
                       </label>
@@ -672,28 +915,38 @@ export default function App() {
                   })}
                 </div>
 
-                {}
-                {/* زر السماح بالتواصل الهاتفي والواتساب مع تنبيه حالة الرقم */}
-                <div className={`p-3.5 rounded-2xl border transition-all mt-2 ${newTrip.allowPhoneContact ? (isDarkMode ? 'bg-emerald-950/20 border-emerald-800/60' : 'bg-emerald-50/70 border-emerald-200') : (isDarkMode ? 'bg-slate-800/40 border-slate-700' : 'bg-slate-50 border-slate-200')}`}>
-                  <div className="flex items-center justify-between gap-2">
-                    <label htmlFor="allowPhoneContact" className="text-xs font-black text-slate-800 dark:text-slate-200 cursor-pointer flex items-center gap-2">
-                      <span>📞 السماح بالمكالمات والواتساب المباشر على الكارت</span>
-                    </label>
-                    <input 
-                      type="checkbox" 
-                      id="allowPhoneContact" 
-                      checked={newTrip.allowPhoneContact} 
-                      onChange={(e) => setNewTrip({...newTrip, allowPhoneContact: e.target.checked})} 
-                      className="w-4 h-4 rounded text-emerald-600 focus:ring-emerald-500 cursor-pointer" 
-                    />
+                <div className="space-y-2 pt-2 border-t border-slate-200 dark:border-slate-700">
+                  <label className="text-xs font-black text-slate-700 dark:text-slate-200 flex items-center gap-1.5 px-1">
+                    <Phone size={14} className="text-indigo-500"/> طريقة التواصل المفضلة على الكارت
+                  </label>
+                  <div className="grid grid-cols-2 gap-2">
+                    {[
+                      { id: 'both', label: 'فون + واتساب 📞💬' },
+                      { id: 'whatsapp', label: 'واتساب فقط 💬' },
+                      { id: 'phone', label: 'مكالمات فون فقط 📞' },
+                      { id: 'chat', label: 'شات التطبيق فقط 🔒' }
+                    ].map(opt => (
+                      <button
+                        key={opt.id}
+                        type="button"
+                        onClick={() => setNewTrip({ ...newTrip, contactMethod: opt.id, allowPhoneContact: opt.id !== 'chat' })}
+                        className={`p-2.5 rounded-xl border text-[11px] font-black transition-all ${
+                          newTrip.contactMethod === opt.id 
+                            ? 'bg-emerald-600 text-white border-emerald-600 shadow-sm' 
+                            : 'bg-slate-50 dark:bg-slate-800 text-slate-600 dark:text-slate-300 border-slate-200 dark:border-slate-700'
+                        }`}
+                      >
+                        {opt.label}
+                      </button>
+                    ))}
                   </div>
-                  <p className="text-[10px] font-bold mt-1.5 text-slate-500 dark:text-slate-400">
-                    {newTrip.allowPhoneContact 
-                      ? (userData?.phone 
-                          ? `سيظهر زر اتصال وواتساب برقمك المسجل (${userData.phone}) لتسهيل التواصل السريع.` 
-                          : '⚠️ تنبيه: لم تقم بإضافة رقم هاتفك في (حسابي) بعد! أضفه ليظهر للمستخدمين.')
-                      : 'لن يظهر رقمك على الكارت، وسيقتصر التواصل على الشات الداخلي فقط.'}
-                  </p>
+                  {newTrip.contactMethod !== 'chat' && (
+                    <p className="text-[10px] font-bold text-slate-500 dark:text-slate-400 px-1">
+                      {userData?.phone 
+                        ? `سيتم استخدام رقمك المسجل في حسابك: (${userData.phone})` 
+                        : '⚠️ تنبيه: لم تقم بإضافة رقم هاتفك في (حسابي) بعد! أضفه ليظهر للمستخدمين.'}
+                    </p>
+                  )}
                 </div>
 
                 <textarea rows="3" placeholder="ملاحظات إضافية..." value={newTrip.notes} onChange={e => setNewTrip({...newTrip, notes: e.target.value})} className={`w-full p-4 rounded-2xl border font-bold text-sm outline-none resize-none ${bgInput}`}></textarea>
@@ -708,14 +961,13 @@ export default function App() {
         </div>
       )}
 
-      {}
       {activeTab === 'home' && (
         <HomeScreen 
           user={user} isAdmin={isAdmin} isDarkMode={isDarkMode} realTrips={realTrips} stations={stations} isGuest={isGuest}
           homeCategory={homeCategory} setHomeCategory={setHomeCategory} viewMode={viewMode} setViewMode={setViewMode} filterType={filterType} setFilterType={setFilterType}
           filterFrom={filterFrom} setFilterFrom={setFilterFrom} filterTo={filterTo} setFilterTo={setFilterTo} openChatFromTrip={openChatFromTrip}
           setSelectedStation={setSelectedStation} triggerToast={triggerToast} appSettings={appSettings} 
-          userArea={userArea} onOpenAreaModal={() => setShowAreaModal(true)}
+          userArea={userArea} userAreas={userAreas} onOpenAreaModal={openAreaModalWithSync}
         />
       )}
 
@@ -785,7 +1037,6 @@ export default function App() {
         </div>
       </nav>
 
-      {}
       {!user && (
         <div dir="rtl" className={`fixed inset-0 flex items-center justify-center p-4 z-[1000] ${bgMain}`}>
           <div className={`${bgCard} p-8 rounded-[2rem] shadow-xl max-w-sm w-full border relative`}>
