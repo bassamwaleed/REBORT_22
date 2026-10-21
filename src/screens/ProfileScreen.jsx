@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { 
-  User, ShieldCheck, Star, ShieldAlert, Gift, ChevronLeft, 
+  User, ShieldCheck, Star, Edit2, ShieldAlert, Gift, ChevronLeft, 
   Moon, LogOut, Crown, Phone, Check, X, Camera, Loader2, Award, Zap, CheckCircle2, Info, Settings, Lock
 } from 'lucide-react';
 import { doc, updateDoc, collection, query, where, getDocs, writeBatch } from 'firebase/firestore';
@@ -12,17 +12,18 @@ const ProfileScreen = ({
   user, userData, setUserData, isGuest, isAdmin, isDarkMode, toggleTheme, handleLogout, 
   setShowVerifyModal, setShowAdminPanel, forceSignUpScreen
 }) => {
-  // حالات التعديل داخل إعدادات الحساب
+  // حالات التعديل المباشر ونافذة إعدادات الحساب
+  const [isEditingName, setIsEditingName] = useState(false);
   const [tempName, setTempName] = useState('');
   const [isSavingName, setIsSavingName] = useState(false);
 
+  const [isEditingPhone, setIsEditingPhone] = useState(false);
   const [tempPhone, setTempPhone] = useState('');
   const [isSavingPhone, setIsSavingPhone] = useState(false);
 
   const [newPassword, setNewPassword] = useState('');
   const [isSavingPassword, setIsSavingPassword] = useState(false);
 
-  // حالات رفع الصورة
   const [localPhoto, setLocalPhoto] = useState(null);
   const [isUploadingPhoto, setIsUploadingPhoto] = useState(false);
 
@@ -30,7 +31,6 @@ const ProfileScreen = ({
   const [showAccountModal, setShowAccountModal] = useState(false);
   const [showInternalRewards, setShowInternalRewards] = useState(false);
   const [showAboutModal, setShowAboutModal] = useState(false);
-
   const [feedbackMsg, setFeedbackMsg] = useState('');
 
   useEffect(() => {
@@ -64,7 +64,8 @@ const ProfileScreen = ({
       if (setUserData) {
         setUserData(prev => ({ ...prev, photoURL: base64 }));
       }
-      
+
+      // تحديث الصورة في الرحلات السابقة
       const tripsQuery = query(collection(db, APP_COLLECTION_NAME), where('userId', '==', user.uid));
       const snap = await getDocs(tripsQuery);
       if (!snap.empty) {
@@ -80,10 +81,10 @@ const ProfileScreen = ({
     }
   };
 
-  // 2. دالة حفظ الاسم الجديد وتحديث الواجهة فوراً
+  // 2. دالة حفظ الاسم الجديد
   const handleSaveName = async () => {
     if (!tempName.trim() || tempName.trim() === userData?.name) {
-      showFeedback('لم يتم تغيير الاسم');
+      setIsEditingName(false);
       return;
     }
     setIsSavingName(true);
@@ -94,6 +95,7 @@ const ProfileScreen = ({
         await updateProfile(auth.currentUser, { displayName: cleanName });
       }
       
+      // تحديث الاسم في كل الرحلات الخاصة بالمستخدم
       const tripsQuery = query(collection(db, APP_COLLECTION_NAME), where('userId', '==', user.uid));
       const querySnapshot = await getDocs(tripsQuery);
       if (!querySnapshot.empty) {
@@ -107,7 +109,8 @@ const ProfileScreen = ({
       if (setUserData) {
         setUserData(prev => ({ ...prev, name: cleanName }));
       }
-      showFeedback('تم تحديث الاسم بنجاح ✅');
+      setIsEditingName(false);
+      showFeedback('تم تحديث الاسم في حسابك ورحلاتك بنجاح ✅');
     } catch (e) {
       showFeedback('تعذر تحديث الاسم، حاول مرة أخرى');
     } finally {
@@ -115,29 +118,31 @@ const ProfileScreen = ({
     }
   };
 
-  // 3. دالة حفظ رقم الموبايل وتغيير بيانات الدخول (اللوجن)
+  // 3. دالة حفظ رقم الموبايل / الواتساب
   const handleSavePhone = async () => {
     if (!tempPhone.trim() || tempPhone.trim() === userData?.phone) {
-      showFeedback('لم يتم تغيير الرقم');
+      setIsEditingPhone(false);
       return;
     }
     setIsSavingPhone(true);
     try {
       const cleanPhone = tempPhone.trim();
 
-      // تحديث إيميل تسجيل الدخول إذا كان المستخدم مسجل بالموبايل
       if (auth.currentUser) {
         const currentEmail = auth.currentUser.email;
-        // إذا كان الإيميل ينتهي بـ @khodnimaak.com، فهذا يعني أنه سجل برقم موبايل
         const isPhoneLogin = currentEmail && currentEmail.endsWith('@khodnimaak.com');
-        
         if (isPhoneLogin && currentEmail !== `${cleanPhone}@khodnimaak.com`) {
-          await updateEmail(auth.currentUser, `${cleanPhone}@khodnimaak.com`);
+          try {
+            await updateEmail(auth.currentUser, `${cleanPhone}@khodnimaak.com`);
+          } catch (emailErr) {
+            // يستمر في حفظ الرقم في قاعدة البيانات حتى لو تطلب الإيميل إعادة تسجيل دخول
+          }
         }
       }
 
       await updateDoc(doc(db, USERS_COLLECTION, user.uid), { phone: cleanPhone });
       
+      // تحديث الرقم في الرحلات السابقة أيضاً
       const tripsQuery = query(collection(db, APP_COLLECTION_NAME), where('userId', '==', user.uid));
       const querySnapshot = await getDocs(tripsQuery);
       if (!querySnapshot.empty) {
@@ -151,19 +156,16 @@ const ProfileScreen = ({
       if (setUserData) {
         setUserData(prev => ({ ...prev, phone: cleanPhone }));
       }
-      showFeedback('تم حفظ الرقم وتحديث بيانات الدخول بنجاح 📱');
-    } catch (error) {
-      if (error.code === 'auth/requires-recent-login') {
-        showFeedback('لتغيير رقم الدخول، يرجى تسجيل الخروج والدخول مجدداً ثم المحاولة ⚠️');
-      } else {
-        showFeedback('حدث خطأ أثناء تحديث الرقم');
-      }
+      setIsEditingPhone(false);
+      showFeedback('تم حفظ رقم الموبايل والواتساب بنجاح 📱');
+    } catch (e) {
+      showFeedback('حدث خطأ أثناء تحديث الرقم');
     } finally {
       setIsSavingPhone(false);
     }
   };
 
-  // 4. دالة تغيير الباسورد
+  // 4. دالة تغيير كلمة المرور
   const handleSavePassword = async () => {
     if (!newPassword || newPassword.length < 6) {
       showFeedback('كلمة المرور يجب أن تكون 6 أحرف على الأقل ⚠️');
@@ -218,6 +220,7 @@ const ProfileScreen = ({
   return (
     <div className="animate-fade-in-up pb-[120px] flex-1 w-full max-w-2xl mx-auto px-4 py-6 mt-4 relative z-10">
       
+      {/* إشعار داخلي سريع للتعديلات */}
       {feedbackMsg && (
         <div className="fixed top-20 left-1/2 transform -translate-x-1/2 z-[600] bg-slate-900 text-white px-5 py-3 rounded-full shadow-2xl flex items-center gap-2 border border-slate-700 animate-fade-in-up">
           <CheckCircle2 size={18} className="text-emerald-400 shrink-0" />
@@ -227,6 +230,7 @@ const ProfileScreen = ({
 
       <div className="space-y-4">
         
+        {/* زر لوحة الإدارة للأدمن */}
         {isAdmin && setShowAdminPanel && ( 
           <button onClick={() => setShowAdminPanel(true)} className="w-full p-4 rounded-2xl flex justify-between items-center bg-gradient-to-r from-indigo-900 to-slate-900 text-white shadow-lg active:scale-95 transition-transform border border-indigo-700/50">
             <span className="font-black text-base flex items-center gap-2.5">
@@ -236,8 +240,10 @@ const ProfileScreen = ({
           </button> 
         )}
 
-        {/* الكارت الشخصي الرئيسي (للعرض فقط) */}
+        {/* الكارت الشخصي الرئيسي */}
         <div className={`p-6 rounded-[2rem] border shadow-sm flex flex-col items-center relative overflow-hidden ${bgCard}`}>
+          
+          {/* الصورة الشخصية مع زر الرفع */}
           <div className="relative mb-4 group">
             <div className="w-24 h-24 rounded-full bg-slate-100 dark:bg-slate-800 border-4 border-indigo-50 dark:border-slate-700 shadow-md flex items-center justify-center overflow-hidden">
               {isUploadingPhoto ? (
@@ -254,10 +260,45 @@ const ProfileScreen = ({
             </label>
           </div>
           
-          <h3 className={`font-black text-xl flex items-center gap-2 ${textPrimary}`}>
-            <span>{userData?.name || 'مستخدم'}</span>
-            {userData?.isVerified && <ShieldCheck size={20} className="text-emerald-500 shrink-0" title="حساب موثق"/>}
-          </h3>
+          {/* تعديل وعرض الاسم (تم إصلاح قوس الإغلاق هنا) */}
+          {isEditingName ? (
+            <div className="flex items-center gap-2 my-1 w-full max-w-xs justify-center animate-fade-in-up">
+              <input 
+                type="text" 
+                value={tempName} 
+                onChange={(e) => setTempName(e.target.value)}
+                placeholder="الاسم الكامل..."
+                className={`flex-1 px-3 py-2 rounded-xl border text-sm font-bold outline-none focus:border-indigo-500 ${bgInput}`}
+                autoFocus
+              />
+              <button onClick={handleSaveName} disabled={isSavingName} className="p-2 bg-emerald-500 hover:bg-emerald-600 text-white rounded-xl shadow-sm">
+                {isSavingName ? <Loader2 size={16} className="animate-spin"/> : <Check size={16}/>}
+              </button>
+              <button onClick={() => { setIsEditingName(false); setTempName(userData?.name || ''); }} className="p-2 bg-rose-100 text-rose-600 dark:bg-rose-900/30 dark:text-rose-400 rounded-xl">
+                <X size={16}/>
+              </button>
+            </div>
+          ) : (
+            <h3 className={`font-black text-xl flex items-center gap-2 ${textPrimary}`}>
+              <span>{tempName || userData?.name || 'مستخدم'}</span>
+              {userData?.isVerified && <ShieldCheck size={20} className="text-emerald-500 shrink-0" title="حساب موثق"/>}
+              <button 
+                onClick={() => setIsEditingName(true)} 
+                className="text-slate-400 hover:text-indigo-500 transition-colors p-1.5 bg-slate-100 dark:bg-slate-800 rounded-full" 
+                title="تعديل الاسم"
+              >
+                <Edit2 size={13}/>
+              </button>
+            </h3>
+          )}
+
+          {/* عرض شارة البونص والتميز الممنوحة من الإدارة */}
+          {userData?.customBadge && (
+            <div className="mt-1.5 inline-flex items-center gap-1.5 bg-gradient-to-r from-amber-500/15 to-orange-500/15 border border-amber-400/50 text-amber-700 dark:text-amber-300 px-3.5 py-1 rounded-full text-xs font-black shadow-sm">
+              <Award size={14} className="text-amber-500"/>
+              <span>{userData.customBadge}</span>
+            </div>
+          )}
           
           <div className="flex items-center gap-2 mt-2">
             <div className="flex items-center gap-1 bg-amber-50 dark:bg-amber-900/20 border border-amber-200/60 dark:border-amber-800/50 px-3 py-1 rounded-full">
@@ -269,13 +310,42 @@ const ProfileScreen = ({
             </span>
           </div>
 
+          {/* تعديل وعرض رقم الموبايل والواتساب */}
           <div className="w-full max-w-xs mt-4">
-            <div className="flex items-center gap-2 bg-slate-50 dark:bg-slate-800/60 px-4 py-2.5 rounded-2xl border border-slate-200/70 dark:border-slate-700/70 cursor-default">
-              <Phone size={15} className="text-indigo-500 shrink-0"/>
-              <span className={`text-xs font-bold ${userData?.phone ? textPrimary : 'text-rose-500'}`} dir="ltr">
-                {userData?.phone || 'لم يتم إضافة رقم الموبايل'}
-              </span>
-            </div>
+            {isEditingPhone ? (
+              <div className="flex items-center gap-2 animate-fade-in-up">
+                <input 
+                  type="tel" 
+                  dir="ltr"
+                  value={tempPhone} 
+                  onChange={(e) => setTempPhone(e.target.value)}
+                  placeholder="01xxxxxxxxx"
+                  className={`flex-1 px-3 py-2 rounded-xl border text-sm font-bold text-left outline-none focus:border-indigo-500 ${bgInput}`}
+                  autoFocus
+                />
+                <button onClick={handleSavePhone} disabled={isSavingPhone} className="p-2 bg-emerald-500 hover:bg-emerald-600 text-white rounded-xl shadow-sm">
+                  {isSavingPhone ? <Loader2 size={16} className="animate-spin"/> : <Check size={16}/>}
+                </button>
+                <button onClick={() => { setIsEditingPhone(false); setTempPhone(userData?.phone || ''); }} className="p-2 bg-rose-100 text-rose-600 dark:bg-rose-900/30 dark:text-rose-400 rounded-xl">
+                  <X size={16}/>
+                </button>
+              </div>
+            ) : (
+              <div 
+                onClick={() => setIsEditingPhone(true)}
+                className="flex items-center justify-between gap-2 bg-slate-50 dark:bg-slate-800/60 hover:bg-indigo-50/50 dark:hover:bg-slate-800 px-4 py-2.5 rounded-2xl border border-slate-200/70 dark:border-slate-700/70 cursor-pointer transition-colors group"
+              >
+                <div className="flex items-center gap-2">
+                  <Phone size={15} className="text-indigo-500 shrink-0"/>
+                  <span className={`text-xs font-bold ${tempPhone ? textPrimary : 'text-rose-500'}`} dir="ltr">
+                    {tempPhone || 'أضف رقم الموبايل / واتساب'}
+                  </span>
+                </div>
+                <span className="text-[10px] font-bold text-indigo-600 dark:text-indigo-400 flex items-center gap-1 bg-indigo-50 dark:bg-indigo-900/40 px-2 py-1 rounded-lg">
+                  <Edit2 size={11}/> {tempPhone ? 'تعديل' : 'إضافة'}
+                </span>
+              </div>
+            )}
           </div>
 
           {userData?.email && (
@@ -283,7 +353,7 @@ const ProfileScreen = ({
           )}
         </div>
 
-        {/* إعدادات الحساب */}
+        {/* إعدادات الحساب (الاسم، الرقم، كلمة المرور) */}
         <div 
           onClick={() => setShowAccountModal(true)} 
           className={`p-5 rounded-[1.5rem] border shadow-sm flex items-center justify-between cursor-pointer hover:border-indigo-500/50 hover:shadow-md transition-all group mt-2 ${bgCard}`}
@@ -294,7 +364,7 @@ const ProfileScreen = ({
              </div>
              <div>
                <h4 className={`font-black text-sm flex items-center gap-2 ${textPrimary}`}>
-                 إعدادات الحساب
+                 إعدادات الحساب وكلمة المرور
                </h4>
                <p className={`text-xs mt-1 font-medium ${textSecondary}`}>
                  تعديل الاسم، رقم الموبايل، وتغيير كلمة المرور
@@ -308,7 +378,7 @@ const ProfileScreen = ({
 
         <h4 className={`px-2 font-black text-base mt-6 mb-2 ${textPrimary}`}>الأمان والمكافآت</h4>
         
-        {/* كارت توثيق الحساب */}
+        {/* كارت توثيق الحساب بالبطاقة والرخصة */}
         <div 
           onClick={() => {
             if (!userData?.isVerified && setShowVerifyModal) setShowVerifyModal(true);
@@ -367,7 +437,7 @@ const ProfileScreen = ({
            )}
         </div>
 
-        {/* كارت المكافآت */}
+        {/* كارت مكافآت السائقين وبونص الرحلات */}
         <div 
           onClick={() => setShowInternalRewards(true)} 
           className={`p-5 rounded-[1.5rem] border shadow-sm flex items-center justify-between cursor-pointer hover:border-amber-500/50 hover:shadow-md transition-all group ${bgCard}`}
@@ -391,7 +461,7 @@ const ProfileScreen = ({
            </div>
         </div>
 
-        {/* حول التطبيق */}
+        {/* حول التطبيق والسياسات */}
         <div 
           onClick={() => setShowAboutModal(true)} 
           className={`p-5 rounded-[1.5rem] border shadow-sm flex items-center justify-between cursor-pointer hover:border-blue-500/50 hover:shadow-md transition-all group mt-2 ${bgCard}`}
@@ -414,7 +484,7 @@ const ProfileScreen = ({
            </div>
         </div>
 
-        {/* إعدادات النظام */}
+        {/* إعدادات الوضع الليلي وتسجيل الخروج */}
         <div className={`rounded-[1.5rem] border shadow-sm overflow-hidden ${bgCard} mt-6`}>
           <div onClick={toggleTheme} className="p-4 border-b border-slate-100 dark:border-slate-800 flex justify-between items-center cursor-pointer hover:bg-slate-50/50 dark:hover:bg-slate-800/30 transition-colors">
             <div className="flex items-center gap-3">
@@ -456,7 +526,6 @@ const ProfileScreen = ({
             </div>
 
             <div className="p-5 overflow-y-auto space-y-5 flex-1 [&::-webkit-scrollbar]:hidden">
-              
               <div className="space-y-2">
                 <label className={`text-xs font-bold px-1 ${textSecondary}`}>الاسم الكامل</label>
                 <div className="flex items-center gap-2">
@@ -509,15 +578,13 @@ const ProfileScreen = ({
                     {isSavingPassword ? <Loader2 size={18} className="animate-spin"/> : 'تغيير'}
                   </button>
                 </div>
-                <p className="text-[10px] text-slate-500 px-1 mt-1">تنبيه: إذا واجهت خطأ أثناء التغيير، قم بتسجيل الخروج والدخول مرة أخرى ثم حاول.</p>
               </div>
-
             </div>
           </div>
         </div>
       )}
 
-      {/* نافذة المكافآت */}
+      {/* نافذة مكافآت السائقين وبونص الرحلات */}
       {showInternalRewards && (
         <div className="fixed inset-0 bg-slate-900/90 backdrop-blur-sm z-[550] flex justify-center items-end sm:items-center p-0 sm:p-4 pointer-events-auto" onClick={() => setShowInternalRewards(false)}>
           <div 
@@ -616,7 +683,7 @@ const ProfileScreen = ({
         </div>
       )}
 
-      {/* نافذة حول التطبيق */}
+      {/* نافذة حول التطبيق والسياسات */}
       {showAboutModal && (
         <div className="fixed inset-0 bg-slate-900/90 backdrop-blur-sm z-[550] flex justify-center items-end sm:items-center p-0 sm:p-4 pointer-events-auto" onClick={() => setShowAboutModal(false)}>
           <div 
@@ -660,21 +727,7 @@ const ProfileScreen = ({
                     <li>سلامة أو محتوى الأمانات المنقولة.</li>
                     <li>أي حوادث أو طوارئ تحدث أثناء الرحلة.</li>
                   </ul>
-                  <p className="mt-3 font-bold text-rose-600 dark:text-rose-400 bg-rose-100 dark:bg-rose-900/30 p-2 rounded-lg border border-rose-200 dark:border-rose-800/50">
-                    يرجى التأكد من هوية الشخص الآخر ومشاركة تفاصيل رحلتك مع أحد المقربين لضمان سلامتك.
-                  </p>
                 </div>
-              </div>
-
-              <div>
-                <h3 className={`font-black text-base mb-2 flex items-center gap-2 ${textPrimary}`}>
-                  <span className="w-2 h-2 rounded-full bg-blue-500"></span> شروط الاستخدام
-                </h3>
-                <ul className={`font-medium leading-relaxed space-y-2 text-xs ${textSecondary} list-disc list-inside mr-1`}>
-                  <li>يُمنع استخدام التطبيق لأي أغراض غير قانونية.</li>
-                  <li>يجب الحفاظ على الاحترام المتبادل والمصداقية في المواعيد.</li>
-                  <li>يحق للإدارة حظر أي حساب يخالف الشروط أو يتلقى شكاوى متكررة بدون سابق إنذار.</li>
-                </ul>
               </div>
             </div>
 

@@ -3,17 +3,21 @@ import { Bell, BusFront, MapPinned, List, X, ChevronRight, ChevronLeft, Route, P
 import TripCard from '../components/TripCard';
 import { collection, addDoc } from 'firebase/firestore';
 import { db, STATIONS_COLLECTION } from '../firebase';
-// استدعاء المناطق المدعومة وخريطة المناطق القريبة ودالة التطبيع من App
 import { SUPPORTED_AREAS, NEARBY_AREAS_MAP, normalizeArabic } from '../App';
 
 const HomeScreen = ({
   user, isAdmin, isDarkMode, realTrips, stations, isGuest,
   homeCategory, setHomeCategory, viewMode, setViewMode, filterType, setFilterType,
   filterFrom, setFilterFrom, filterTo, setFilterTo, openChatFromTrip,
-  setSelectedStation, triggerToast, appSettings, userArea, onOpenAreaModal
+  setSelectedStation, triggerToast, appSettings, userArea, userAreas = [], onOpenAreaModal
 }) => {
   
   const [stationSearchQuery, setStationSearchQuery] = useState('');
+
+  // تحديد قائمة المناطق النشطة للعميل (سواء اختار من الفلتر أو من زر منطقتك الحالية متعدد المناطق)
+  const activeUserAreas = filterFrom 
+    ? [filterFrom] 
+    : (Array.isArray(userAreas) && userAreas.length > 0 ? userAreas : (userArea ? userArea.split('، ').filter(Boolean) : []));
 
   // 1. تصفية الرحلات حسب القسم (سفريات أو أمانات) ونوع الطلب (سائق أو راكب)
   const categoryTrips = (realTrips || []).filter(t => {
@@ -36,6 +40,22 @@ const HomeScreen = ({
     return normTrip === normTarget || normTrip.includes(normTarget) || normTarget.includes(normTrip);
   };
 
+  // دالة فحص هل المنطقة موجودة في نقطة التحرك أو في خط السير (routeAreas)
+  const isTripMatchingOriginOrRoute = (trip, targetArea) => {
+    if (!targetArea) return true;
+    if (isAreaMatch(trip.from, targetArea) || isAreaMatch(trip.fromDetails, targetArea)) return true;
+    if (Array.isArray(trip.routeAreas) && trip.routeAreas.some(r => isAreaMatch(r, targetArea))) return true;
+    return false;
+  };
+
+  // دالة فحص هل المنطقة موجودة في نقطة الوصول أو في خط السير
+  const isTripMatchingDestOrRoute = (trip, targetArea) => {
+    if (!targetArea) return true;
+    if (isAreaMatch(trip.to, targetArea) || isAreaMatch(trip.toDetails, targetArea)) return true;
+    if (Array.isArray(trip.routeAreas) && trip.routeAreas.some(r => isAreaMatch(r, targetArea))) return true;
+    return false;
+  };
+
   // دالة فحص هل المنطقة قريبة جغرافياً
   const isNearbyArea = (tripArea, targetArea) => {
     if (!tripArea || !targetArea) return false;
@@ -46,17 +66,18 @@ const HomeScreen = ({
   // حساب درجة التطابق والأولوية
   const getTripRelevanceScore = (trip) => {
     let score = 0;
-    const activeOrigin = filterFrom || userArea;
 
-    if (activeOrigin) {
-      if (isAreaMatch(trip.from, activeOrigin)) score += 100;
-      else if (isAreaMatch(trip.fromDetails, activeOrigin)) score += 80;
-      else if (isNearbyArea(trip.from, activeOrigin)) score += 50;
-      else if (isAreaMatch(trip.to, activeOrigin)) score += 30;
+    if (activeUserAreas.length > 0) {
+      if (activeUserAreas.some(a => isAreaMatch(trip.from, a))) score += 100;
+      else if (activeUserAreas.some(a => Array.isArray(trip.routeAreas) && trip.routeAreas.some(r => isAreaMatch(r, a)))) score += 85;
+      else if (activeUserAreas.some(a => isAreaMatch(trip.fromDetails, a))) score += 75;
+      else if (activeUserAreas.some(a => isNearbyArea(trip.from, a))) score += 50;
+      else if (activeUserAreas.some(a => isAreaMatch(trip.to, a))) score += 30;
     }
 
     if (filterTo) {
       if (isAreaMatch(trip.to, filterTo)) score += 90;
+      else if (Array.isArray(trip.routeAreas) && trip.routeAreas.some(r => isAreaMatch(r, filterTo))) score += 75;
       else if (isAreaMatch(trip.toDetails, filterTo)) score += 70;
       else if (isNearbyArea(trip.to, filterTo)) score += 45;
     }
@@ -64,21 +85,19 @@ const HomeScreen = ({
     return score;
   };
 
-  // 2. الرحلات المطابقة تماماً للبحث الحالي
+  // 2. الرحلات المطابقة تماماً للبحث الحالي أو المناطق المختارة أو خط السير
   const exactMatchedTrips = categoryTrips.filter(t => {
-    const matchFrom = !filterFrom || isAreaMatch(t.from, filterFrom) || isAreaMatch(t.fromDetails, filterFrom);
-    const matchTo = !filterTo || isAreaMatch(t.to, filterTo) || isAreaMatch(t.toDetails, filterTo);
+    const matchFrom = activeUserAreas.length === 0 || activeUserAreas.some(a => isTripMatchingOriginOrRoute(t, a));
+    const matchTo = !filterTo || isTripMatchingDestOrRoute(t, filterTo);
     return matchFrom && matchTo;
   }).sort((a, b) => getTripRelevanceScore(b) - getTripRelevanceScore(a));
 
   // 3. الرحلات المشابهة والبديلة 
   const similarTrips = categoryTrips.filter(t => {
     if (exactMatchedTrips.some(exact => exact.id === t.id)) return false;
-    
-    const activeOrigin = filterFrom || userArea;
-    if (!activeOrigin && !filterTo) return false;
+    if (activeUserAreas.length === 0 && !filterTo) return false;
 
-    const fromNearby = activeOrigin && (isNearbyArea(t.from, activeOrigin) || isAreaMatch(t.to, activeOrigin));
+    const fromNearby = activeUserAreas.length > 0 && activeUserAreas.some(a => isNearbyArea(t.from, a) || isAreaMatch(t.to, a));
     const toNearby = filterTo && (isAreaMatch(t.to, filterTo) || isNearbyArea(t.to, filterTo));
     const sameCategoryFallback = categoryTrips.length > 0;
 
@@ -160,13 +179,14 @@ const HomeScreen = ({
 
   const handleSetAlert = async () => {
     if (isGuest || !user) return triggerToast('يجب تسجيل الدخول أولاً لتفعيل التنبيهات');
-    if (!filterFrom || !filterTo) return triggerToast('يرجى تحديد المحافظة والوجهة أولاً');
+    const originForAlert = filterFrom || activeUserAreas[0];
+    if (!originForAlert || !filterTo) return triggerToast('يرجى تحديد منطقة التحرك والوجهة أولاً');
 
     try {
       await addDoc(collection(db, 'trip_alerts'), {
         userId: user.uid,
         userName: user.displayName || 'مستخدم',
-        from: filterFrom,
+        from: originForAlert,
         to: filterTo,
         category: homeCategory,
         createdAt: new Date(),
@@ -248,34 +268,6 @@ const HomeScreen = ({
         <div className="animate-fade-in-up">
           {(homeCategory === 'travel' || homeCategory === 'parcel') && (
             <div className="mb-6 space-y-3">
-              
-              <div className="flex items-center justify-between px-3.5 py-2.5 rounded-2xl bg-indigo-50/70 dark:bg-indigo-950/30 border border-indigo-100 dark:border-indigo-900/50">
-                <div className="flex items-center gap-2">
-                  <MapPin size={16} className="text-indigo-600 dark:text-indigo-400 shrink-0" />
-                  <span className="text-xs font-bold text-slate-600 dark:text-slate-300">
-                    منطقتك الحالية: <strong className="font-black text-indigo-600 dark:text-indigo-400">{userArea || 'جميع المناطق'}</strong>
-                  </span>
-                </div>
-                <div className="flex items-center gap-2">
-                  {filterFrom && (
-                    <button 
-                      onClick={() => setFilterFrom('')} 
-                      className="text-[11px] font-bold text-slate-500 hover:text-indigo-600 dark:text-slate-400 underline"
-                    >
-                      عرض كل المدن
-                    </button>
-                  )}
-                  {onOpenAreaModal && (
-                    <button 
-                      onClick={onOpenAreaModal} 
-                      className="text-[11px] font-black bg-white dark:bg-slate-800 text-indigo-600 dark:text-indigo-400 px-2.5 py-1 rounded-lg border border-indigo-200 dark:border-slate-700 shadow-sm hover:scale-105 transition-transform"
-                    >
-                      تغيير المنطقة
-                    </button>
-                  )}
-                </div>
-              </div>
-
               {homeCategory === 'travel' && (
                 <div className="flex gap-2">
                   <button onClick={() => setFilterType('offer')} className={`flex-1 py-2.5 rounded-xl text-xs font-bold border transition-colors ${filterType === 'offer' ? 'bg-indigo-600 text-white border-indigo-600' : (isDarkMode ? 'bg-slate-800 text-slate-300 border-slate-700' : 'bg-white text-slate-600 border-slate-200')}`}>عربيات متاحة (سائق)</button>
@@ -284,7 +276,7 @@ const HomeScreen = ({
               )}
               <div className={`flex gap-2 p-3 rounded-2xl border ${isDarkMode ? 'bg-slate-800 border-slate-700' : 'bg-slate-50 border-slate-200'}`}>
                 <select value={filterFrom} onChange={(e) => setFilterFrom(e.target.value)} className={`flex-1 p-2.5 rounded-xl border text-xs font-bold outline-none ${bgInput}`}>
-                  <option value="">كل مناطق التحرك</option>
+                  <option value="">{activeUserAreas.length > 0 && !filterFrom ? `منطقتك (${activeUserAreas.length})` : 'كل مناطق التحرك'}</option>
                   {SUPPORTED_AREAS.map(c => <option key={c} value={c}>{c}</option>)}
                 </select>
                 <select value={filterTo} onChange={(e) => setFilterTo(e.target.value)} className={`flex-1 p-2.5 rounded-xl border text-xs font-bold outline-none ${bgInput}`}>
@@ -412,36 +404,39 @@ const HomeScreen = ({
                  {/* 1. الرحلات المطابقة تماماً */}
                  {exactMatchedTrips.length > 0 && (
                    <>
-                     {(filterFrom || filterTo || userArea) && (
+                     {(activeUserAreas.length > 0 || filterTo) && (
                        <div className="col-span-1 md:col-span-2 flex items-center justify-between px-2 pt-1 mb-2">
                          <span className="text-xs font-black text-emerald-600 dark:text-emerald-400 flex items-center gap-1.5">
                            <Sparkles size={15}/> رحلات مطابقة لبحثك ومنطقتك ({exactMatchedTrips.length})
                          </span>
                        </div>
                      )}
-                     {exactMatchedTrips.map(trip => (
-                       <TripCard 
-                         key={trip.id} 
-                         trip={trip} 
-                         user={user} 
-                         isAdmin={isAdmin} 
-                         isDarkMode={isDarkMode} 
-                         openChatFromTrip={openChatFromTrip} 
-                         triggerToast={triggerToast} 
-                         matchBadge={(filterFrom || userArea) && isAreaMatch(trip.from, filterFrom || userArea) ? 'مطابق لمنطقتك ⭐' : null}
-                       />
-                     ))}
+                     {exactMatchedTrips.map(trip => {
+                       const isRouteMatch = activeUserAreas.length > 0 && !activeUserAreas.some(a => isAreaMatch(trip.from, a)) && Array.isArray(trip.routeAreas) && activeUserAreas.some(a => trip.routeAreas.some(r => isAreaMatch(r, a)));
+                       return (
+                         <TripCard 
+                           key={trip.id} 
+                           trip={trip} 
+                           user={user} 
+                           isAdmin={isAdmin} 
+                           isDarkMode={isDarkMode} 
+                           openChatFromTrip={openChatFromTrip} 
+                           triggerToast={triggerToast} 
+                           matchBadge={isRouteMatch ? 'يمر بمنطقتك 🛣️' : (activeUserAreas.length > 0 ? 'مطابق لمنطقتك ⭐' : null)}
+                         />
+                       );
+                     })}
                    </>
                  )}
 
-                 {/* 2. تنبيه سلس في حال عدم وجود رحلات مطابقة - تظهر مع باقي الرحلات دون حظر */}
-                 {exactMatchedTrips.length === 0 && categoryTrips.length > 0 && (filterFrom || filterTo) && (
+                 {/* 2. تنبيه سلس في حال عدم وجود رحلات مطابقة */}
+                 {exactMatchedTrips.length === 0 && categoryTrips.length > 0 && (activeUserAreas.length > 0 || filterTo) && (
                    <div className="col-span-1 md:col-span-2 flex flex-col sm:flex-row items-center justify-between gap-3 px-4 py-3 mb-3 rounded-2xl bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-800/50">
                      <span className="text-xs font-bold text-amber-700 dark:text-amber-400 flex items-center gap-1.5 text-center sm:text-right leading-relaxed">
                        <Compass size={16} className="shrink-0"/> 
-                       لم نجد رحلات مطابقة لـ "{filterFrom || filterTo}"، نعرض لك أحدث الرحلات المتاحة بدلاً من ذلك:
+                       لم نجد رحلات مطابقة لـ "{filterFrom || filterTo || activeUserAreas.join('، ')}"، نعرض لك أحدث الرحلات المتاحة بدلاً من ذلك:
                      </span>
-                     {filterFrom && filterTo && (
+                     {(filterFrom || activeUserAreas.length > 0) && filterTo && (
                        <button onClick={handleSetAlert} className="shrink-0 text-[11px] font-black bg-white dark:bg-slate-800 text-amber-600 dark:text-amber-400 px-3 py-2 rounded-xl shadow-sm flex items-center gap-1.5 hover:scale-105 transition-transform border border-amber-200 dark:border-slate-700">
                          <Bell size={14} className="animate-pulse" /> بلّغني عند توفرها
                        </button>
@@ -468,8 +463,7 @@ const HomeScreen = ({
                        </div>
                      )}
                      {similarTrips.map(trip => {
-                       const activeOrigin = filterFrom || userArea;
-                       const isNear = activeOrigin && isNearbyArea(trip.from, activeOrigin);
+                       const isNear = activeUserAreas.length > 0 && activeUserAreas.some(a => isNearbyArea(trip.from, a));
                        return (
                          <TripCard 
                            key={trip.id} 
@@ -479,7 +473,7 @@ const HomeScreen = ({
                            isDarkMode={isDarkMode} 
                            openChatFromTrip={openChatFromTrip} 
                            triggerToast={triggerToast} 
-                           matchBadge={isNear ? 'منطقة قريبة منك 📍' : (exactMatchedTrips.length === 0 && (filterFrom || filterTo) ? 'مقترح لك 💡' : null)}
+                           matchBadge={isNear ? 'منطقة قريبة منك 📍' : (exactMatchedTrips.length === 0 && (activeUserAreas.length > 0 || filterTo) ? 'مقترح لك 💡' : null)}
                          />
                        );
                      })}
