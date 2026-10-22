@@ -1,29 +1,37 @@
 import React, { useState, useEffect } from 'react';
 import { 
   User, ShieldCheck, Star, Edit2, ShieldAlert, Gift, ChevronLeft, 
-  Moon, LogOut, Crown, Phone, Check, X, Camera, Loader2, Award, Zap, CheckCircle2, Info, Settings, Lock
+  Moon, LogOut, Crown, Phone, Check, X, Camera, Loader2, Award, Zap, CheckCircle2, Info, Settings, Lock, Car, Search
 } from 'lucide-react';
 import { doc, updateDoc, collection, query, where, getDocs, writeBatch } from 'firebase/firestore';
 import { updateProfile, updatePassword, updateEmail } from 'firebase/auth';
 import { auth, db, USERS_COLLECTION, APP_COLLECTION_NAME } from '../firebase';
 import { resizeAndConvertToBase64 } from '../utils/helpers';
+import TripCard from '../components/TripCard'; // استيراد كارت الرحلة لعرض "رحلاتي"
 
 const ProfileScreen = ({
   user, userData, setUserData, isGuest, isAdmin, isDarkMode, toggleTheme, handleLogout, 
-  setShowVerifyModal, setShowAdminPanel, forceSignUpScreen
+  setShowVerifyModal, setShowAdminPanel, forceSignUpScreen, realTrips, openChatFromTrip, triggerToast
 }) => {
-  // حالات التعديل المباشر ونافذة إعدادات الحساب
-  const [isEditingName, setIsEditingName] = useState(false);
+  const [activeSubTab, setActiveSubTab] = useState('settings'); // 'settings' | 'trips'
+  const myTrips = (realTrips || []).filter(t => t.userId === user?.uid);
+
+  // حالات التعديل داخل إعدادات الحساب
   const [tempName, setTempName] = useState('');
   const [isSavingName, setIsSavingName] = useState(false);
 
-  const [isEditingPhone, setIsEditingPhone] = useState(false);
   const [tempPhone, setTempPhone] = useState('');
   const [isSavingPhone, setIsSavingPhone] = useState(false);
+
+  // بيانات السيارة
+  const [tempCarModel, setTempCarModel] = useState('');
+  const [tempCarColor, setTempCarColor] = useState('');
+  const [isSavingCarInfo, setIsSavingCarInfo] = useState(false);
 
   const [newPassword, setNewPassword] = useState('');
   const [isSavingPassword, setIsSavingPassword] = useState(false);
 
+  // حالات رفع الصورة
   const [localPhoto, setLocalPhoto] = useState(null);
   const [isUploadingPhoto, setIsUploadingPhoto] = useState(false);
 
@@ -31,20 +39,16 @@ const ProfileScreen = ({
   const [showAccountModal, setShowAccountModal] = useState(false);
   const [showInternalRewards, setShowInternalRewards] = useState(false);
   const [showAboutModal, setShowAboutModal] = useState(false);
-  const [feedbackMsg, setFeedbackMsg] = useState('');
 
   useEffect(() => {
     if (userData) {
       setTempName(userData.name || '');
       setTempPhone(userData.phone || '');
+      setTempCarModel(userData.carModel || '');
+      setTempCarColor(userData.carColor || '');
       setLocalPhoto(userData.photoURL || null);
     }
   }, [userData]);
-
-  const showFeedback = (msg) => {
-    setFeedbackMsg(msg);
-    setTimeout(() => setFeedbackMsg(''), 3500);
-  };
 
   const bgCard = isDarkMode ? 'bg-slate-900 border-slate-800' : 'bg-white border-slate-200';
   const textPrimary = isDarkMode ? 'text-white' : 'text-slate-900';
@@ -61,11 +65,8 @@ const ProfileScreen = ({
       await updateDoc(doc(db, USERS_COLLECTION, user.uid), { photoURL: base64 });
       setLocalPhoto(base64);
       
-      if (setUserData) {
-        setUserData(prev => ({ ...prev, photoURL: base64 }));
-      }
-
-      // تحديث الصورة في الرحلات السابقة
+      if (setUserData) setUserData(prev => ({ ...prev, photoURL: base64 }));
+      
       const tripsQuery = query(collection(db, APP_COLLECTION_NAME), where('userId', '==', user.uid));
       const snap = await getDocs(tripsQuery);
       if (!snap.empty) {
@@ -73,102 +74,75 @@ const ProfileScreen = ({
         snap.forEach(d => batch.update(d.ref, { userPhoto: base64 }));
         await batch.commit();
       }
-      showFeedback('تم تحديث الصورة الشخصية بنجاح 📸');
+      triggerToast('تم تحديث الصورة الشخصية بنجاح 📸');
     } catch (err) {
-      showFeedback('حدث خطأ أثناء رفع الصورة');
+      triggerToast('حدث خطأ أثناء رفع الصورة');
     } finally {
       setIsUploadingPhoto(false);
     }
   };
 
-  // 2. دالة حفظ الاسم الجديد
-  const handleSaveName = async () => {
-    if (!tempName.trim() || tempName.trim() === userData?.name) {
-      setIsEditingName(false);
-      return;
-    }
+  // 2. حفظ بيانات الحساب الأساسية (الاسم والموبايل)
+  const handleSaveProfileInfo = async () => {
+    if (!tempName.trim() && !tempPhone.trim()) return;
     setIsSavingName(true);
     try {
-      const cleanName = tempName.trim();
-      await updateDoc(doc(db, USERS_COLLECTION, user.uid), { name: cleanName });
-      if (auth.currentUser) {
+      const cleanName = tempName.trim() || userData?.name;
+      const cleanPhone = tempPhone.trim() || userData?.phone;
+
+      if (auth.currentUser && cleanPhone !== userData?.phone) {
+        const currentEmail = auth.currentUser.email;
+        if (currentEmail && currentEmail.endsWith('@khodnimaak.com')) {
+          try { await updateEmail(auth.currentUser, `${cleanPhone}@khodnimaak.com`); } catch(e) {}
+        }
+      }
+
+      await updateDoc(doc(db, USERS_COLLECTION, user.uid), { name: cleanName, phone: cleanPhone });
+      if (auth.currentUser && cleanName !== userData?.name) {
         await updateProfile(auth.currentUser, { displayName: cleanName });
       }
       
-      // تحديث الاسم في كل الرحلات الخاصة بالمستخدم
       const tripsQuery = query(collection(db, APP_COLLECTION_NAME), where('userId', '==', user.uid));
       const querySnapshot = await getDocs(tripsQuery);
       if (!querySnapshot.empty) {
         const batch = writeBatch(db);
         querySnapshot.forEach((tripDoc) => {
-          batch.update(tripDoc.ref, { userName: cleanName });
+          batch.update(tripDoc.ref, { userName: cleanName, userPhone: cleanPhone });
         });
         await batch.commit();
       }
       
-      if (setUserData) {
-        setUserData(prev => ({ ...prev, name: cleanName }));
-      }
-      setIsEditingName(false);
-      showFeedback('تم تحديث الاسم في حسابك ورحلاتك بنجاح ✅');
+      if (setUserData) setUserData(prev => ({ ...prev, name: cleanName, phone: cleanPhone }));
+      triggerToast('تم تحديث بيانات الحساب بنجاح ✅');
     } catch (e) {
-      showFeedback('تعذر تحديث الاسم، حاول مرة أخرى');
+      triggerToast('تعذر التحديث، حاول مرة أخرى');
     } finally {
       setIsSavingName(false);
     }
   };
 
-  // 3. دالة حفظ رقم الموبايل / الواتساب
-  const handleSavePhone = async () => {
-    if (!tempPhone.trim() || tempPhone.trim() === userData?.phone) {
-      setIsEditingPhone(false);
-      return;
-    }
-    setIsSavingPhone(true);
+  // 3. حفظ بيانات السيارة (للكباتن)
+  const handleSaveCarInfo = async () => {
+    setIsSavingCarInfo(true);
     try {
-      const cleanPhone = tempPhone.trim();
-
-      if (auth.currentUser) {
-        const currentEmail = auth.currentUser.email;
-        const isPhoneLogin = currentEmail && currentEmail.endsWith('@khodnimaak.com');
-        if (isPhoneLogin && currentEmail !== `${cleanPhone}@khodnimaak.com`) {
-          try {
-            await updateEmail(auth.currentUser, `${cleanPhone}@khodnimaak.com`);
-          } catch (emailErr) {
-            // يستمر في حفظ الرقم في قاعدة البيانات حتى لو تطلب الإيميل إعادة تسجيل دخول
-          }
-        }
-      }
-
-      await updateDoc(doc(db, USERS_COLLECTION, user.uid), { phone: cleanPhone });
+      const model = tempCarModel.trim();
+      const color = tempCarColor.trim();
       
-      // تحديث الرقم في الرحلات السابقة أيضاً
-      const tripsQuery = query(collection(db, APP_COLLECTION_NAME), where('userId', '==', user.uid));
-      const querySnapshot = await getDocs(tripsQuery);
-      if (!querySnapshot.empty) {
-        const batch = writeBatch(db);
-        querySnapshot.forEach((tripDoc) => {
-          batch.update(tripDoc.ref, { userPhone: cleanPhone });
-        });
-        await batch.commit();
-      }
-
-      if (setUserData) {
-        setUserData(prev => ({ ...prev, phone: cleanPhone }));
-      }
-      setIsEditingPhone(false);
-      showFeedback('تم حفظ رقم الموبايل والواتساب بنجاح 📱');
+      await updateDoc(doc(db, USERS_COLLECTION, user.uid), { carModel: model, carColor: color });
+      
+      if (setUserData) setUserData(prev => ({ ...prev, carModel: model, carColor: color }));
+      triggerToast('تم حفظ بيانات سيارتك بنجاح 🚘');
     } catch (e) {
-      showFeedback('حدث خطأ أثناء تحديث الرقم');
+      triggerToast('حدث خطأ أثناء الحفظ');
     } finally {
-      setIsSavingPhone(false);
+      setIsSavingCarInfo(false);
     }
   };
 
-  // 4. دالة تغيير كلمة المرور
+  // 4. دالة تغيير الباسورد
   const handleSavePassword = async () => {
     if (!newPassword || newPassword.length < 6) {
-      showFeedback('كلمة المرور يجب أن تكون 6 أحرف على الأقل ⚠️');
+      triggerToast('كلمة المرور يجب أن تكون 6 أحرف على الأقل ⚠️');
       return;
     }
     setIsSavingPassword(true);
@@ -176,20 +150,19 @@ const ProfileScreen = ({
       if (auth.currentUser) {
         await updatePassword(auth.currentUser, newPassword);
         setNewPassword('');
-        showFeedback('تم تغيير كلمة المرور بنجاح 🔒');
+        triggerToast('تم تغيير كلمة المرور بنجاح 🔒');
       }
     } catch (error) {
       if (error.code === 'auth/requires-recent-login') {
-        showFeedback('يرجى تسجيل الخروج والدخول مجدداً لتتمكن من تغيير الباسورد ⚠️');
+        triggerToast('لتغيير الباسورد، يرجى تسجيل الخروج والدخول مجدداً ⚠️');
       } else {
-        showFeedback('حدث خطأ أثناء تغيير كلمة المرور ❌');
+        triggerToast('حدث خطأ أثناء تغيير كلمة المرور ❌');
       }
     } finally {
       setIsSavingPassword(false);
     }
   };
 
-  // حساب مستويات البونص والمكافآت
   const completedTrips = Number(userData?.completedTripsCount || 0);
   const rewardTiers = [
     { id: 1, title: 'كابتن مبادر 🌱', target: 5, reward: 'ظهور رحلاتك في أولوية البحث لمدة أسبوع', icon: Zap },
@@ -220,293 +193,264 @@ const ProfileScreen = ({
   return (
     <div className="animate-fade-in-up pb-[120px] flex-1 w-full max-w-2xl mx-auto px-4 py-6 mt-4 relative z-10">
       
-      {/* إشعار داخلي سريع للتعديلات */}
-      {feedbackMsg && (
-        <div className="fixed top-20 left-1/2 transform -translate-x-1/2 z-[600] bg-slate-900 text-white px-5 py-3 rounded-full shadow-2xl flex items-center gap-2 border border-slate-700 animate-fade-in-up">
-          <CheckCircle2 size={18} className="text-emerald-400 shrink-0" />
-          <span className="text-xs font-bold whitespace-nowrap">{feedbackMsg}</span>
-        </div>
-      )}
+      {/* تبويبات سريعة: إعدادات الحساب | رحلاتي */}
+      <div className="flex bg-slate-100 dark:bg-slate-800 p-1 rounded-2xl mb-4 shadow-sm border border-slate-200/50 dark:border-slate-700/50">
+        <button onClick={() => setActiveSubTab('settings')} className={`flex-1 py-2.5 rounded-xl text-xs font-black transition-all ${activeSubTab === 'settings' ? 'bg-white text-indigo-600 shadow-sm dark:bg-slate-700 dark:text-white' : 'text-slate-500 hover:text-slate-700 dark:text-slate-400 dark:hover:text-slate-200'}`}>
+          إعدادات الحساب ⚙️
+        </button>
+        <button onClick={() => setActiveSubTab('trips')} className={`flex-1 py-2.5 rounded-xl text-xs font-black transition-all ${activeSubTab === 'trips' ? 'bg-white text-indigo-600 shadow-sm dark:bg-slate-700 dark:text-white' : 'text-slate-500 hover:text-slate-700 dark:text-slate-400 dark:hover:text-slate-200'}`}>
+          إعلاناتي ورحلاتي ({myTrips.length})
+        </button>
+      </div>
 
-      <div className="space-y-4">
-        
-        {/* زر لوحة الإدارة للأدمن */}
-        {isAdmin && setShowAdminPanel && ( 
-          <button onClick={() => setShowAdminPanel(true)} className="w-full p-4 rounded-2xl flex justify-between items-center bg-gradient-to-r from-indigo-900 to-slate-900 text-white shadow-lg active:scale-95 transition-transform border border-indigo-700/50">
-            <span className="font-black text-base flex items-center gap-2.5">
-              <Crown size={22} className="text-amber-400"/> لوحة الإدارة والتحكم (كاملة)
-            </span>
-            <ChevronLeft size={20}/>
-          </button> 
-        )}
-
-        {/* الكارت الشخصي الرئيسي */}
-        <div className={`p-6 rounded-[2rem] border shadow-sm flex flex-col items-center relative overflow-hidden ${bgCard}`}>
-          
-          {/* الصورة الشخصية مع زر الرفع */}
-          <div className="relative mb-4 group">
-            <div className="w-24 h-24 rounded-full bg-slate-100 dark:bg-slate-800 border-4 border-indigo-50 dark:border-slate-700 shadow-md flex items-center justify-center overflow-hidden">
-              {isUploadingPhoto ? (
-                <Loader2 size={28} className="animate-spin text-indigo-500" />
-              ) : localPhoto ? (
-                <img src={localPhoto} className="w-full h-full object-cover" alt="Profile" />
-              ) : (
-                <User size={40} className="text-slate-400"/>
-              )}
-            </div>
-            <label className="absolute bottom-0 right-0 bg-indigo-600 hover:bg-indigo-700 text-white p-2 rounded-full shadow-lg cursor-pointer transition-transform active:scale-90 border-2 border-white dark:border-slate-900" title="تغيير الصورة الشخصية">
-              <Camera size={14} />
-              <input type="file" accept="image/*" className="hidden" onChange={handlePhotoChange} disabled={isUploadingPhoto} />
-            </label>
-          </div>
-          
-          {/* تعديل وعرض الاسم (تم إصلاح قوس الإغلاق هنا) */}
-          {isEditingName ? (
-            <div className="flex items-center gap-2 my-1 w-full max-w-xs justify-center animate-fade-in-up">
-              <input 
-                type="text" 
-                value={tempName} 
-                onChange={(e) => setTempName(e.target.value)}
-                placeholder="الاسم الكامل..."
-                className={`flex-1 px-3 py-2 rounded-xl border text-sm font-bold outline-none focus:border-indigo-500 ${bgInput}`}
-                autoFocus
-              />
-              <button onClick={handleSaveName} disabled={isSavingName} className="p-2 bg-emerald-500 hover:bg-emerald-600 text-white rounded-xl shadow-sm">
-                {isSavingName ? <Loader2 size={16} className="animate-spin"/> : <Check size={16}/>}
-              </button>
-              <button onClick={() => { setIsEditingName(false); setTempName(userData?.name || ''); }} className="p-2 bg-rose-100 text-rose-600 dark:bg-rose-900/30 dark:text-rose-400 rounded-xl">
-                <X size={16}/>
-              </button>
+      {activeSubTab === 'trips' ? (
+        <div className="space-y-4 animate-fade-in-up">
+          {myTrips.length === 0 ? (
+            <div className={`text-center py-16 px-4 rounded-[2rem] border-2 border-dashed ${isDarkMode ? 'border-slate-800 bg-slate-900/50' : 'border-slate-200 bg-slate-50'}`}>
+              <Car size={48} className="mx-auto text-indigo-400 mb-4 opacity-50"/>
+              <h3 className="font-bold text-lg text-slate-700 dark:text-slate-300 mb-2">لم تقم بنشر أي رحلات بعد</h3>
+              <p className="text-sm text-slate-500">اضغط على زر (+) في الرئيسية لإضافة إعلانك الأول</p>
             </div>
           ) : (
-            <h3 className={`font-black text-xl flex items-center gap-2 ${textPrimary}`}>
-              <span>{tempName || userData?.name || 'مستخدم'}</span>
-              {userData?.isVerified && <ShieldCheck size={20} className="text-emerald-500 shrink-0" title="حساب موثق"/>}
-              <button 
-                onClick={() => setIsEditingName(true)} 
-                className="text-slate-400 hover:text-indigo-500 transition-colors p-1.5 bg-slate-100 dark:bg-slate-800 rounded-full" 
-                title="تعديل الاسم"
-              >
-                <Edit2 size={13}/>
-              </button>
-            </h3>
+            myTrips.map(trip => (
+              <TripCard 
+                key={trip.id} trip={trip} user={user} isAdmin={isAdmin} isDarkMode={isDarkMode} 
+                openChatFromTrip={openChatFromTrip} triggerToast={triggerToast} matchBadge={trip.status === 'completed' ? 'رحلة منتهية ✅' : 'إعلانك الخاص'}
+              />
+            ))
+          )}
+        </div>
+      ) : (
+        <div className="space-y-4 animate-fade-in-up">
+          {isAdmin && setShowAdminPanel && ( 
+            <button onClick={() => setShowAdminPanel(true)} className="w-full p-4 rounded-2xl flex justify-between items-center bg-gradient-to-r from-indigo-900 to-slate-900 text-white shadow-lg active:scale-95 transition-transform border border-indigo-700/50">
+              <span className="font-black text-base flex items-center gap-2.5">
+                <Crown size={22} className="text-amber-400"/> لوحة الإدارة والتحكم (كاملة)
+              </span>
+              <ChevronLeft size={20}/>
+            </button> 
           )}
 
-          {/* عرض شارة البونص والتميز الممنوحة من الإدارة */}
-          {userData?.customBadge && (
-            <div className="mt-1.5 inline-flex items-center gap-1.5 bg-gradient-to-r from-amber-500/15 to-orange-500/15 border border-amber-400/50 text-amber-700 dark:text-amber-300 px-3.5 py-1 rounded-full text-xs font-black shadow-sm">
-              <Award size={14} className="text-amber-500"/>
-              <span>{userData.customBadge}</span>
-            </div>
-          )}
-          
-          <div className="flex items-center gap-2 mt-2">
-            <div className="flex items-center gap-1 bg-amber-50 dark:bg-amber-900/20 border border-amber-200/60 dark:border-amber-800/50 px-3 py-1 rounded-full">
-              <Star size={13} className="text-amber-500 fill-amber-500"/>
-              <span className="text-xs font-black text-amber-700 dark:text-amber-400">{Number(userData?.rating || 0).toFixed(1)}</span>
-            </div>
-            <span className={`text-xs font-bold px-3 py-1 rounded-full bg-slate-100 dark:bg-slate-800 ${textSecondary}`}>
-              {completedTrips} رحلة مكتملة
-            </span>
-          </div>
-
-          {/* تعديل وعرض رقم الموبايل والواتساب */}
-          <div className="w-full max-w-xs mt-4">
-            {isEditingPhone ? (
-              <div className="flex items-center gap-2 animate-fade-in-up">
-                <input 
-                  type="tel" 
-                  dir="ltr"
-                  value={tempPhone} 
-                  onChange={(e) => setTempPhone(e.target.value)}
-                  placeholder="01xxxxxxxxx"
-                  className={`flex-1 px-3 py-2 rounded-xl border text-sm font-bold text-left outline-none focus:border-indigo-500 ${bgInput}`}
-                  autoFocus
-                />
-                <button onClick={handleSavePhone} disabled={isSavingPhone} className="p-2 bg-emerald-500 hover:bg-emerald-600 text-white rounded-xl shadow-sm">
-                  {isSavingPhone ? <Loader2 size={16} className="animate-spin"/> : <Check size={16}/>}
-                </button>
-                <button onClick={() => { setIsEditingPhone(false); setTempPhone(userData?.phone || ''); }} className="p-2 bg-rose-100 text-rose-600 dark:bg-rose-900/30 dark:text-rose-400 rounded-xl">
-                  <X size={16}/>
-                </button>
+          {/* الكارت الشخصي الرئيسي (للعرض فقط) */}
+          <div className={`p-6 rounded-[2rem] border shadow-sm flex flex-col items-center relative overflow-hidden ${bgCard}`}>
+            <div className="relative mb-4 group">
+              <div className="w-24 h-24 rounded-full bg-slate-100 dark:bg-slate-800 border-4 border-indigo-50 dark:border-slate-700 shadow-md flex items-center justify-center overflow-hidden">
+                {isUploadingPhoto ? (
+                  <Loader2 size={28} className="animate-spin text-indigo-500" />
+                ) : localPhoto ? (
+                  <img src={localPhoto} className="w-full h-full object-cover" alt="Profile" />
+                ) : (
+                  <User size={40} className="text-slate-400"/>
+                )}
               </div>
-            ) : (
-              <div 
-                onClick={() => setIsEditingPhone(true)}
-                className="flex items-center justify-between gap-2 bg-slate-50 dark:bg-slate-800/60 hover:bg-indigo-50/50 dark:hover:bg-slate-800 px-4 py-2.5 rounded-2xl border border-slate-200/70 dark:border-slate-700/70 cursor-pointer transition-colors group"
-              >
-                <div className="flex items-center gap-2">
-                  <Phone size={15} className="text-indigo-500 shrink-0"/>
-                  <span className={`text-xs font-bold ${tempPhone ? textPrimary : 'text-rose-500'}`} dir="ltr">
-                    {tempPhone || 'أضف رقم الموبايل / واتساب'}
-                  </span>
-                </div>
-                <span className="text-[10px] font-bold text-indigo-600 dark:text-indigo-400 flex items-center gap-1 bg-indigo-50 dark:bg-indigo-900/40 px-2 py-1 rounded-lg">
-                  <Edit2 size={11}/> {tempPhone ? 'تعديل' : 'إضافة'}
+              <label className="absolute bottom-0 right-0 bg-indigo-600 hover:bg-indigo-700 text-white p-2 rounded-full shadow-lg cursor-pointer transition-transform active:scale-90 border-2 border-white dark:border-slate-900" title="تغيير الصورة الشخصية">
+                <Camera size={14} />
+                <input type="file" accept="image/*" className="hidden" onChange={handlePhotoChange} disabled={isUploadingPhoto} />
+              </label>
+            </div>
+            
+            <h3 className={`font-black text-xl flex items-center gap-2 ${textPrimary}`}>
+              <span>{userData?.name || 'مستخدم'}</span>
+              {userData?.isVerified && <ShieldCheck size={20} className="text-emerald-500 shrink-0" title="حساب موثق"/>}
+            </h3>
+
+            {userData?.customBadge && (
+              <div className="mt-1.5 inline-flex items-center gap-1.5 bg-gradient-to-r from-amber-500/15 to-orange-500/15 border border-amber-400/50 text-amber-700 dark:text-amber-300 px-3.5 py-1 rounded-full text-xs font-black shadow-sm">
+                <Award size={14} className="text-amber-500"/>
+                <span>{userData.customBadge}</span>
+              </div>
+            )}
+            
+            <div className="flex items-center gap-2 mt-2">
+              <div className="flex items-center gap-1 bg-amber-50 dark:bg-amber-900/20 border border-amber-200/60 dark:border-amber-800/50 px-3 py-1 rounded-full">
+                <Star size={13} className="text-amber-500 fill-amber-500"/>
+                <span className="text-xs font-black text-amber-700 dark:text-amber-400">{Number(userData?.rating || 0).toFixed(1)}</span>
+              </div>
+              <span className={`text-xs font-bold px-3 py-1 rounded-full bg-slate-100 dark:bg-slate-800 ${textSecondary}`}>
+                {completedTrips} رحلة مكتملة
+              </span>
+            </div>
+
+            <div className="w-full max-w-xs mt-4 space-y-2">
+              <div className="flex items-center gap-2 bg-slate-50 dark:bg-slate-800/60 px-4 py-2.5 rounded-2xl border border-slate-200/70 dark:border-slate-700/70 cursor-default">
+                <Phone size={15} className="text-indigo-500 shrink-0"/>
+                <span className={`text-xs font-bold ${userData?.phone ? textPrimary : 'text-rose-500'}`} dir="ltr">
+                  {userData?.phone || 'لم يتم إضافة رقم الموبايل'}
                 </span>
               </div>
+
+              {/* إظهار بيانات السيارة إن وجدت */}
+              {userData?.carModel && (
+                <div className="flex items-center justify-between gap-2 bg-slate-50 dark:bg-slate-800/60 px-4 py-2.5 rounded-2xl border border-slate-200/70 dark:border-slate-700/70">
+                  <div className="flex items-center gap-2 truncate">
+                    <Car size={15} className="text-indigo-500 shrink-0"/>
+                    <span className={`text-xs font-bold truncate ${textPrimary}`}>
+                      {userData.carModel} {userData.carColor ? `(${userData.carColor})` : ''}
+                    </span>
+                  </div>
+                </div>
+              )}
+            </div>
+
+            {userData?.email && (
+              <p className={`text-[11px] mt-3 font-medium opacity-75 ${textSecondary}`} dir="ltr">{userData.email}</p>
             )}
           </div>
 
-          {userData?.email && (
-            <p className={`text-[11px] mt-3 font-medium opacity-75 ${textSecondary}`} dir="ltr">{userData.email}</p>
-          )}
-        </div>
-
-        {/* إعدادات الحساب (الاسم، الرقم، كلمة المرور) */}
-        <div 
-          onClick={() => setShowAccountModal(true)} 
-          className={`p-5 rounded-[1.5rem] border shadow-sm flex items-center justify-between cursor-pointer hover:border-indigo-500/50 hover:shadow-md transition-all group mt-2 ${bgCard}`}
-        >
-           <div className="flex items-center gap-4">
-             <div className="bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300 p-3.5 rounded-2xl shrink-0 group-hover:scale-110 transition-transform">
-               <Settings size={24}/>
+          {/* إعدادات الحساب (تفتح النافذة) */}
+          <div 
+            onClick={() => setShowAccountModal(true)} 
+            className={`p-5 rounded-[1.5rem] border shadow-sm flex items-center justify-between cursor-pointer hover:border-indigo-500/50 hover:shadow-md transition-all group mt-2 ${bgCard}`}
+          >
+             <div className="flex items-center gap-4">
+               <div className="bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300 p-3.5 rounded-2xl shrink-0 group-hover:scale-110 transition-transform">
+                 <Settings size={24}/>
+               </div>
+               <div>
+                 <h4 className={`font-black text-sm flex items-center gap-2 ${textPrimary}`}>
+                   إعدادات الحساب والسيارة
+                 </h4>
+                 <p className={`text-xs mt-1 font-medium ${textSecondary}`}>
+                   تعديل الاسم، الرقم، وبيانات سيارتك للكابتن
+                 </p>
+               </div>
              </div>
-             <div>
-               <h4 className={`font-black text-sm flex items-center gap-2 ${textPrimary}`}>
-                 إعدادات الحساب وكلمة المرور
-               </h4>
-               <p className={`text-xs mt-1 font-medium ${textSecondary}`}>
-                 تعديل الاسم، رقم الموبايل، وتغيير كلمة المرور
-               </p>
+             <div className="bg-slate-100 dark:bg-slate-800 p-2 rounded-full group-hover:bg-indigo-500 group-hover:text-white transition-colors">
+               <ChevronLeft size={18} className={textSecondary + " group-hover:text-white"}/>
              </div>
-           </div>
-           <div className="bg-slate-100 dark:bg-slate-800 p-2 rounded-full group-hover:bg-indigo-500 group-hover:text-white transition-colors">
-             <ChevronLeft size={18} className={textSecondary + " group-hover:text-white"}/>
-           </div>
-        </div>
-
-        <h4 className={`px-2 font-black text-base mt-6 mb-2 ${textPrimary}`}>الأمان والمكافآت</h4>
-        
-        {/* كارت توثيق الحساب بالبطاقة والرخصة */}
-        <div 
-          onClick={() => {
-            if (!userData?.isVerified && setShowVerifyModal) setShowVerifyModal(true);
-          }}
-          className={`p-5 rounded-[1.5rem] border shadow-sm flex items-center justify-between transition-all ${!userData?.isVerified ? 'cursor-pointer hover:border-indigo-500/50' : ''} ${
-            userData?.isVerified 
-              ? 'bg-emerald-50/50 border-emerald-200 dark:bg-emerald-900/10 dark:border-emerald-800/60' 
-              : userData?.verificationStatus === 'pending' 
-                ? 'bg-amber-50/60 border-amber-200 dark:bg-amber-900/10 dark:border-amber-800/60' 
-                : bgCard
-          }`}
-        >
-           <div className="flex items-center gap-4">
-             <div className={`p-3.5 rounded-2xl shrink-0 ${
-               userData?.isVerified 
-                 ? 'bg-emerald-100 text-emerald-600 dark:bg-emerald-900/40 dark:text-emerald-400' 
-                 : userData?.verificationStatus === 'pending' 
-                   ? 'bg-amber-100 text-amber-600 dark:bg-amber-900/40 dark:text-amber-400' 
-                   : 'bg-indigo-50 text-indigo-600 dark:bg-indigo-900/30 dark:text-indigo-400'
-             }`}>
-               {userData?.isVerified ? <ShieldCheck size={24}/> : <ShieldAlert size={24}/>}
-             </div>
-             <div>
-               <h4 className={`font-black text-sm ${textPrimary}`}>
-                 {userData?.isVerified 
-                   ? 'الحساب موثق رسمياً ✅' 
-                   : userData?.verificationStatus === 'pending' 
-                     ? 'طلب التوثيق قيد المراجعة ⏳' 
-                     : 'توثيق الحساب (البطاقة / الرخصة)'}
-               </h4>
-               <p className={`text-xs font-medium mt-1 leading-relaxed ${textSecondary}`}>
-                 {userData?.isVerified 
-                   ? 'تم التحقق من هويتك، تظهر لديك الآن شارة التوثيق الخضراء.' 
-                   : userData?.verificationStatus === 'pending' 
-                     ? 'جاري مراجعة المستندات من الإدارة، اضغط هنا إذا أردت تعديل الصور.' 
-                     : 'ارفع صورة البطاقة ورخصة القيادة للحصول على شارة الثقة وزيادة قبول رحلاتك.'}
-               </p>
-             </div>
-           </div>
-           
-           {!userData?.isVerified && ( 
-             <button 
-               type="button"
-               onClick={(e) => {
-                 e.stopPropagation();
-                 if (setShowVerifyModal) setShowVerifyModal(true);
-               }} 
-               className={`px-4 py-2.5 rounded-xl text-xs font-black shadow-sm transition-transform active:scale-95 shrink-0 mr-2 ${
-                 userData?.verificationStatus === 'pending'
-                   ? 'bg-amber-500 hover:bg-amber-600 text-white'
-                   : 'bg-indigo-600 hover:bg-indigo-700 text-white'
-               }`}
-             >
-               {userData?.verificationStatus === 'pending' ? 'تعديل الصور' : 'وثق الآن'}
-             </button> 
-           )}
-        </div>
-
-        {/* كارت مكافآت السائقين وبونص الرحلات */}
-        <div 
-          onClick={() => setShowInternalRewards(true)} 
-          className={`p-5 rounded-[1.5rem] border shadow-sm flex items-center justify-between cursor-pointer hover:border-amber-500/50 hover:shadow-md transition-all group ${bgCard}`}
-        >
-           <div className="flex items-center gap-4">
-             <div className="bg-amber-100 dark:bg-amber-900/30 text-amber-600 dark:text-amber-400 p-3.5 rounded-2xl shrink-0 group-hover:scale-110 transition-transform">
-               <Gift size={24}/>
-             </div>
-             <div>
-               <h4 className={`font-black text-sm flex items-center gap-2 ${textPrimary}`}>
-                 <span>برنامج مكافآت وبونص الرحلات</span>
-                 <span className="text-[10px] bg-amber-100 dark:bg-amber-900/40 text-amber-700 dark:text-amber-300 px-2 py-0.5 rounded-full font-extrabold">جديد 🔥</span>
-               </h4>
-               <p className={`text-xs mt-1 font-medium ${textSecondary}`}>
-                 أكملت <span className="font-black text-indigo-500">{completedTrips} رحلة</span>.. اضغط لمعرفة مستواك واستلام البونص!
-               </p>
-             </div>
-           </div>
-           <div className="bg-slate-100 dark:bg-slate-800 p-2 rounded-full group-hover:bg-amber-500 group-hover:text-white transition-colors">
-             <ChevronLeft size={18} className={textSecondary + " group-hover:text-white"}/>
-           </div>
-        </div>
-
-        {/* حول التطبيق والسياسات */}
-        <div 
-          onClick={() => setShowAboutModal(true)} 
-          className={`p-5 rounded-[1.5rem] border shadow-sm flex items-center justify-between cursor-pointer hover:border-blue-500/50 hover:shadow-md transition-all group mt-2 ${bgCard}`}
-        >
-           <div className="flex items-center gap-4">
-             <div className="bg-blue-100 dark:bg-blue-900/30 text-blue-600 dark:text-blue-400 p-3.5 rounded-2xl shrink-0 group-hover:scale-110 transition-transform">
-               <Info size={24}/>
-             </div>
-             <div>
-               <h4 className={`font-black text-sm flex items-center gap-2 ${textPrimary}`}>
-                 حول التطبيق والسياسات
-               </h4>
-               <p className={`text-xs mt-1 font-medium ${textSecondary}`}>
-                 فكرة العمل، إخلاء المسؤولية، وشروط الاستخدام
-               </p>
-             </div>
-           </div>
-           <div className="bg-slate-100 dark:bg-slate-800 p-2 rounded-full group-hover:bg-blue-500 group-hover:text-white transition-colors">
-             <ChevronLeft size={18} className={textSecondary + " group-hover:text-white"}/>
-           </div>
-        </div>
-
-        {/* إعدادات الوضع الليلي وتسجيل الخروج */}
-        <div className={`rounded-[1.5rem] border shadow-sm overflow-hidden ${bgCard} mt-6`}>
-          <div onClick={toggleTheme} className="p-4 border-b border-slate-100 dark:border-slate-800 flex justify-between items-center cursor-pointer hover:bg-slate-50/50 dark:hover:bg-slate-800/30 transition-colors">
-            <div className="flex items-center gap-3">
-              <Moon size={20} className="text-indigo-500"/>
-              <span className={`font-bold text-sm ${textPrimary}`}>الوضع الليلي (Dark Mode)</span>
-            </div>
-            <button type="button" className={`w-12 h-6 rounded-full relative transition-colors ${isDarkMode ? 'bg-indigo-600' : 'bg-slate-300 dark:bg-slate-700'}`}>
-              <span className={`absolute top-1 w-4 h-4 bg-white rounded-full transition-all shadow-sm ${isDarkMode ? 'left-1' : 'right-1'}`}></span>
-            </button>
           </div>
+
+          <h4 className={`px-2 font-black text-base mt-6 mb-2 ${textPrimary}`}>الأمان والمكافآت</h4>
           
-          <div onClick={handleLogout} className="p-4 flex justify-between items-center cursor-pointer text-rose-600 bg-rose-50/40 hover:bg-rose-50 dark:bg-rose-900/10 dark:hover:bg-rose-900/20 transition-colors">
-            <div className="flex items-center gap-3">
-              <LogOut size={20}/>
-              <span className="font-bold text-sm">تسجيل الخروج من الحساب</span>
+          {/* كارت توثيق الحساب */}
+          <div 
+            onClick={() => {
+              if (!userData?.isVerified && setShowVerifyModal) setShowVerifyModal(true);
+            }}
+            className={`p-5 rounded-[1.5rem] border shadow-sm flex items-center justify-between transition-all ${!userData?.isVerified ? 'cursor-pointer hover:border-indigo-500/50' : ''} ${
+              userData?.isVerified 
+                ? 'bg-emerald-50/50 border-emerald-200 dark:bg-emerald-900/10 dark:border-emerald-800/60' 
+                : userData?.verificationStatus === 'pending' 
+                  ? 'bg-amber-50/60 border-amber-200 dark:bg-amber-900/10 dark:border-amber-800/60' 
+                  : bgCard
+            }`}
+          >
+             <div className="flex items-center gap-4">
+               <div className={`p-3.5 rounded-2xl shrink-0 ${
+                 userData?.isVerified 
+                   ? 'bg-emerald-100 text-emerald-600 dark:bg-emerald-900/40 dark:text-emerald-400' 
+                   : userData?.verificationStatus === 'pending' 
+                     ? 'bg-amber-100 text-amber-600 dark:bg-amber-900/40 dark:text-amber-400' 
+                     : 'bg-indigo-50 text-indigo-600 dark:bg-indigo-900/30 dark:text-indigo-400'
+               }`}>
+                 {userData?.isVerified ? <ShieldCheck size={24}/> : <ShieldAlert size={24}/>}
+               </div>
+               <div>
+                 <h4 className={`font-black text-sm ${textPrimary}`}>
+                   {userData?.isVerified 
+                     ? 'الحساب موثق رسمياً ✅' 
+                     : userData?.verificationStatus === 'pending' 
+                       ? 'طلب التوثيق قيد المراجعة ⏳' 
+                       : 'توثيق الحساب (البطاقة / الرخصة)'}
+                 </h4>
+                 <p className={`text-xs font-medium mt-1 leading-relaxed ${textSecondary}`}>
+                   {userData?.isVerified 
+                     ? 'تم التحقق من هويتك، تظهر لديك الآن شارة التوثيق الخضراء.' 
+                     : userData?.verificationStatus === 'pending' 
+                       ? 'جاري مراجعة المستندات من الإدارة، اضغط هنا إذا أردت تعديل الصور.' 
+                       : 'ارفع صورة البطاقة ورخصة القيادة للحصول على شارة الثقة وزيادة قبول رحلاتك.'}
+                 </p>
+               </div>
+             </div>
+             
+             {!userData?.isVerified && ( 
+               <button 
+                 type="button"
+                 onClick={(e) => {
+                   e.stopPropagation();
+                   if (setShowVerifyModal) setShowVerifyModal(true);
+                 }} 
+                 className={`px-4 py-2.5 rounded-xl text-xs font-black shadow-sm transition-transform active:scale-95 shrink-0 mr-2 ${
+                   userData?.verificationStatus === 'pending'
+                     ? 'bg-amber-500 hover:bg-amber-600 text-white'
+                     : 'bg-indigo-600 hover:bg-indigo-700 text-white'
+                 }`}
+               >
+                 {userData?.verificationStatus === 'pending' ? 'تعديل الصور' : 'وثق الآن'}
+               </button> 
+             )}
+          </div>
+
+          {/* كارت مكافآت السائقين */}
+          <div 
+            onClick={() => setShowInternalRewards(true)} 
+            className={`p-5 rounded-[1.5rem] border shadow-sm flex items-center justify-between cursor-pointer hover:border-amber-500/50 hover:shadow-md transition-all group ${bgCard}`}
+          >
+             <div className="flex items-center gap-4">
+               <div className="bg-amber-100 dark:bg-amber-900/30 text-amber-600 dark:text-amber-400 p-3.5 rounded-2xl shrink-0 group-hover:scale-110 transition-transform">
+                 <Gift size={24}/>
+               </div>
+               <div>
+                 <h4 className={`font-black text-sm flex items-center gap-2 ${textPrimary}`}>
+                   <span>برنامج مكافآت وبونص الرحلات</span>
+                   <span className="text-[10px] bg-amber-100 dark:bg-amber-900/40 text-amber-700 dark:text-amber-300 px-2 py-0.5 rounded-full font-extrabold">جديد 🔥</span>
+                 </h4>
+                 <p className={`text-xs mt-1 font-medium ${textSecondary}`}>
+                   أكملت <span className="font-black text-indigo-500">{completedTrips} رحلة</span>.. اضغط لمعرفة مستواك واستلام البونص!
+                 </p>
+               </div>
+             </div>
+             <div className="bg-slate-100 dark:bg-slate-800 p-2 rounded-full group-hover:bg-amber-500 group-hover:text-white transition-colors">
+               <ChevronLeft size={18} className={textSecondary + " group-hover:text-white"}/>
+             </div>
+          </div>
+
+          {/* حول التطبيق والسياسات */}
+          <div 
+            onClick={() => setShowAboutModal(true)} 
+            className={`p-5 rounded-[1.5rem] border shadow-sm flex items-center justify-between cursor-pointer hover:border-blue-500/50 hover:shadow-md transition-all group mt-2 ${bgCard}`}
+          >
+             <div className="flex items-center gap-4">
+               <div className="bg-blue-100 dark:bg-blue-900/30 text-blue-600 dark:text-blue-400 p-3.5 rounded-2xl shrink-0 group-hover:scale-110 transition-transform">
+                 <Info size={24}/>
+               </div>
+               <div>
+                 <h4 className={`font-black text-sm flex items-center gap-2 ${textPrimary}`}>
+                   حول التطبيق والسياسات
+                 </h4>
+                 <p className={`text-xs mt-1 font-medium ${textSecondary}`}>
+                   فكرة العمل، إخلاء المسؤولية، وشروط الاستخدام
+                 </p>
+               </div>
+             </div>
+             <div className="bg-slate-100 dark:bg-slate-800 p-2 rounded-full group-hover:bg-blue-500 group-hover:text-white transition-colors">
+               <ChevronLeft size={18} className={textSecondary + " group-hover:text-white"}/>
+             </div>
+          </div>
+
+          {/* إعدادات الوضع الليلي وتسجيل الخروج */}
+          <div className={`rounded-[1.5rem] border shadow-sm overflow-hidden ${bgCard} mt-6`}>
+            <div onClick={toggleTheme} className="p-4 border-b border-slate-100 dark:border-slate-800 flex justify-between items-center cursor-pointer hover:bg-slate-50/50 dark:hover:bg-slate-800/30 transition-colors">
+              <div className="flex items-center gap-3">
+                <Moon size={20} className="text-indigo-500"/>
+                <span className={`font-bold text-sm ${textPrimary}`}>الوضع الليلي (Dark Mode)</span>
+              </div>
+              <button type="button" className={`w-12 h-6 rounded-full relative transition-colors ${isDarkMode ? 'bg-indigo-600' : 'bg-slate-300 dark:bg-slate-700'}`}>
+                <span className={`absolute top-1 w-4 h-4 bg-white rounded-full transition-all shadow-sm ${isDarkMode ? 'left-1' : 'right-1'}`}></span>
+              </button>
+            </div>
+            
+            <div onClick={handleLogout} className="p-4 flex justify-between items-center cursor-pointer text-rose-600 bg-rose-50/40 hover:bg-rose-50 dark:bg-rose-900/10 dark:hover:bg-rose-900/20 transition-colors">
+              <div className="flex items-center gap-3">
+                <LogOut size={20}/>
+                <span className="font-bold text-sm">تسجيل الخروج من الحساب</span>
+              </div>
             </div>
           </div>
         </div>
+      )}
 
-      </div>
-
-      {/* نافذة إعدادات الحساب (تغيير الاسم، الرقم، الباسورد) */}
+      {/* نافذة إعدادات الحساب الشاملة */}
       {showAccountModal && (
         <div className="fixed inset-0 bg-slate-900/90 backdrop-blur-sm z-[550] flex justify-center items-end sm:items-center p-0 sm:p-4 pointer-events-auto" onClick={() => setShowAccountModal(false)}>
           <div 
@@ -525,43 +469,78 @@ const ProfileScreen = ({
               </button>
             </div>
 
-            <div className="p-5 overflow-y-auto space-y-5 flex-1 [&::-webkit-scrollbar]:hidden">
-              <div className="space-y-2">
-                <label className={`text-xs font-bold px-1 ${textSecondary}`}>الاسم الكامل</label>
-                <div className="flex items-center gap-2">
-                  <input 
-                    type="text" 
-                    value={tempName} 
-                    onChange={(e) => setTempName(e.target.value)}
-                    placeholder="الاسم الكامل..."
-                    className={`flex-1 px-4 py-3.5 rounded-xl border text-sm font-bold outline-none focus:border-indigo-500 ${bgInput}`}
-                  />
-                  <button onClick={handleSaveName} disabled={isSavingName} className="px-5 py-3.5 bg-indigo-600 hover:bg-indigo-700 text-white rounded-xl shadow-sm font-black text-sm flex items-center justify-center min-w-[80px] transition-transform active:scale-95">
-                    {isSavingName ? <Loader2 size={18} className="animate-spin"/> : 'حفظ'}
-                  </button>
+            <div className="p-5 overflow-y-auto space-y-6 flex-1 [&::-webkit-scrollbar]:hidden">
+              
+              <div className="space-y-4">
+                <h4 className={`text-sm font-black flex items-center gap-1 ${textPrimary}`}><User size={16} className="text-indigo-500"/> البيانات الأساسية</h4>
+                <div className="space-y-2">
+                  <label className={`text-xs font-bold px-1 ${textSecondary}`}>الاسم الكامل</label>
+                  <div className="flex items-center gap-2">
+                    <input 
+                      type="text" 
+                      value={tempName} 
+                      onChange={(e) => setTempName(e.target.value)}
+                      placeholder="الاسم الكامل..."
+                      className={`flex-1 px-4 py-3.5 rounded-xl border text-sm font-bold outline-none focus:border-indigo-500 ${bgInput}`}
+                    />
+                  </div>
                 </div>
+
+                <div className="space-y-2">
+                  <label className={`text-xs font-bold px-1 ${textSecondary}`}>رقم الموبايل / الواتساب</label>
+                  <div className="flex items-center gap-2">
+                    <input 
+                      type="tel" 
+                      dir="ltr"
+                      value={tempPhone} 
+                      onChange={(e) => setTempPhone(e.target.value)}
+                      placeholder="01xxxxxxxxx"
+                      className={`flex-1 px-4 py-3.5 rounded-xl border text-sm font-bold outline-none focus:border-indigo-500 text-left ${bgInput}`}
+                    />
+                  </div>
+                </div>
+                <button onClick={handleSaveProfileInfo} disabled={isSavingName} className="w-full py-3.5 bg-indigo-600 hover:bg-indigo-700 text-white rounded-xl shadow-md font-black text-sm flex items-center justify-center gap-2 transition-transform active:scale-95">
+                  {isSavingName ? <Loader2 size={18} className="animate-spin"/> : <Check size={18}/>} حفظ البيانات الأساسية
+                </button>
               </div>
 
-              <div className="space-y-2">
-                <label className={`text-xs font-bold px-1 ${textSecondary}`}>رقم الموبايل / الواتساب</label>
-                <div className="flex items-center gap-2">
-                  <input 
-                    type="tel" 
-                    dir="ltr"
-                    value={tempPhone} 
-                    onChange={(e) => setTempPhone(e.target.value)}
-                    placeholder="01xxxxxxxxx"
-                    className={`flex-1 px-4 py-3.5 rounded-xl border text-sm font-bold outline-none focus:border-indigo-500 text-left ${bgInput}`}
-                  />
-                  <button onClick={handleSavePhone} disabled={isSavingPhone} className="px-5 py-3.5 bg-indigo-600 hover:bg-indigo-700 text-white rounded-xl shadow-sm font-black text-sm flex items-center justify-center min-w-[80px] transition-transform active:scale-95">
-                    {isSavingPhone ? <Loader2 size={18} className="animate-spin"/> : 'حفظ'}
-                  </button>
+              <hr className="border-slate-200 dark:border-slate-700" />
+
+              {/* قسم بيانات السيارة للكابتن */}
+              <div className="space-y-4">
+                <h4 className={`text-sm font-black flex items-center gap-1 ${textPrimary}`}><Car size={16} className="text-emerald-500"/> بيانات السيارة (للكباتن فقط)</h4>
+                <p className="text-[10px] font-bold text-slate-500">إضافة موديل ولون السيارة يزيد من ثقة الركاب في إعلاناتك.</p>
+                
+                <div className="flex gap-2">
+                  <div className="space-y-2 flex-1">
+                    <label className={`text-xs font-bold px-1 ${textSecondary}`}>نوع وموديل السيارة</label>
+                    <input 
+                      type="text" 
+                      value={tempCarModel} 
+                      onChange={(e) => setTempCarModel(e.target.value)}
+                      placeholder="مثال: هيونداي إلنترا"
+                      className={`w-full px-4 py-3.5 rounded-xl border text-sm font-bold outline-none focus:border-emerald-500 ${bgInput}`}
+                    />
+                  </div>
+                  <div className="space-y-2 w-1/3">
+                    <label className={`text-xs font-bold px-1 ${textSecondary}`}>اللون</label>
+                    <input 
+                      type="text" 
+                      value={tempCarColor} 
+                      onChange={(e) => setTempCarColor(e.target.value)}
+                      placeholder="مثال: فضي"
+                      className={`w-full px-4 py-3.5 rounded-xl border text-sm font-bold outline-none focus:border-emerald-500 ${bgInput}`}
+                    />
+                  </div>
                 </div>
+                <button onClick={handleSaveCarInfo} disabled={isSavingCarInfo} className="w-full py-3.5 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl shadow-md font-black text-sm flex items-center justify-center gap-2 transition-transform active:scale-95">
+                  {isSavingCarInfo ? <Loader2 size={18} className="animate-spin"/> : <Check size={18}/>} حفظ بيانات السيارة
+                </button>
               </div>
 
-              <hr className="border-slate-200 dark:border-slate-700 my-2" />
+              <hr className="border-slate-200 dark:border-slate-700" />
 
-              <div className="space-y-2">
+              <div className="space-y-2 pb-4">
                 <label className={`text-xs font-bold px-1 flex items-center gap-1 ${textSecondary}`}>
                   <Lock size={14}/> تغيير كلمة المرور
                 </label>
@@ -579,12 +558,13 @@ const ProfileScreen = ({
                   </button>
                 </div>
               </div>
+
             </div>
           </div>
         </div>
       )}
 
-      {/* نافذة مكافآت السائقين وبونص الرحلات */}
+      {/* نافذة المكافآت */}
       {showInternalRewards && (
         <div className="fixed inset-0 bg-slate-900/90 backdrop-blur-sm z-[550] flex justify-center items-end sm:items-center p-0 sm:p-4 pointer-events-auto" onClick={() => setShowInternalRewards(false)}>
           <div 
@@ -727,7 +707,21 @@ const ProfileScreen = ({
                     <li>سلامة أو محتوى الأمانات المنقولة.</li>
                     <li>أي حوادث أو طوارئ تحدث أثناء الرحلة.</li>
                   </ul>
+                  <p className="mt-3 font-bold text-rose-600 dark:text-rose-400 bg-rose-100 dark:bg-rose-900/30 p-2 rounded-lg border border-rose-200 dark:border-rose-800/50">
+                    يرجى التأكد من هوية الشخص الآخر ومشاركة تفاصيل رحلتك مع أحد المقربين لضمان سلامتك.
+                  </p>
                 </div>
+              </div>
+
+              <div>
+                <h3 className={`font-black text-base mb-2 flex items-center gap-2 ${textPrimary}`}>
+                  <span className="w-2 h-2 rounded-full bg-blue-500"></span> شروط الاستخدام
+                </h3>
+                <ul className={`font-medium leading-relaxed space-y-2 text-xs ${textSecondary} list-disc list-inside mr-1`}>
+                  <li>يُمنع استخدام التطبيق لأي أغراض غير قانونية.</li>
+                  <li>يجب الحفاظ على الاحترام المتبادل والمصداقية في المواعيد.</li>
+                  <li>يحق للإدارة حظر أي حساب يخالف الشروط أو يتلقى شكاوى متكررة بدون سابق إنذار.</li>
+                </ul>
               </div>
             </div>
 
