@@ -1037,6 +1037,9 @@ export default function App() {
         <StationModal station={selectedStation} user={user} isAdmin={isAdmin} isGuest={isGuest} isDarkMode={isDarkMode} onClose={() => setSelectedStation(null)} triggerToast={triggerToast}/>
       )}
 
+      {/* 
+        الخطوة الأولى: تمرير realTrips و openChatFromTrip هنا إلى ProfileScreen
+      */}
       {activeTab === 'profile' && (
         <ProfileScreen 
           user={user} 
@@ -1051,6 +1054,9 @@ export default function App() {
           setShowVerifyModal={setShowVerifyModal} 
           setShowAdminPanel={setShowAdminPanel} 
           forceSignUpScreen={forceSignUpScreen}
+          realTrips={realTrips}
+          openChatFromTrip={openChatFromTrip}
+          triggerToast={triggerToast}
         />
       )}
 
