@@ -219,6 +219,7 @@ const ProfileScreen = ({
                 <span className={`text-xs font-bold px-3 py-1 rounded-full bg-indigo-50 text-indigo-600 dark:bg-indigo-900/30 dark:text-indigo-400`}>{completedTrips} رحلات مكتملة</span>
               </div>
 
+              {/* إظهار نوع السيارة في البروفايل */}
               {userData?.carModel && (
                 <div className="mt-3 bg-slate-50 dark:bg-slate-800 px-3 py-2 rounded-xl flex items-center gap-2 border dark:border-slate-700 inline-flex">
                   <Car size={14} className="text-indigo-500"/>
@@ -278,26 +279,29 @@ const ProfileScreen = ({
         </div>
       )}
 
-      {/* نافذة الإعدادات (تصميم جديد ونظيف) */}
+      {/* نافذة الإعدادات (معالجة مشكلة التمرير/Scroll) */}
       {showAccountModal && (
         <div className="fixed inset-0 bg-slate-900/90 backdrop-blur-sm z-[550] flex justify-center items-end sm:items-center p-0 sm:p-4 pointer-events-auto" onClick={() => setShowAccountModal(false)}>
-          <div onClick={(e) => e.stopPropagation()} className={`${bgCard} w-full sm:max-w-md max-h-[90vh] rounded-t-[2rem] sm:rounded-[2rem] shadow-2xl flex flex-col overflow-hidden animate-fade-in-up border dark:border-slate-700`}>
+          <div onClick={(e) => e.stopPropagation()} className={`${bgCard} w-full sm:max-w-md max-h-[85vh] sm:max-h-[90vh] rounded-t-[2rem] sm:rounded-[2rem] shadow-2xl flex flex-col overflow-hidden animate-fade-in-up border dark:border-slate-700`}>
+            
+            {/* Header ثابت */}
             <div className="p-4 border-b border-slate-200 dark:border-slate-700 flex justify-between items-center bg-slate-50 dark:bg-slate-800/90 shrink-0">
               <h2 className={`text-base font-black flex items-center gap-2 ${textPrimary}`}><Settings size={18}/> إعدادات الحساب</h2>
               <button onClick={() => setShowAccountModal(false)} className="p-1.5 bg-slate-200 dark:bg-slate-700 rounded-full hover:bg-rose-100 hover:text-rose-500"><X size={16}/></button>
             </div>
 
-            <div className="p-5 overflow-y-auto space-y-6 flex-1 [&::-webkit-scrollbar]:hidden">
+            {/* محتوى قابل للتمرير بسلاسة */}
+            <div className="p-5 overflow-y-auto overscroll-contain flex-1 space-y-6 pb-24 sm:pb-6 [&::-webkit-scrollbar]:hidden">
               
               <div className="space-y-4">
                 <h3 className={`text-sm font-black border-b pb-2 ${textPrimary}`}>البيانات الأساسية</h3>
                 <div>
                   <label className={`text-[10px] font-bold px-1 ${textSecondary}`}>الاسم الكامل</label>
-                  <input type="text" value={tempName} onChange={(e) => setTempName(e.target.value)} className={`w-full px-4 py-3 mt-1 rounded-xl border text-sm font-bold outline-none ${bgInput}`} />
+                  <input type="text" value={tempName} onChange={(e) => setTempName(e.target.value)} className={`w-full px-4 py-3 mt-1 rounded-xl border text-sm font-bold outline-none focus:border-indigo-500 ${bgInput}`} />
                 </div>
                 <div>
                   <label className={`text-[10px] font-bold px-1 ${textSecondary}`}>رقم الموبايل / واتساب (يظهر للركاب)</label>
-                  <input type="tel" dir="ltr" value={tempPhone} onChange={(e) => setTempPhone(e.target.value)} className={`w-full px-4 py-3 mt-1 rounded-xl border text-sm font-bold text-left outline-none ${bgInput}`} />
+                  <input type="tel" dir="ltr" value={tempPhone} onChange={(e) => setTempPhone(e.target.value)} className={`w-full px-4 py-3 mt-1 rounded-xl border text-sm font-bold text-left outline-none focus:border-indigo-500 ${bgInput}`} />
                 </div>
               </div>
 
@@ -306,24 +310,24 @@ const ProfileScreen = ({
                 <div className="grid grid-cols-2 gap-3">
                   <div>
                     <label className={`text-[10px] font-bold px-1 ${textSecondary}`}>موديل السيارة</label>
-                    <input type="text" placeholder="مثال: نيسان صني" value={tempCarModel} onChange={(e) => setTempCarModel(e.target.value)} className={`w-full px-3 py-3 mt-1 rounded-xl border text-xs font-bold outline-none ${bgInput}`} />
+                    <input type="text" placeholder="مثال: نيسان صني" value={tempCarModel} onChange={(e) => setTempCarModel(e.target.value)} className={`w-full px-3 py-3 mt-1 rounded-xl border text-xs font-bold outline-none focus:border-indigo-500 ${bgInput}`} />
                   </div>
                   <div>
                     <label className={`text-[10px] font-bold px-1 ${textSecondary}`}>لون السيارة</label>
-                    <input type="text" placeholder="مثال: فضي" value={tempCarColor} onChange={(e) => setTempCarColor(e.target.value)} className={`w-full px-3 py-3 mt-1 rounded-xl border text-xs font-bold outline-none ${bgInput}`} />
+                    <input type="text" placeholder="مثال: فضي" value={tempCarColor} onChange={(e) => setTempCarColor(e.target.value)} className={`w-full px-3 py-3 mt-1 rounded-xl border text-xs font-bold outline-none focus:border-indigo-500 ${bgInput}`} />
                   </div>
                 </div>
               </div>
 
-              <button onClick={handleSaveSettings} disabled={isSavingSettings} className="w-full bg-indigo-600 hover:bg-indigo-700 text-white py-3.5 rounded-xl shadow-md font-black text-sm flex items-center justify-center gap-2">
+              <button onClick={handleSaveSettings} disabled={isSavingSettings} className="w-full bg-indigo-600 hover:bg-indigo-700 text-white py-3.5 rounded-xl shadow-md font-black text-sm flex items-center justify-center gap-2 transition-transform active:scale-95">
                 {isSavingSettings ? <Loader2 size={18} className="animate-spin"/> : <CheckCircle2 size={18}/>} حفظ التعديلات
               </button>
 
               <div className="space-y-3 pt-4 border-t border-slate-200 dark:border-slate-700">
                 <h3 className={`text-sm font-black ${textPrimary}`}>تغيير كلمة المرور</h3>
                 <div className="flex gap-2">
-                  <input type="password" dir="ltr" value={newPassword} onChange={(e) => setNewPassword(e.target.value)} placeholder="كلمة مرور جديدة" className={`flex-1 px-4 py-3 rounded-xl border text-sm font-bold outline-none ${bgInput}`} />
-                  <button onClick={handleSavePassword} disabled={isSavingPassword} className="px-4 bg-slate-800 text-white rounded-xl text-xs font-bold">تغيير</button>
+                  <input type="password" dir="ltr" value={newPassword} onChange={(e) => setNewPassword(e.target.value)} placeholder="كلمة مرور جديدة" className={`flex-1 px-4 py-3 rounded-xl border text-sm font-bold outline-none focus:border-indigo-500 ${bgInput}`} />
+                  <button onClick={handleSavePassword} disabled={isSavingPassword} className="px-4 bg-slate-800 text-white rounded-xl text-xs font-bold transition-transform active:scale-95">تغيير</button>
                 </div>
               </div>
 
@@ -332,10 +336,10 @@ const ProfileScreen = ({
         </div>
       )}
 
-      {/* نوافذ المكافآت وحول التطبيق تعمل كما هي */}
+      {/* نوافذ المكافآت وحول التطبيق (محدثة بميزة الـ Scroll) */}
       {showInternalRewards && (
         <div className="fixed inset-0 bg-slate-900/90 backdrop-blur-sm z-[550] flex justify-center items-end sm:items-center p-0 sm:p-4 pointer-events-auto" onClick={() => setShowInternalRewards(false)}>
-          <div onClick={(e) => e.stopPropagation()} className={`${bgCard} w-full sm:max-w-md max-h-[88vh] rounded-t-[2rem] sm:rounded-[2rem] shadow-2xl flex flex-col overflow-hidden animate-fade-in-up border dark:border-slate-700`}>
+          <div onClick={(e) => e.stopPropagation()} className={`${bgCard} w-full sm:max-w-md max-h-[85vh] sm:max-h-[90vh] rounded-t-[2rem] sm:rounded-[2rem] shadow-2xl flex flex-col overflow-hidden animate-fade-in-up border dark:border-slate-700`}>
             <div className="p-5 bg-gradient-to-r from-amber-500 to-orange-500 text-white flex justify-between items-center shrink-0">
               <div className="flex items-center gap-2.5">
                 <div className="bg-white/20 p-2 rounded-xl backdrop-blur-sm"><Gift size={22}/></div>
@@ -343,7 +347,8 @@ const ProfileScreen = ({
               </div>
               <button onClick={() => setShowInternalRewards(false)} className="p-2 bg-black/15 rounded-full text-white"><X size={20}/></button>
             </div>
-            <div className="p-5 overflow-y-auto space-y-4 flex-1">
+            
+            <div className="p-5 overflow-y-auto overscroll-contain flex-1 pb-24 sm:pb-5 space-y-4 [&::-webkit-scrollbar]:hidden">
               <div className={`p-4 rounded-2xl border text-center ${isDarkMode ? 'bg-slate-800/70 border-slate-700' : 'bg-amber-50/60 border-amber-200/70'}`}>
                 <span className={`text-xs font-bold ${textSecondary}`}>إجمالي رحلاتك المكتملة</span>
                 <div className="text-3xl font-black text-amber-500 my-1">{completedTrips}</div>
@@ -369,12 +374,13 @@ const ProfileScreen = ({
 
       {showAboutModal && (
         <div className="fixed inset-0 bg-slate-900/90 backdrop-blur-sm z-[550] flex justify-center items-end sm:items-center p-0 sm:p-4 pointer-events-auto" onClick={() => setShowAboutModal(false)}>
-          <div onClick={(e) => e.stopPropagation()} className={`${bgCard} w-full sm:max-w-md max-h-[88vh] rounded-t-[2rem] sm:rounded-[2rem] shadow-2xl flex flex-col overflow-hidden animate-fade-in-up border dark:border-slate-700`}>
+          <div onClick={(e) => e.stopPropagation()} className={`${bgCard} w-full sm:max-w-md max-h-[85vh] sm:max-h-[90vh] rounded-t-[2rem] sm:rounded-[2rem] shadow-2xl flex flex-col overflow-hidden animate-fade-in-up border dark:border-slate-700`}>
             <div className="p-5 bg-gradient-to-r from-blue-600 to-indigo-600 text-white flex justify-between items-center shrink-0">
               <h2 className="text-lg font-black">حول التطبيق والسياسات</h2>
               <button onClick={() => setShowAboutModal(false)} className="p-2 bg-black/15 rounded-full"><X size={20}/></button>
             </div>
-            <div className="p-6 overflow-y-auto space-y-4 flex-1 text-sm">
+            
+            <div className="p-6 overflow-y-auto overscroll-contain flex-1 pb-24 sm:pb-6 space-y-4 text-sm [&::-webkit-scrollbar]:hidden">
               <p className={textSecondary}>"طريقنا" يهدف لتسهيل مشاركة الرحلات لتقليل الزحام والتكاليف.</p>
               <div className="p-3 bg-rose-50 border border-rose-200 rounded-xl"><p className="text-xs text-rose-700 font-bold">التطبيق غير مسؤول عن أي خلافات مالية أو أمنية، يرجى توخي الحذر والتأكد من هوية الطرف الآخر.</p></div>
             </div>
@@ -386,3 +392,6 @@ const ProfileScreen = ({
 };
 
 export default ProfileScreen;
+```
+
+جرب الكود ده دلوقتي؛ هتلاقي إنك لما تفتح إعدادات الحساب أو المكافآت أو السياسات، تقدر تسحب الشاشة وتشوف المحتوى براحتك لأقصى نقطة تحت (بفضل ה`overscroll-contain` و `pb-24`) دون أي تعليق من الموبايل! 🚀
