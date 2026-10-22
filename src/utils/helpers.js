@@ -28,6 +28,18 @@ export const timeToMinutes = (timeStr) => {
   return (parseInt(parts[0], 10) * 60) + parseInt(parts[1], 10);
 };
 
+// دالة التحقق من انتهاء الرحلة (مرور أكثر من 3 ساعات على موعدها)
+export const isTripExpired = (dateStr, timeStr) => {
+  if (!dateStr || !timeStr) return false;
+  try {
+    const tripDateTime = new Date(`${dateStr}T${timeStr}`);
+    if (isNaN(tripDateTime.getTime())) return false;
+    const now = new Date();
+    const diffHours = (now.getTime() - tripDateTime.getTime()) / (1000 * 60 * 60);
+    return diffHours > 3; 
+  } catch(e) { return false; }
+};
+
 export const formatTripDateTime = (dateStr, timeStr) => {
   if (!dateStr || !timeStr || typeof timeStr !== 'string') return "موعد غير محدد";
   
@@ -37,7 +49,7 @@ export const formatTripDateTime = (dateStr, timeStr) => {
     
     const today = new Date();
     const tomorrow = new Date(); 
-    tomorrow.setDate(tomorrow.getDate() + 1);
+    tomorrow.setDate(today.getDate() + 1);
     
     let dayText = "";
     if (tripDate.toDateString() === today.toDateString()) {
@@ -104,9 +116,6 @@ export const resizeAndConvertToBase64 = (file, maxWidth = 800, maxHeight = 800, 
   });
 };
 
-// ==========================================
-// Custom Hook: Geolocation to Egyptian City + Detailed Address
-// ==========================================
 export const useEgyptianLocation = () => {
   const [isLocating, setIsLocating] = useState(false);
   const [locationError, setLocationError] = useState('');
@@ -156,35 +165,28 @@ export const useEgyptianLocation = () => {
       async (position) => {
         const { latitude, longitude } = position.coords;
         try {
-          // استدعاء واجهة برمجة التطبيقات للحصول على العنوان بالتفصيل بالعربي
           const response = await fetch(`https://nominatim.openstreetmap.org/reverse?format=json&lat=${latitude}&lon=${longitude}&accept-language=ar`);
           const data = await response.json();
           
           if (data && data.address) {
-            // استخراج المحافظة
             const stateName = data.address.state || data.address.region || data.address.city; 
             const matchedCity = mapApiStateToEgyptCities(stateName);
 
-            // استخراج التفاصيل الدقيقة (الشارع، الحي، أو المنطقة)
             let detailedAddress = '';
-            
-            // نأخذ أهم التفاصيل المتاحة ونجمعها
             const parts = [];
             if (data.address.road) parts.push(data.address.road);
             if (data.address.suburb) parts.push(data.address.suburb);
             if (data.address.neighbourhood) parts.push(data.address.neighbourhood);
             if (data.address.town && !parts.includes(data.address.town)) parts.push(data.address.town);
             
-            // لو مفيش تفاصيل دقيقة، ناخد الاسم العام المعروض (مع حذف المحافظة والبلد عشان ميبقاش طويل جداً)
             if (parts.length > 0) {
               detailedAddress = parts.join('، ');
             } else if (data.display_name) {
               const nameArray = data.display_name.split('،');
-              detailedAddress = nameArray.slice(0, 2).join('،').trim(); // أول جزئين فقط
+              detailedAddress = nameArray.slice(0, 2).join('،').trim(); 
             }
 
             if (matchedCity) {
-              // بنبعت كائن فيه المحافظة والتفاصيل الدقيقة مع بعض
               onSuccess({ city: matchedCity, details: detailedAddress });
             } else {
               setLocationError('لم نتمكن من مطابقة محافظتك بدقة.');
@@ -203,7 +205,7 @@ export const useEgyptianLocation = () => {
         if (error.code === 1) setLocationError('يرجى إعطاء صلاحية الموقع (Location).');
         else setLocationError('تعذر تحديد موقعك الحالي.');
       },
-      { timeout: 10000, enableHighAccuracy: true } // خليناها true هنا عشان نجيب الشارع بدقة
+      { timeout: 10000, enableHighAccuracy: true } 
     );
   };
 
