@@ -63,6 +63,25 @@ export default function App() {
   const [homeCategory, setHomeCategory] = useState('travel'); 
   const [viewMode, setViewMode] = useState('list'); 
   const [filterType, setFilterType] = useState('offer'); 
+  const [isScrolling, setIsScrolling] = useState(false);
+
+  // مراقبة السكرول لإخفاء الشريط السفلي والزر العائم أثناء التصفح وإظهارهم عند التوقف
+  useEffect(() => {
+    let scrollTimer;
+    const handleWindowScroll = () => {
+      setIsScrolling(true);
+      clearTimeout(scrollTimer);
+      scrollTimer = setTimeout(() => {
+        setIsScrolling(false);
+      }, 250);
+    };
+
+    window.addEventListener('scroll', handleWindowScroll, { passive: true });
+    return () => {
+      window.removeEventListener('scroll', handleWindowScroll);
+      clearTimeout(scrollTimer);
+    };
+  }, []);
   
   const getInitialAreas = () => {
     try {
@@ -473,7 +492,6 @@ export default function App() {
       let existingStatus = 'none';
       let existingSenderId = null;
 
-      // فحص هل يوجد شات مفتوح مسبقاً لنفس هذه الرحلة للحفاظ على حالة الأزرار
       if (chatSnapMe.exists()) {
         const existingData = chatSnapMe.data();
         if (existingData.tripId === trip.id) {
@@ -542,7 +560,6 @@ export default function App() {
       else if (actionType === 'cancel_request') { 
         newStatus = 'none'; systemText = `قام ${myName} بإلغاء الطلب 🔙`; 
         
-        // إرجاع المقعد إذا كان ملغياً بعد القبول
         if (chatInfo.requestStatus === 'accepted' && chatInfo.tripId && chatInfo.tripId !== 'system') {
           try {
             const tripRef = doc(db, APP_COLLECTION_NAME, chatInfo.tripId);
@@ -726,52 +743,87 @@ export default function App() {
         </div>
       )}
 
-      <header className={`sticky top-0 z-40 border-b ${isDarkMode ? 'bg-slate-950/90 border-slate-800' : 'bg-white/90 border-slate-100 shadow-sm'} backdrop-blur-xl pointer-events-auto`}>
-        <div className="max-w-3xl mx-auto px-4 py-2.5 min-h-[68px] flex justify-between items-center w-full">
-          <div className="flex flex-col items-start gap-1">
-            <div className="flex items-center gap-2.5 cursor-pointer" onClick={() => setActiveTab('profile')}>
-              {userData?.photoURL ? ( 
-                <img src={userData.photoURL} className="w-9 h-9 rounded-full object-cover border border-indigo-200 dark:border-slate-700" alt="user" /> 
+      {/* الهيدر المنسق بالكامل في صف واحد أنيق */}
+      <header className={`sticky top-0 z-40 border-b ${isDarkMode ? 'bg-slate-950/90 border-slate-800/80' : 'bg-white/90 border-slate-200/70 shadow-sm'} backdrop-blur-xl pointer-events-auto`}>
+        <div className="max-w-2xl mx-auto px-3 sm:px-4 py-2 flex items-center justify-between gap-2 w-full">
+          
+          {/* 1. يمين الهيدر: صورة البروفايل والترحيب */}
+          <div 
+            className="flex items-center gap-2 cursor-pointer shrink-0" 
+            onClick={() => setActiveTab('profile')}
+          >
+            {userData?.photoURL ? ( 
+              <img src={userData.photoURL} className="w-9 h-9 rounded-full object-cover border border-indigo-500/30 shrink-0" alt="user" /> 
+            ) : ( 
+              <div className={`w-9 h-9 rounded-full flex items-center justify-center border shrink-0 ${isDarkMode ? 'bg-slate-800 border-slate-700' : 'bg-slate-100 border-slate-200'}`}>
+                <User size={17} className={textSecondary}/>
+              </div> 
+            )}
+            <div className="flex flex-col text-right leading-tight">
+              <span className={`text-[10px] font-bold ${textSecondary}`}>مرحباً،</span>
+              <span className={`text-xs font-black ${textPrimary} truncate max-w-[65px] sm:max-w-[90px]`}>
+                {isGuest ? 'زائر' : (userData?.name?.split(' ')[0] || 'مستخدم')}
+              </span>
+            </div>
+          </div>
+
+          {/* 2. منتصف الهيدر: كبسولة "منطقتك" بالتصميم الصغير الأنيق */}
+          <button 
+            type="button"
+            onClick={openAreaModalWithSync}
+            className={`inline-flex items-center gap-1.5 px-2.5 py-1.5 rounded-full text-[11px] font-bold border transition-all shadow-sm active:scale-95 min-w-0 max-w-[175px] sm:max-w-[240px] ${
+              isDarkMode 
+                ? 'bg-slate-900 border-slate-800 text-slate-200 hover:border-indigo-500/50' 
+                : 'bg-white border-slate-200/80 text-slate-700 hover:border-indigo-300'
+            }`}
+            title="اضغط لتعديل منطقتك الحالية"
+          >
+            <span className="w-4 h-4 rounded-full bg-indigo-500/10 text-indigo-600 dark:text-indigo-400 flex items-center justify-center shrink-0">
+              <MapPin size={11} />
+            </span>
+            <span className="text-slate-400 font-medium text-[10px] shrink-0 hidden xs:inline">منطقتك:</span>
+            <span className="text-indigo-600 dark:text-indigo-400 font-black truncate">
+              {userAreas.length > 0 ? userAreas.join('، ') : 'جميع المناطق'}
+            </span>
+            <span className="text-[9px] bg-slate-100 dark:bg-slate-800 text-slate-500 dark:text-slate-400 px-1.5 py-0.5 rounded-md shrink-0">
+              تغيير
+            </span>
+          </button>
+          
+          {/* 3. يسار الهيدر: جرس الإشعارات + اسم ولوجو "طريقنا" مظبوطين بالكامل */}
+          <div className="flex items-center gap-1.5 sm:gap-2 shrink-0">
+            {!isGuest && (
+              <button 
+                type="button"
+                className={`relative p-2 rounded-full border transition-colors shrink-0 ${
+                  isDarkMode 
+                    ? 'bg-slate-900 border-slate-800 hover:bg-slate-800 text-slate-300' 
+                    : 'bg-slate-100 border-slate-200/70 hover:bg-slate-200 text-slate-600'
+                }`} 
+                onClick={() => setShowNotificationsModal(true)}
+              >
+                <Bell size={17} />
+                {notifications.filter(n => !n.read).length > 0 && (
+                  <span className="absolute top-0.5 right-0.5 w-2.5 h-2.5 bg-rose-500 rounded-full border-2 border-white dark:border-slate-900"></span>
+                )}
+              </button>
+            )}
+
+            <div 
+              className="flex items-center gap-1.5 cursor-pointer shrink-0" 
+              onClick={() => { setActiveTab('home'); setViewMode('list'); }}
+            >
+              <span className="font-black text-sm sm:text-base text-indigo-600 dark:text-indigo-400 tracking-tight">طريقنا</span>
+              {appSettings?.logo ? ( 
+                <img src={appSettings.logo} className="w-8 h-8 object-contain rounded-xl bg-white p-0.5 border border-slate-200/60 dark:border-slate-800 shadow-sm shrink-0" alt="Logo"/> 
               ) : ( 
-                <div className={`w-9 h-9 rounded-full flex items-center justify-center border ${isDarkMode ? 'bg-slate-800 border-slate-700' : 'bg-white border-slate-200'}`}>
-                  <User size={17} className={textSecondary}/>
+                <div className="bg-indigo-600 text-white p-1.5 rounded-xl shadow-sm shrink-0">
+                  <Car size={18}/>
                 </div> 
               )}
-              <div className="flex flex-col text-right">
-                <span className={`text-[10px] font-medium leading-none ${textSecondary}`}>مرحباً،</span>
-                <span className={`text-xs sm:text-sm font-black ${textPrimary} leading-tight mt-0.5`}>{isGuest ? 'زائر' : (userData?.name?.split(' ')[0] || 'مستخدم')}</span>
-              </div>
             </div>
+          </div>
 
-            <button 
-              type="button"
-              onClick={openAreaModalWithSync}
-              className="flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-indigo-50 hover:bg-indigo-100 dark:bg-indigo-950/50 dark:hover:bg-indigo-900/60 border border-indigo-200/80 dark:border-indigo-800/70 transition-all active:scale-95"
-              title="اضغط لتعديل منطقتك الحالية"
-            >
-              <MapPin size={11} className="text-indigo-600 dark:text-indigo-400 shrink-0" />
-              <span className="text-[10px] font-bold text-slate-600 dark:text-slate-300">منطقتك الحالية:</span>
-              <span className="text-[10px] font-black text-indigo-600 dark:text-indigo-400 max-w-[115px] sm:max-w-[180px] truncate">
-                {userAreas.length > 0 ? userAreas.join('، ') : 'جميع المناطق'}
-              </span>
-              <span className="text-[9px] font-black bg-indigo-600 text-white px-1.5 py-0.5 rounded-md flex items-center gap-0.5 mr-0.5">
-                <Edit2 size={8} /> تعديل
-              </span>
-            </button>
-          </div>
-          
-          <div className="flex items-center gap-3">
-            {!isGuest && (
-              <div className="relative cursor-pointer bg-slate-100 dark:bg-slate-800 p-2 rounded-full hover:bg-slate-200 dark:hover:bg-slate-700 transition-colors" onClick={() => setShowNotificationsModal(true)}>
-                <Bell size={20} className={textSecondary} />
-                {notifications.filter(n => !n.read).length > 0 && (<span className="absolute top-0 right-0 w-2.5 h-2.5 bg-rose-500 rounded-full border-2 border-white dark:border-slate-800"></span>)}
-              </div>
-            )}
-            <div className="flex items-center gap-2 cursor-pointer" onClick={() => {setActiveTab('home'); setViewMode('list');}}>
-              <span className="font-black text-xl text-indigo-600 dark:text-indigo-400">طريقنا</span>
-              {appSettings?.logo ? ( <img src={appSettings.logo} className="w-8 h-8 object-contain rounded-md" alt="Logo"/> ) : ( <div className="bg-indigo-600 text-white p-1.5 rounded-lg"><Car size={20}/></div> )}
-            </div>
-          </div>
         </div>
       </header>
 
@@ -828,13 +880,16 @@ export default function App() {
         </div>
       )}
 
+      {/* الزر العائم (+) يختفي مع السكرول ويظهر عند التوقف */}
       {activeTab === 'home' && !isGuest && (
         <button 
           onClick={() => {
             if (checkUserRestriction('trip')) return;
             setShowAddModal(true);
           }} 
-          className="fixed bottom-[90px] right-5 bg-indigo-600 text-white w-14 h-14 rounded-full shadow-lg flex items-center justify-center z-50 hover:bg-indigo-700 transition-transform"
+          className={`fixed bottom-[90px] right-5 bg-indigo-600 text-white w-14 h-14 rounded-full shadow-lg flex items-center justify-center z-50 hover:bg-indigo-700 transition-all duration-300 ${
+            isScrolling ? 'translate-y-28 opacity-0 pointer-events-none scale-75' : 'translate-y-0 opacity-100 scale-100'
+          }`}
         >
           <Plus size={28} />
         </button>
@@ -881,7 +936,6 @@ export default function App() {
                   <input type="text" placeholder="مكان التحرك بالتفصيل (مثل: أمام مول العرب)" value={newTrip.fromDetails} onChange={e => setNewTrip({...newTrip, fromDetails: e.target.value})} className={`w-full p-3.5 rounded-xl border font-medium text-xs outline-none ${bgInput}`}/>
                 </div>
 
-                {/* خانة خط السير: اختيار المناطق التي سيمر عليها */}
                 <div className="space-y-2 pt-1">
                   <div className="flex items-center justify-between px-1">
                     <label className="text-[11px] font-black text-indigo-600 dark:text-indigo-400 flex items-center gap-1">
@@ -1037,9 +1091,6 @@ export default function App() {
         <StationModal station={selectedStation} user={user} isAdmin={isAdmin} isGuest={isGuest} isDarkMode={isDarkMode} onClose={() => setSelectedStation(null)} triggerToast={triggerToast}/>
       )}
 
-      {/* 
-        الخطوة الأولى: تمرير realTrips و openChatFromTrip هنا إلى ProfileScreen
-      */}
       {activeTab === 'profile' && (
         <ProfileScreen 
           user={user} 
@@ -1095,7 +1146,10 @@ export default function App() {
         <LiveTrackerBar activeTrackers={activeTrackers} isDarkMode={isDarkMode} user={user} setActiveChat={setActiveChat} setActiveTab={setActiveTab} setViewMode={setViewMode} handleTripAction={(chatInfo, actionType) => handleTripAction(chatInfo, actionType)}/>
       )}
 
-      <nav className={`fixed bottom-0 w-full z-[100] border-t ${isDarkMode ? 'bg-slate-950 border-slate-800' : 'bg-white border-slate-100'} pointer-events-auto`}>
+      {/* الشريط السفلي يختفي مع السكرول ويظهر عند التوقف */}
+      <nav className={`fixed bottom-0 w-full z-[100] border-t ${isDarkMode ? 'bg-slate-950 border-slate-800' : 'bg-white border-slate-100'} pointer-events-auto transition-all duration-300 ${
+        isScrolling ? 'translate-y-full opacity-0 pointer-events-none' : 'translate-y-0 opacity-100'
+      }`}>
         <div className="flex justify-around items-center h-[70px] w-full max-w-md md:max-w-2xl mx-auto px-2 pb-2">
           <button onClick={() => setActiveTab('home')} className={`flex flex-col items-center justify-center gap-1 w-20 transition-colors ${activeTab === 'home' ? 'text-indigo-600 dark:text-indigo-400' : textSecondary}`}><Home size={22} /><span className="text-[10px] font-bold">الرئيسية</span></button>
           <button onClick={() => setActiveTab('inbox')} className={`flex flex-col items-center justify-center gap-1 w-20 relative transition-colors ${activeTab === 'inbox' ? 'text-indigo-600 dark:text-indigo-400' : textSecondary}`}>
