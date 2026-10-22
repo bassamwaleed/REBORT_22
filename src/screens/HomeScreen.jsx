@@ -14,6 +14,28 @@ const HomeScreen = ({
   
   const [stationSearchQuery, setStationSearchQuery] = useState('');
   const [showCompletedTrips, setShowCompletedTrips] = useState(false); 
+  const [isScrolling, setIsScrolling] = useState(false);
+
+  // تأثير إخفاء الشريط السفلي أثناء السكرول وإظهاره عند التوقف
+  useEffect(() => {
+    let scrollTimeout;
+    const handleScroll = () => {
+      setIsScrolling(true);
+      document.body.classList.add('user-is-scrolling');
+      clearTimeout(scrollTimeout);
+      scrollTimeout = setTimeout(() => {
+        setIsScrolling(false);
+        document.body.classList.remove('user-is-scrolling');
+      }, 250);
+    };
+
+    window.addEventListener('scroll', handleScroll, { passive: true });
+    return () => {
+      window.removeEventListener('scroll', handleScroll);
+      clearTimeout(scrollTimeout);
+      document.body.classList.remove('user-is-scrolling');
+    };
+  }, []);
 
   const activeUserAreas = filterFrom 
     ? [filterFrom] 
@@ -231,7 +253,7 @@ const HomeScreen = ({
   const bgCard = isDarkMode ? 'bg-slate-900 border-slate-800' : 'bg-white border-slate-200';
 
   return (
-    <main className="flex-1 w-full max-w-2xl mx-auto px-3 sm:px-4 py-3 relative z-10 pb-28">
+    <main className="flex-1 w-full max-w-2xl mx-auto px-3 sm:px-4 pt-2 pb-28 relative z-10">
       
       <style>{`
         @keyframes scrollRoutesRtl {
@@ -244,66 +266,62 @@ const HomeScreen = ({
         .station-card-wrapper:hover .animate-scrolling-routes {
           animation-play-state: paused;
         }
+        /* إخفاء ناعم للشريط السفلي والزر العائم أثناء السكرول */
+        nav.fixed.bottom-0,
+        .bottom-nav-bar,
+        button.fixed.bottom-20,
+        button.fixed.bottom-24 {
+          transition: transform 0.3s cubic-bezier(0.4, 0, 0.2, 1), opacity 0.25s ease !important;
+        }
+        body.user-is-scrolling nav.fixed.bottom-0,
+        body.user-is-scrolling .bottom-nav-bar {
+          transform: translateY(100%) !important;
+          opacity: 0 !important;
+          pointer-events: none !important;
+        }
+        body.user-is-scrolling button.fixed.bottom-20,
+        body.user-is-scrolling button.fixed.bottom-24 {
+          transform: translateY(120px) scale(0.8) !important;
+          opacity: 0 !important;
+          pointer-events: none !important;
+        }
       `}</style>
 
-      {/* 1. شريط منطقتك الحالية المنسق والمدمج + النص الترحيبي */}
-      <div className="flex items-center justify-between gap-2 mb-3">
-        {onOpenAreaModal && (
-          <button
-            onClick={onOpenAreaModal}
-            className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full text-[11px] font-bold border transition-all shadow-sm active:scale-95 ${
-              isDarkMode 
-                ? 'bg-slate-900 border-slate-800 text-slate-200 hover:border-indigo-500/50' 
-                : 'bg-white border-slate-200/80 text-slate-700 hover:border-indigo-300'
-            }`}
-          >
-            <span className="w-5 h-5 rounded-full bg-indigo-500/10 text-indigo-600 dark:text-indigo-400 flex items-center justify-center shrink-0">
-              <MapPin size={12} />
-            </span>
-            <span className="text-slate-400 font-medium">منطقتك:</span>
-            <span className="text-indigo-600 dark:text-indigo-400 font-black truncate max-w-[140px] sm:max-w-[220px]">
-              {activeUserAreas.length > 0 ? activeUserAreas.join('، ') : 'حدد منطقتك الآن'}
-            </span>
-            <span className="text-[9px] bg-slate-100 dark:bg-slate-800 text-slate-500 px-1.5 py-0.5 rounded-md mr-0.5">
-              تغيير
-            </span>
-          </button>
-        )}
+      {/* 1. البانر في الأعلى مباشرة بارتفاع أكبر ومريح للعين */}
+      {viewMode === 'list' && (
+        <div className="mb-3.5 animate-fade-in-up">
+          {appSettings?.bannerText && (
+            <div className="mb-2 px-2 border-r-4 border-indigo-500">
+              <h2 className={`font-black text-sm sm:text-base ${textPrimary} leading-relaxed`}>{appSettings.bannerText}</h2>
+            </div>
+          )}
 
-        {appSettings?.bannerText && (
-          <div className="px-2 border-r-2 border-indigo-500 truncate flex-1 text-right">
-            <h2 className={`font-black text-xs sm:text-sm ${textPrimary} truncate`}>{appSettings.bannerText}</h2>
-          </div>
-        )}
-      </div>
-
-      {/* 2. البانر بحجم أنيق ومناسب */}
-      {viewMode === 'list' && banners.length > 0 && (
-        <div className="mb-3 animate-fade-in-up">
-          <div 
-            className="relative w-full h-32 sm:h-40 rounded-2xl overflow-hidden shadow-sm border dark:border-slate-800 bg-slate-100 dark:bg-slate-800 group"
-            onTouchStart={onTouchStart} onTouchMove={onTouchMove} onTouchEnd={onTouchEndHandler}
-          >
-             {banners.map((imgUrl, idx) => (
-               <img key={idx} src={imgUrl} alt={`Banner ${idx}`} className={`absolute inset-0 w-full h-full object-cover transition-opacity duration-500 ease-in-out ${idx === currentSlide ? 'opacity-100 z-10' : 'opacity-0 z-0'}`} />
-             ))}
-             {banners.length > 1 && (
-               <>
-                 <button onClick={prevSlide} className="absolute right-2 top-1/2 -translate-y-1/2 z-20 bg-black/30 hover:bg-black/50 text-white p-1.5 rounded-full backdrop-blur-sm transition-all md:opacity-0 group-hover:opacity-100"><ChevronRight size={16}/></button>
-                 <button onClick={nextSlide} className="absolute left-2 top-1/2 -translate-y-1/2 z-20 bg-black/30 hover:bg-black/50 text-white p-1.5 rounded-full backdrop-blur-sm transition-all md:opacity-0 group-hover:opacity-100"><ChevronLeft size={16}/></button>
-                 <div className="absolute bottom-2 left-0 right-0 flex justify-center gap-1.5 z-20">
-                   {banners.map((_, idx) => (
-                     <button key={idx} onClick={() => setCurrentSlide(idx)} className={`h-1.5 rounded-full transition-all duration-300 shadow-sm ${idx === currentSlide ? 'w-5 bg-indigo-600' : 'w-1.5 bg-white/80 hover:bg-white'}`}></button>
-                   ))}
-                 </div>
-               </>
-             )}
-          </div>
+          {banners.length > 0 && (
+            <div 
+              className="relative w-full h-40 sm:h-48 rounded-[1.5rem] overflow-hidden shadow-md border dark:border-slate-800 bg-slate-100 dark:bg-slate-800 group"
+              onTouchStart={onTouchStart} onTouchMove={onTouchMove} onTouchEnd={onTouchEndHandler}
+            >
+               {banners.map((imgUrl, idx) => (
+                 <img key={idx} src={imgUrl} alt={`Banner ${idx}`} className={`absolute inset-0 w-full h-full object-cover transition-opacity duration-500 ease-in-out ${idx === currentSlide ? 'opacity-100 z-10' : 'opacity-0 z-0'}`} />
+               ))}
+               {banners.length > 1 && (
+                 <>
+                   <button onClick={prevSlide} className="absolute right-2.5 top-1/2 -translate-y-1/2 z-20 bg-black/35 hover:bg-black/55 text-white p-1.5 rounded-full backdrop-blur-sm transition-all md:opacity-0 group-hover:opacity-100"><ChevronRight size={18}/></button>
+                   <button onClick={nextSlide} className="absolute left-2.5 top-1/2 -translate-y-1/2 z-20 bg-black/35 hover:bg-black/55 text-white p-1.5 rounded-full backdrop-blur-sm transition-all md:opacity-0 group-hover:opacity-100"><ChevronLeft size={18}/></button>
+                   <div className="absolute bottom-2.5 left-0 right-0 flex justify-center gap-1.5 z-20">
+                     {banners.map((_, idx) => (
+                       <button key={idx} onClick={() => setCurrentSlide(idx)} className={`h-1.5 rounded-full transition-all duration-300 shadow-sm ${idx === currentSlide ? 'w-6 bg-indigo-600' : 'w-2 bg-white/80 hover:bg-white'}`}></button>
+                     ))}
+                   </div>
+                 </>
+               )}
+            </div>
+          )}
         </div>
       )}
 
-      {/* 3. شريط الأيقونات المربعة في صف واحد (الأقسام + وضع العرض) */}
-      <div className="grid grid-cols-4 gap-2 mb-3 pointer-events-auto relative z-10">
+      {/* 2. شريط الأيقونات المربعة في صف واحد (الأقسام + وضع العرض) */}
+      <div className="grid grid-cols-4 gap-2 mb-3.5 pointer-events-auto relative z-10">
         {/* مربع سفريات */}
         <button
           onClick={() => { setViewMode('list'); setHomeCategory('travel'); setFilterTo(''); setShowCompletedTrips(false); }}
@@ -378,7 +396,7 @@ const HomeScreen = ({
           {(homeCategory === 'travel' || homeCategory === 'parcel') && (
             <div className={`mb-4 p-2 rounded-2xl border shadow-sm space-y-2 ${isDarkMode ? 'bg-slate-900/90 border-slate-800' : 'bg-white border-slate-200/80'}`}>
               
-              {/* الصف الأول من الفلتر: يجمع نوع الرحلة (سائق/راكب) مع الحالة (المتاحة/الأرشيف) في سطر واحد مدمج */}
+              {/* الصف الأول من الفلتر: يجمع نوع الرحلة (سائق/راكب) مع الحالة (المتاحة/الأرشيف) */}
               <div className="flex items-center justify-between gap-1.5 overflow-x-auto [&::-webkit-scrollbar]:hidden">
                 {homeCategory === 'travel' && (
                   <div className={`flex p-0.5 rounded-xl border shrink-0 ${isDarkMode ? 'bg-slate-800 border-slate-700' : 'bg-slate-100 border-slate-200'}`}>
