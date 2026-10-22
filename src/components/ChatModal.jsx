@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { collection, onSnapshot, addDoc, doc, setDoc, serverTimestamp, getDoc, updateDoc } from 'firebase/firestore';
-import { ChevronLeft, Users, User, Loader2, Send, ShieldAlert, CheckCircle2, MessageCircle, Ban, Star, Phone, ShieldCheck, Check, X, Shield } from 'lucide-react';
+import { ChevronLeft, Users, User, Loader2, Send, ShieldAlert, CheckCircle2, MessageCircle, Ban, Star, Phone, ShieldCheck, Check, X } from 'lucide-react';
 
 import { db, USERS_COLLECTION } from '../firebase';
 import { safeMillis } from '../utils/helpers';
@@ -28,7 +28,6 @@ const ChatModal = ({ baseChatData, user, userData, isDarkMode, onClose, triggerT
     "تمام، في انتظارك 👍"
   ];
 
-  // المراقبة الحية لبيانات الشات
   useEffect(() => {
     if(!user || !baseChatData?.chatId) return;
     
@@ -63,14 +62,6 @@ const ChatModal = ({ baseChatData, user, userData, isDarkMode, onClose, triggerT
     return () => unsub();
   }, [user, baseChatData?.chatId, baseChatData?.tripId]);
 
-  // تحديث حالة "تمت القراءة" لإخفاء النقطة الحمراء بمجرد فتح الشات
-  useEffect(() => {
-    if (liveChatInfo?.lastSenderId && liveChatInfo.lastSenderId !== user?.uid && !liveChatInfo.isRead) {
-      updateDoc(doc(db, `inbox_${user.uid}`, liveChatInfo.chatId), { isRead: true }).catch(()=>{});
-    }
-  }, [liveChatInfo?.lastSenderId, liveChatInfo?.isRead, liveChatInfo?.chatId, user?.uid]);
-
-  // جلب رقم موبايل الطرف الآخر إذا لم يكن متوفراً
   useEffect(() => {
     const fetchOtherPhone = async () => {
       if (!liveChatInfo?.otherPersonId || liveChatInfo.otherPersonId === 'system' || liveChatInfo?.isGroup) return;
@@ -86,7 +77,6 @@ const ChatModal = ({ baseChatData, user, userData, isDarkMode, onClose, triggerT
     fetchOtherPhone();
   }, [liveChatInfo?.otherPersonId, liveChatInfo?.isGroup]);
 
-  // جلب الرسائل
   useEffect(() => {
     if (!user || !baseChatData?.chatId) return;
     setIsChatLoading(true);
@@ -114,6 +104,7 @@ const ChatModal = ({ baseChatData, user, userData, isDarkMode, onClose, triggerT
         
         await updateDoc(userRef, { rating: newRating, ratingsCount: newCount });
       }
+      // حفظ حالة التقييم في الـ inbox لمنع التقييم المتكرر
       await setDoc(doc(db, `inbox_${user.uid}`, baseChatData.chatId), { hasRated: true }, { merge: true });
       setHasRated(true);
       triggerToast('تم إرسال التقييم بنجاح! شكراً لك ⭐');
@@ -124,15 +115,10 @@ const ChatModal = ({ baseChatData, user, userData, isDarkMode, onClose, triggerT
 
   const sendTextMessage = async (textToSend) => {
     if (!textToSend?.trim() || !baseChatData?.chatId) return;
-    
-    const isSupportChat = baseChatData.tripId === 'system';
-
-    // السماح بالتواصل مع الدعم الفني حتى لو كان المستخدم محظوراً
-    if (!isSupportChat && userData && (userData.isBanned || (userData.fullBanUntil && Number(userData.fullBanUntil) > Date.now()) || (userData.chatBanUntil && Number(userData.chatBanUntil) > Date.now()))) {
+    if (userData && (userData.isBanned || (userData.fullBanUntil && Number(userData.fullBanUntil) > Date.now()) || (userData.chatBanUntil && Number(userData.chatBanUntil) > Date.now()))) {
       triggerToast('🚫 حسابك مقيد حالياً من إرسال الرسائل بقرار من الإدارة');
       return;
     }
-
     const chatId = baseChatData.chatId;
     try {
       await addDoc(collection(db, `chats_${chatId}`), { 
@@ -142,10 +128,8 @@ const ChatModal = ({ baseChatData, user, userData, isDarkMode, onClose, triggerT
         senderPhoto: userData?.photoURL || null, 
         createdAt: serverTimestamp() 
       });
-
-      // إضافة isRead: false للطرف الآخر ليظهر له إشعار بالنقطة الحمراء
-      const inboxUpdateMe = { lastMessage: textToSend.trim(), lastSenderId: user.uid, lastMessageTime: Date.now(), isRead: true };
-      const inboxUpdateOther = { ...inboxUpdateMe, otherPersonId: user.uid, otherPersonName: userData?.name || 'مستخدم', otherPersonPhoto: userData?.photoURL || null, otherPersonVerified: userData?.isVerified || false, isRead: false };
+      const inboxUpdateMe = { lastMessage: textToSend.trim(), lastSenderId: user.uid, lastMessageTime: Date.now() };
+      const inboxUpdateOther = { ...inboxUpdateMe, otherPersonId: user.uid, otherPersonName: userData?.name || 'مستخدم', otherPersonPhoto: userData?.photoURL || null, otherPersonVerified: userData?.isVerified || false };
       
       await setDoc(doc(db, `inbox_${user.uid}`, chatId), inboxUpdateMe, { merge: true });
       if (liveChatInfo.otherPersonId && !liveChatInfo.isGroup && liveChatInfo.otherPersonId !== 'system') { 
@@ -175,21 +159,13 @@ const ChatModal = ({ baseChatData, user, userData, isDarkMode, onClose, triggerT
   const isActualDriver = (liveChatInfo?.tripType === 'offer' || liveChatInfo?.tripType === 'delivery') ? isTripOwner : !isTripOwner;
   const isRequestSender = liveChatInfo?.requestSenderId === user?.uid;
   const isApprovedState = ['accepted', 'moving', 'arrived', 'in_progress_trip'].includes(reqStatus);
-  const isSupportChat = liveChatInfo?.tripId === 'system';
-
-  // تحديد لون الهيدر بناءً على نوع الشات
-  const headerBgColor = liveChatInfo?.isGroup 
-    ? 'bg-purple-600' 
-    : isSupportChat 
-      ? 'bg-slate-800' 
-      : 'bg-indigo-600';
 
   return (
     <div className="fixed inset-0 bg-slate-900/95 backdrop-blur-md z-[400] flex justify-center items-end sm:items-center p-0 sm:p-4 pointer-events-auto">
       <div className={`bg-white dark:bg-slate-900 w-full h-[92vh] sm:h-[680px] sm:max-w-md md:max-w-2xl rounded-t-[2rem] sm:rounded-[2rem] shadow-2xl flex flex-col overflow-hidden animate-fade-in-up relative border dark:border-slate-700`}>
         
         {/* الهيدر */}
-        <div className={`text-white p-4 flex items-center justify-between shadow-md z-20 ${headerBgColor}`}>
+        <div className={`text-white p-4 flex items-center justify-between shadow-md z-20 ${liveChatInfo?.isGroup ? 'bg-purple-600' : 'bg-indigo-600'}`}>
           <div className="flex items-center gap-3 overflow-hidden">
             <button onClick={onClose} className="p-2 rounded-full hover:bg-black/20 transition-colors shrink-0"><ChevronLeft size={24} /></button>
             <div className="w-11 h-11 bg-white/20 rounded-full flex items-center justify-center shrink-0 font-bold overflow-hidden border border-white/30">
@@ -199,7 +175,6 @@ const ChatModal = ({ baseChatData, user, userData, isDarkMode, onClose, triggerT
               <div className="flex items-center gap-1">
                 <h3 className="font-black text-sm truncate">{liveChatInfo?.otherPersonName || 'مستخدم'}</h3>
                 {liveChatInfo?.otherPersonVerified && <ShieldCheck size={14} className="text-emerald-300 shrink-0" title="موثق"/>}
-                {isSupportChat && <span className="text-[9px] bg-blue-500/80 text-white px-2 py-0.5 rounded-full border border-blue-400 shadow-sm flex items-center gap-0.5"><Shield size={10}/> الدعم الفني</span>}
               </div>
               {!liveChatInfo?.isGroup && (
                 <span className="text-[11px] text-indigo-100 font-medium truncate opacity-90">{liveChatInfo?.tripInfo || 'محادثة'}</span>
@@ -208,8 +183,8 @@ const ChatModal = ({ baseChatData, user, userData, isDarkMode, onClose, triggerT
           </div>
 
           <div className="flex items-center gap-1.5 shrink-0">
-            {/* أزرار الاتصال والواتساب تظهر بعد القبول لو الرقم متاح (ولا تظهر في شات الدعم) */}
-            {isApprovedState && otherUserPhone && !isSupportChat && (
+            {/* أزرار الاتصال والواتساب تظهر بعد القبول لو الرقم متاح */}
+            {isApprovedState && otherUserPhone && (
               <>
                 <a 
                   href={`tel:${otherUserPhone}`} 
@@ -230,7 +205,7 @@ const ChatModal = ({ baseChatData, user, userData, isDarkMode, onClose, triggerT
               </>
             )}
 
-            {!isSupportChat && reqStatus !== 'blocked' && (
+            {reqStatus !== 'blocked' && (
               showBlockConfirm ? (
                 <div className="flex items-center gap-1 bg-black/30 p-1 rounded-full animate-fade-in-up">
                   <button onClick={() => onActionClick('block')} className="p-1.5 bg-rose-500 text-white rounded-full hover:bg-rose-600" title="تأكيد الحظر"><Check size={14}/></button>
@@ -246,7 +221,7 @@ const ChatModal = ({ baseChatData, user, userData, isDarkMode, onClose, triggerT
         </div>
 
         {/* نافذة تأكيد وصول الكابتن للراكب */}
-        {showPassengerConfirm && !isActualDriver && !isSupportChat && (
+        {showPassengerConfirm && !isActualDriver && (
           <div className="absolute top-20 left-4 right-4 bg-emerald-50 dark:bg-slate-800 border-2 border-emerald-500 dark:border-emerald-600 rounded-2xl p-4 shadow-xl z-50 animate-fade-in-up">
             <div className="flex items-start gap-3">
               <CheckCircle2 size={24} className="text-emerald-500 shrink-0 mt-1"/>
@@ -262,13 +237,13 @@ const ChatModal = ({ baseChatData, user, userData, isDarkMode, onClose, triggerT
           </div>
         )}
 
-        {/* أدوات التحكم في الرحلة (مخفية تماماً في شات الدعم الفني أو الجروب) */}
-        {!isSupportChat && !liveChatInfo?.isGroup && (
-          reqStatus === 'blocked' ? (
-            <div className="p-4 bg-rose-50 dark:bg-rose-900/30 text-rose-600 dark:text-rose-400 text-center font-bold text-xs border-b border-rose-200 dark:border-rose-800">
-              تم حظر التعامل في هذا الشات 🚫
-            </div>
-          ) : (
+        {}
+        {reqStatus === 'blocked' ? (
+          <div className="p-4 bg-rose-50 dark:bg-rose-900/30 text-rose-600 dark:text-rose-400 text-center font-bold text-xs border-b border-rose-200 dark:border-rose-800">
+            تم حظر التعامل في هذا الشات 🚫
+          </div>
+        ) : (
+          !liveChatInfo?.isGroup && liveChatInfo?.tripInfo !== 'system' && (
             <div className={`p-3 border-b text-center shadow-sm z-10 space-y-3 ${isDarkMode ? 'bg-slate-800 border-slate-700' : 'bg-slate-50 border-slate-200'}`}>
               
               {reqStatus === 'none' && !isTripOwner && ( 
@@ -338,16 +313,12 @@ const ChatModal = ({ baseChatData, user, userData, isDarkMode, onClose, triggerT
           )
         )}
 
+        {}
         <div className={`flex-1 overflow-y-auto p-4 space-y-4 ${isDarkMode ? 'bg-slate-900/80' : 'bg-slate-100/50'}`}>
           {isChatLoading ? ( 
             <div className="flex justify-center items-center h-full"><Loader2 className="animate-spin text-indigo-500" size={30}/></div> 
           ) : messages.length === 0 ? ( 
-            <div className="flex flex-col items-center justify-center h-full text-slate-400">
-              <MessageCircle size={40} className="mb-3 opacity-50"/>
-              <p className="text-sm font-bold">
-                {isSupportChat ? 'كيف يمكننا مساعدتك اليوم؟' : 'ابدأ المحادثة لتنسيق تفاصيل المشوار!'}
-              </p>
-            </div> 
+            <div className="flex flex-col items-center justify-center h-full text-slate-400"><MessageCircle size={40} className="mb-3 opacity-50"/><p className="text-sm font-bold">ابدأ المحادثة لتنسيق تفاصيل المشوار!</p></div> 
           ) : messages.map(msg => {
             const isMe = user && msg.senderId === user.uid;
             if (msg.isSystem) return (<div key={msg.id} className="flex justify-center my-3"><span className="text-[10px] font-bold px-4 py-2 bg-indigo-100 dark:bg-indigo-900/50 text-indigo-700 dark:text-indigo-300 rounded-full border border-indigo-200 dark:border-indigo-800/50 text-center">{msg.text || ''}</span></div>);
@@ -373,20 +344,18 @@ const ChatModal = ({ baseChatData, user, userData, isDarkMode, onClose, triggerT
         {reqStatus !== 'blocked' && (
           <div className={`border-t ${isDarkMode ? 'bg-slate-800 border-slate-700' : 'bg-white border-slate-200'}`}>
             {/* الردود السريعة */}
-            {!isSupportChat && (
-              <div className="flex gap-2 overflow-x-auto px-3 pt-2.5 pb-1 [&::-webkit-scrollbar]:hidden [-ms-overflow-style:none] [scrollbar-width:none]">
-                {quickReplies.map((reply, i) => (
-                  <button
-                    key={i}
-                    type="button"
-                    onClick={() => sendTextMessage(reply)}
-                    className={`shrink-0 text-[11px] font-bold px-3 py-1.5 rounded-full border transition-all active:scale-95 ${isDarkMode ? 'bg-slate-700/60 border-slate-600 text-slate-200 hover:bg-indigo-600 hover:text-white hover:border-indigo-500' : 'bg-slate-50 border-slate-200 text-slate-600 hover:bg-indigo-50 hover:text-indigo-600 hover:border-indigo-200'}`}
-                  >
-                    {reply}
-                  </button>
-                ))}
-              </div>
-            )}
+            <div className="flex gap-2 overflow-x-auto px-3 pt-2.5 pb-1 [&::-webkit-scrollbar]:hidden [-ms-overflow-style:none] [scrollbar-width:none]">
+              {quickReplies.map((reply, i) => (
+                <button
+                  key={i}
+                  type="button"
+                  onClick={() => sendTextMessage(reply)}
+                  className={`shrink-0 text-[11px] font-bold px-3 py-1.5 rounded-full border transition-all active:scale-95 ${isDarkMode ? 'bg-slate-700/60 border-slate-600 text-slate-200 hover:bg-indigo-600 hover:text-white hover:border-indigo-500' : 'bg-slate-50 border-slate-200 text-slate-600 hover:bg-indigo-50 hover:text-indigo-600 hover:border-indigo-200'}`}
+                >
+                  {reply}
+                </button>
+              ))}
+            </div>
 
             <form onSubmit={handleSendMessage} className="p-3 flex gap-2 items-center">
               <input type="text" value={newMessage} onChange={(e) => setNewMessage(e.target.value)} placeholder="اكتب رسالتك..." className={`flex-1 rounded-2xl px-4 py-3.5 text-sm outline-none focus:ring-2 focus:ring-indigo-500 ${bgInput}`} />
@@ -402,4 +371,3 @@ const ChatModal = ({ baseChatData, user, userData, isDarkMode, onClose, triggerT
 };
 
 export default ChatModal;
-```eof
