@@ -359,7 +359,7 @@ const HomeScreen = ({
             </span>
           )}
           <Package size={19} className="mb-1 shrink-0" />
-          <span className="text-[11px] font-black tracking-tight">أمانات</span>
+          <span className="text-[11px] font-black tracking-tight">توصيل </span>
         </button>
 
         {/* مربع مواقف مصر */}
@@ -404,13 +404,13 @@ const HomeScreen = ({
                       onClick={() => setFilterType('offer')} 
                       className={`px-2.5 py-1.5 rounded-lg text-[11px] font-black transition-all ${filterType === 'offer' ? 'bg-indigo-600 text-white shadow-sm' : 'text-slate-500 dark:text-slate-400'}`}
                     >
-                      🚗 سائق
+                       سائق
                     </button>
                     <button 
                       onClick={() => setFilterType('request')} 
                       className={`px-2.5 py-1.5 rounded-lg text-[11px] font-black transition-all ${filterType === 'request' ? 'bg-indigo-600 text-white shadow-sm' : 'text-slate-500 dark:text-slate-400'}`}
                     >
-                      🙋‍♂️ راكب
+                       راكب
                     </button>
                   </div>
                 )}
@@ -421,7 +421,7 @@ const HomeScreen = ({
                     className={`flex-1 py-1.5 px-2 rounded-lg text-[11px] font-black flex items-center justify-center gap-1 transition-all ${!showCompletedTrips ? 'bg-white dark:bg-slate-700 text-indigo-600 dark:text-indigo-400 shadow-sm' : 'text-slate-500'}`}
                   >
                     <Compass size={13}/> 
-                    <span>المتاحة</span>
+                    <span>رحلات متاحة</span>
                     <span className={`px-1.5 py-0.2 rounded-full text-[9px] ${!showCompletedTrips ? 'bg-indigo-100 text-indigo-700 dark:bg-indigo-900/60 dark:text-indigo-300' : 'bg-slate-200 text-slate-600 dark:bg-slate-800 dark:text-slate-400'}`}>
                       {availableTripsList.length}
                     </span>
@@ -431,7 +431,7 @@ const HomeScreen = ({
                     className={`flex-1 py-1.5 px-2 rounded-lg text-[11px] font-black flex items-center justify-center gap-1 transition-all ${showCompletedTrips ? 'bg-white dark:bg-slate-700 text-emerald-600 dark:text-emerald-400 shadow-sm' : 'text-slate-500'}`}
                   >
                     <CheckCircle2 size={13}/> 
-                    <span>الأرشيف</span>
+                    <span>رحلات مكتمله</span>
                     <span className={`px-1.5 py-0.2 rounded-full text-[9px] ${showCompletedTrips ? 'bg-emerald-100 text-emerald-700 dark:bg-emerald-900/60 dark:text-emerald-300' : 'bg-slate-200 text-slate-600 dark:bg-slate-800 dark:text-slate-400'}`}>
                       {completedTripsList.length}
                     </span>
