@@ -387,8 +387,6 @@ export default function App() {
         userName: userData?.name || 'مستخدم', 
         userPhoto: userData?.photoURL || null, 
         userPhone: userData?.phone || '', 
-        carModel: userData?.carModel || null, // إضافة موديل السيارة للرحلة
-        carColor: userData?.carColor || null, // إضافة لون السيارة للرحلة
         verified: userData?.isVerified || false, 
         userBadge: userData?.customBadge || null,
         rating: userData?.rating || 0, 
@@ -427,7 +425,9 @@ export default function App() {
            });
            await batch.commit();
         }
-      } catch (err) {}
+      } catch (err) {
+        console.error("خطأ أثناء إرسال التنبيهات:", err);
+      }
 
       setShowAddModal(false); triggerToast('تم النشر بنجاح!');
       setActiveTab('home'); setHomeCategory(newTrip.category);
@@ -438,16 +438,6 @@ export default function App() {
         preferences: { ac: false, noSmoking: false, luggage: false, families: false, femalesOnly: false } 
       });
     } catch (error) { triggerToast('حدث خطأ.'); } finally { setIsSubmitting(false); }
-  };
-
-  const handleOpenChat = async (chat) => {
-    setActiveChat(chat);
-    // تصفير نقطة الرسائل الحمراء عند فتح الشات
-    if (chat.lastSenderId && chat.lastSenderId !== user.uid && !chat.isRead) {
-      try {
-        await updateDoc(doc(db, `inbox_${user.uid}`, chat.chatId), { isRead: true });
-      } catch(e){}
-    }
   };
 
   const openChatFromTrip = async (trip) => {
@@ -477,22 +467,69 @@ export default function App() {
       const safeUserVerified = Boolean(trip.verified);
       const safeMyVerified = Boolean(userData?.isVerified);
 
-      const chatDataMe = { chatId: chatId, tripId: trip.id, tripType: safeTripType, tripOwnerId: trip.userId, otherPersonId: trip.userId, otherPersonName: safeUserName, otherPersonPhoto: safeUserPhoto, otherPersonVerified: safeUserVerified, tripInfo: tripRouteName, isRead: true };
-      const chatDataOther = { chatId: chatId, tripId: trip.id, tripType: safeTripType, tripOwnerId: trip.userId, otherPersonId: user.uid, otherPersonName: safeMyName, otherPersonPhoto: safeMyPhoto, otherPersonVerified: safeMyVerified, tripInfo: tripRouteName, isRead: false };
+      const chatRefMe = doc(db, `inbox_${user.uid}`, chatId);
+      const chatSnapMe = await getDoc(chatRefMe);
+
+      let existingStatus = 'none';
+      let existingSenderId = null;
+
+      // فحص هل يوجد شات مفتوح مسبقاً لنفس هذه الرحلة للحفاظ على حالة الأزرار
+      if (chatSnapMe.exists()) {
+        const existingData = chatSnapMe.data();
+        if (existingData.tripId === trip.id) {
+          existingStatus = existingData.requestStatus || 'none';
+          existingSenderId = existingData.requestSenderId || null;
+        }
+      }
+
+      const chatDataMe = { 
+        chatId: chatId, tripId: trip.id, tripType: safeTripType, tripOwnerId: trip.userId, 
+        otherPersonId: trip.userId, otherPersonName: safeUserName, otherPersonPhoto: safeUserPhoto, 
+        otherPersonVerified: safeUserVerified, tripInfo: tripRouteName,
+        requestStatus: existingStatus, requestSenderId: existingSenderId
+      };
+      
+      const chatDataOther = { 
+        chatId: chatId, tripId: trip.id, tripType: safeTripType, tripOwnerId: trip.userId, 
+        otherPersonId: user.uid, otherPersonName: safeMyName, otherPersonPhoto: safeMyPhoto, 
+        otherPersonVerified: safeMyVerified, tripInfo: tripRouteName,
+        requestStatus: existingStatus, requestSenderId: existingSenderId
+      };
 
       setActiveChat(chatDataMe); 
 
-      await setDoc(doc(db, `inbox_${user.uid}`, chatId), { ...chatDataMe, createdAt: serverTimestamp(), requestStatus: 'none', tripId: trip.id, tripInfo: tripRouteName }, { merge: true });
-      await setDoc(doc(db, `inbox_${trip.userId}`, chatId), { ...chatDataOther, createdAt: serverTimestamp(), requestStatus: 'none', tripId: trip.id, tripInfo: tripRouteName }, { merge: true });
+      await setDoc(chatRefMe, { ...chatDataMe, lastMessageTime: Date.now() }, { merge: true });
+      await setDoc(doc(db, `inbox_${trip.userId}`, chatId), { ...chatDataOther }, { merge: true });
     } catch (err) {
       triggerToast('حدث خطأ في النظام أثناء محاولة فتح الشات.');
       setActiveChat(null); 
     }
   };
 
+  const openAdminChat = async (targetUser) => {
+    if (!user || isGuest) return;
+    try {
+      const user1 = user.uid < targetUser.id ? user.uid : targetUser.id;
+      const user2 = user.uid < targetUser.id ? targetUser.id : user.uid;
+      const chatId = `${user1}_${user2}`;
+
+      const chatDataMe = { chatId, tripId: 'system', tripType: 'support', tripOwnerId: 'system', otherPersonId: targetUser.id, otherPersonName: targetUser.name || 'مستخدم', otherPersonPhoto: targetUser.photoURL || null, otherPersonVerified: targetUser.isVerified || false, tripInfo: 'الدعم الفني / الإدارة', requestStatus: 'none' };
+      const chatDataOther = { chatId, tripId: 'system', tripType: 'support', tripOwnerId: 'system', otherPersonId: user.uid, otherPersonName: 'الإدارة (الدعم الفني)', otherPersonPhoto: appSettings?.logo || null, otherPersonVerified: true, tripInfo: 'الدعم الفني / الإدارة', requestStatus: 'none' };
+
+      setActiveChat(chatDataMe); 
+
+      await setDoc(doc(db, `inbox_${user.uid}`, chatId), { ...chatDataMe, lastMessageTime: Date.now() }, { merge: true });
+      await setDoc(doc(db, `inbox_${targetUser.id}`, chatId), { ...chatDataOther }, { merge: true });
+      
+      setShowAdminPanel(false);
+    } catch (err) {
+      triggerToast('حدث خطأ في فتح الشات.');
+    }
+  };
+
   const handleTripAction = async (chatInfo, actionType) => {
     if (!chatInfo || typeof chatInfo !== 'object' || !chatInfo.chatId || !user) return;
-    if (checkUserRestriction('chat')) return;
+    if (checkUserRestriction('chat') && chatInfo.tripId !== 'system') return;
     try {
       const chatId = chatInfo.chatId;
       let newStatus = ''; let systemText = '';
@@ -504,7 +541,8 @@ export default function App() {
       if (actionType === 'request') { newStatus = 'pending'; systemText = `قام ${myName} بطلب الانضمام لرحلة (${chatInfo.tripInfo}) الخاصة بـ ${ownerName} 🙋‍♂️`; } 
       else if (actionType === 'cancel_request') { 
         newStatus = 'none'; systemText = `قام ${myName} بإلغاء الطلب 🔙`; 
-        // استرجاع المقعد إذا كان الطلب مقبولاً
+        
+        // إرجاع المقعد إذا كان ملغياً بعد القبول
         if (chatInfo.requestStatus === 'accepted' && chatInfo.tripId && chatInfo.tripId !== 'system') {
           try {
             const tripRef = doc(db, APP_COLLECTION_NAME, chatInfo.tripId);
@@ -553,8 +591,8 @@ export default function App() {
         }
       }
 
-      const updateDataMe = { requestStatus: newStatus, lastMessage: systemText, lastSenderId: user.uid, lastMessageTime: Date.now(), isRead: true };
-      const updateDataOther = { ...updateDataMe, isRead: false };
+      const updateDataMe = { requestStatus: newStatus, lastMessage: systemText, lastSenderId: user.uid, lastMessageTime: Date.now() };
+      const updateDataOther = { ...updateDataMe };
 
       if (actionType === 'request') { 
          updateDataMe.requestSenderId = user.uid; 
@@ -587,8 +625,6 @@ export default function App() {
   const bgInput = isDarkMode ? 'bg-slate-800 border-slate-700 text-white placeholder-slate-400 focus:border-indigo-500' : 'bg-white border-slate-200 text-slate-900 focus:border-indigo-500';
   const textPrimary = isDarkMode ? 'text-white' : 'text-slate-900';
   const textSecondary = isDarkMode ? 'text-slate-400' : 'text-slate-500';
-
-  const unreadMessagesCount = myInbox.filter(c => c.lastSenderId && c.lastSenderId !== user?.uid && !c.isRead && c.lastSenderId !== 'system').length;
 
   if (loading) return <div className="h-screen w-full flex items-center justify-center bg-slate-950"><Loader2 className="animate-spin text-indigo-500" size={40}/></div>;
 
@@ -991,7 +1027,7 @@ export default function App() {
         <HomeScreen 
           user={user} isAdmin={isAdmin} isDarkMode={isDarkMode} realTrips={realTrips} stations={stations} isGuest={isGuest}
           homeCategory={homeCategory} setHomeCategory={setHomeCategory} viewMode={viewMode} setViewMode={setViewMode} filterType={filterType} setFilterType={setFilterType}
-          filterFrom={filterFrom} setFilterFrom={setFilterFrom} filterTo={filterTo} setFilterTo={setFilterTo} openChatFromTrip={handleOpenChat}
+          filterFrom={filterFrom} setFilterFrom={setFilterFrom} filterTo={filterTo} setFilterTo={setFilterTo} openChatFromTrip={openChatFromTrip}
           setSelectedStation={setSelectedStation} triggerToast={triggerToast} appSettings={appSettings} 
           userArea={userArea} userAreas={userAreas} onOpenAreaModal={openAreaModalWithSync}
         />
@@ -1015,9 +1051,6 @@ export default function App() {
           setShowVerifyModal={setShowVerifyModal} 
           setShowAdminPanel={setShowAdminPanel} 
           forceSignUpScreen={forceSignUpScreen}
-          realTrips={realTrips} 
-          openChatFromTrip={handleOpenChat}
-          triggerToast={triggerToast}
         />
       )}
 
@@ -1026,7 +1059,7 @@ export default function App() {
       )}
       
       {showVerifyModal && ( <VerifyModal user={user} isDarkMode={isDarkMode} onClose={() => setShowVerifyModal(false)} triggerToast={triggerToast} setUserData={setUserData} /> )}
-      {showAdminPanel && isAdmin && ( <AdminPanel isDarkMode={isDarkMode} onClose={() => setShowAdminPanel(false)} triggerToast={triggerToast} appSettings={appSettings} user={user} /> )}
+      {showAdminPanel && isAdmin && ( <AdminPanel isDarkMode={isDarkMode} onClose={() => setShowAdminPanel(false)} triggerToast={triggerToast} appSettings={appSettings} user={user} openAdminChat={openAdminChat} /> )}
 
       {activeTab === 'inbox' && (
         <div className="pb-[100px] flex-1 w-full max-w-2xl mx-auto px-4 py-6 mt-4 relative z-10 animate-fade-in-up">
@@ -1037,23 +1070,14 @@ export default function App() {
                 {myInbox.length === 0 ? (
                   <div className="text-center text-slate-500 mt-24"><MessageCircle size={48} className="mx-auto mb-4 opacity-50"/><h3 className="font-bold text-lg">لا توجد رسائل</h3></div>
                 ) : (
-                  myInbox.map(chat => {
-                    const isUnread = chat.lastSenderId && chat.lastSenderId !== user.uid && !chat.isRead && chat.lastSenderId !== 'system';
-                    return (
-                      <div key={chat.chatId} onClick={() => handleOpenChat(chat)} className={`p-4 rounded-2xl shadow-sm mb-3 cursor-pointer border hover:border-indigo-500 transition-colors ${isUnread ? (isDarkMode ? 'bg-indigo-900/30 border-indigo-700/50' : 'bg-indigo-50/60 border-indigo-200') : (isDarkMode ? 'bg-slate-800' : 'bg-slate-50')}`}>
-                        <div className="flex items-center gap-4">
-                           {chat.otherPersonPhoto ? ( <img src={chat.otherPersonPhoto} className="w-12 h-12 rounded-full object-cover shrink-0" alt="avatar" /> ) : ( <div className={`w-12 h-12 rounded-full flex items-center justify-center font-bold text-xl shrink-0 ${isUnread ? 'bg-indigo-600 text-white' : 'bg-indigo-50 text-indigo-500'}`}>{(chat?.otherPersonName || 'م').charAt(0)}</div> )}
-                           <div className="flex-1 overflow-hidden">
-                             <div className="flex justify-between items-center">
-                               <h4 className={`font-bold text-sm ${isUnread ? 'text-indigo-600 dark:text-indigo-400' : textPrimary}`}>{chat?.otherPersonName}</h4>
-                               {isUnread && <span className="w-2.5 h-2.5 bg-rose-500 rounded-full shrink-0"></span>}
-                             </div>
-                             <p className={`text-xs mt-1 truncate ${isUnread ? 'text-indigo-900 font-bold dark:text-indigo-200' : textSecondary}`}>{chat?.lastMessage || '...'}</p>
-                           </div>
-                        </div>
+                  myInbox.map(chat => (
+                    <div key={chat.chatId} onClick={() => setActiveChat(chat)} className={`p-4 rounded-2xl shadow-sm mb-3 cursor-pointer border hover:border-indigo-500 transition-colors ${isDarkMode ? 'bg-slate-800' : 'bg-slate-50'}`}>
+                      <div className="flex items-center gap-4">
+                         {chat.otherPersonPhoto ? ( <img src={chat.otherPersonPhoto} className="w-12 h-12 rounded-full object-cover shrink-0" alt="avatar" /> ) : ( <div className="w-12 h-12 bg-indigo-50 text-indigo-500 rounded-full flex items-center justify-center font-bold text-xl shrink-0">{(chat?.otherPersonName || 'م').charAt(0)}</div> )}
+                         <div className="flex-1 overflow-hidden"><h4 className={`font-bold text-sm ${textPrimary}`}>{chat?.otherPersonName}</h4><p className={`text-xs mt-1 truncate ${textSecondary}`}>{chat?.lastMessage || '...'}</p></div>
                       </div>
-                    );
-                  })
+                    </div>
+                  ))
                 )}
               </div>
             ) : (<div className="flex-1 flex flex-col items-center justify-center"><Lock size={48} className="text-slate-300 mb-4"/><button onClick={forceSignUpScreen} className="bg-indigo-600 text-white px-6 py-3 rounded-xl font-bold">تسجيل الدخول للمتابعة</button></div>)}
@@ -1062,18 +1086,14 @@ export default function App() {
       )}
 
       {!isGuest && activeTrackers.length > 0 && (!activeChat || activeChat.chatId !== (activeTrackers[0]?.type === 'normal' ? activeTrackers[0].data.chatId : activeTrackers[0]?.data.id)) && (
-        <LiveTrackerBar activeTrackers={activeTrackers} isDarkMode={isDarkMode} user={user} setActiveChat={handleOpenChat} setActiveTab={setActiveTab} setViewMode={setViewMode} handleTripAction={(chatInfo, actionType) => handleTripAction(chatInfo, actionType)}/>
+        <LiveTrackerBar activeTrackers={activeTrackers} isDarkMode={isDarkMode} user={user} setActiveChat={setActiveChat} setActiveTab={setActiveTab} setViewMode={setViewMode} handleTripAction={(chatInfo, actionType) => handleTripAction(chatInfo, actionType)}/>
       )}
 
       <nav className={`fixed bottom-0 w-full z-[100] border-t ${isDarkMode ? 'bg-slate-950 border-slate-800' : 'bg-white border-slate-100'} pointer-events-auto`}>
         <div className="flex justify-around items-center h-[70px] w-full max-w-md md:max-w-2xl mx-auto px-2 pb-2">
           <button onClick={() => setActiveTab('home')} className={`flex flex-col items-center justify-center gap-1 w-20 transition-colors ${activeTab === 'home' ? 'text-indigo-600 dark:text-indigo-400' : textSecondary}`}><Home size={22} /><span className="text-[10px] font-bold">الرئيسية</span></button>
           <button onClick={() => setActiveTab('inbox')} className={`flex flex-col items-center justify-center gap-1 w-20 relative transition-colors ${activeTab === 'inbox' ? 'text-indigo-600 dark:text-indigo-400' : textSecondary}`}>
-            <div className="relative">
-              <MessageCircle size={22} />
-              {unreadMessagesCount > 0 && !isGuest && <span className="absolute -top-1 -right-1 w-3 h-3 bg-rose-500 rounded-full border-2 border-white dark:border-slate-900 flex items-center justify-center"><span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-rose-400 opacity-75"></span></span>}
-            </div>
-            <span className="text-[10px] font-bold">الرسائل</span>
+            <div className="relative"><MessageCircle size={22} />{(myInbox || []).length > 0 && !isGuest && <span className="absolute -top-1 -right-1 w-2.5 h-2.5 bg-rose-500 rounded-full border-2 border-white dark:border-slate-900"></span>}</div><span className="text-[10px] font-bold">الرسائل</span>
           </button>
           <button onClick={() => setActiveTab('profile')} className={`flex flex-col items-center justify-center gap-1 w-20 transition-colors ${activeTab === 'profile' ? 'text-indigo-600 dark:text-indigo-400' : textSecondary}`}><User size={22} /><span className="text-[10px] font-bold">حسابي</span></button>
         </div>
