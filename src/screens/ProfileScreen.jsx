@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { 
   User, ShieldCheck, Star, Edit2, ShieldAlert, Gift, ChevronLeft, 
-  Moon, LogOut, Crown, Phone, Check, X, Camera, Loader2, Award, Zap, CheckCircle2, Info, Settings, Lock, Car, Search
+  Moon, LogOut, Crown, Phone, Check, X, Camera, Loader2, Award, Zap, CheckCircle2, Info, Settings, Lock, Car
 } from 'lucide-react';
 import { doc, updateDoc, collection, query, where, getDocs, writeBatch } from 'firebase/firestore';
 import { updateProfile, updatePassword, updateEmail } from 'firebase/auth';
@@ -23,11 +23,6 @@ const ProfileScreen = ({
   const [tempPhone, setTempPhone] = useState('');
   const [isSavingPhone, setIsSavingPhone] = useState(false);
 
-  // بيانات السيارة
-  const [tempCarModel, setTempCarModel] = useState('');
-  const [tempCarColor, setTempCarColor] = useState('');
-  const [isSavingCarInfo, setIsSavingCarInfo] = useState(false);
-
   const [newPassword, setNewPassword] = useState('');
   const [isSavingPassword, setIsSavingPassword] = useState(false);
 
@@ -44,8 +39,6 @@ const ProfileScreen = ({
     if (userData) {
       setTempName(userData.name || '');
       setTempPhone(userData.phone || '');
-      setTempCarModel(userData.carModel || '');
-      setTempCarColor(userData.carColor || '');
       setLocalPhoto(userData.photoURL || null);
     }
   }, [userData]);
@@ -82,60 +75,58 @@ const ProfileScreen = ({
     }
   };
 
-  // 2. حفظ بيانات الحساب الأساسية (الاسم والموبايل)
-  const handleSaveProfileInfo = async () => {
-    if (!tempName.trim() && !tempPhone.trim()) return;
+  // 2. دالة حفظ الاسم الجديد
+  const handleSaveName = async () => {
+    if (!tempName.trim() || tempName.trim() === userData?.name) return;
     setIsSavingName(true);
     try {
-      const cleanName = tempName.trim() || userData?.name;
-      const cleanPhone = tempPhone.trim() || userData?.phone;
-
-      if (auth.currentUser && cleanPhone !== userData?.phone) {
-        const currentEmail = auth.currentUser.email;
-        if (currentEmail && currentEmail.endsWith('@khodnimaak.com')) {
-          try { await updateEmail(auth.currentUser, `${cleanPhone}@khodnimaak.com`); } catch(e) {}
-        }
-      }
-
-      await updateDoc(doc(db, USERS_COLLECTION, user.uid), { name: cleanName, phone: cleanPhone });
-      if (auth.currentUser && cleanName !== userData?.name) {
-        await updateProfile(auth.currentUser, { displayName: cleanName });
-      }
+      const cleanName = tempName.trim();
+      await updateDoc(doc(db, USERS_COLLECTION, user.uid), { name: cleanName });
+      if (auth.currentUser) await updateProfile(auth.currentUser, { displayName: cleanName });
       
       const tripsQuery = query(collection(db, APP_COLLECTION_NAME), where('userId', '==', user.uid));
       const querySnapshot = await getDocs(tripsQuery);
       if (!querySnapshot.empty) {
         const batch = writeBatch(db);
-        querySnapshot.forEach((tripDoc) => {
-          batch.update(tripDoc.ref, { userName: cleanName, userPhone: cleanPhone });
-        });
+        querySnapshot.forEach((tripDoc) => batch.update(tripDoc.ref, { userName: cleanName }));
         await batch.commit();
       }
       
-      if (setUserData) setUserData(prev => ({ ...prev, name: cleanName, phone: cleanPhone }));
-      triggerToast('تم تحديث بيانات الحساب بنجاح ✅');
+      if (setUserData) setUserData(prev => ({ ...prev, name: cleanName }));
+      triggerToast('تم تحديث الاسم بنجاح ✅');
     } catch (e) {
-      triggerToast('تعذر التحديث، حاول مرة أخرى');
+      triggerToast('تعذر تحديث الاسم، حاول مرة أخرى');
     } finally {
       setIsSavingName(false);
     }
   };
 
-  // 3. حفظ بيانات السيارة (للكباتن)
-  const handleSaveCarInfo = async () => {
-    setIsSavingCarInfo(true);
+  // 3. دالة حفظ رقم الموبايل 
+  const handleSavePhone = async () => {
+    if (!tempPhone.trim() || tempPhone.trim() === userData?.phone) return;
+    setIsSavingPhone(true);
     try {
-      const model = tempCarModel.trim();
-      const color = tempCarColor.trim();
-      
-      await updateDoc(doc(db, USERS_COLLECTION, user.uid), { carModel: model, carColor: color });
-      
-      if (setUserData) setUserData(prev => ({ ...prev, carModel: model, carColor: color }));
-      triggerToast('تم حفظ بيانات سيارتك بنجاح 🚘');
+      const cleanPhone = tempPhone.trim();
+      if (auth.currentUser) {
+        const currentEmail = auth.currentUser.email;
+        if (currentEmail && currentEmail.endsWith('@khodnimaak.com') && currentEmail !== `${cleanPhone}@khodnimaak.com`) {
+          try { await updateEmail(auth.currentUser, `${cleanPhone}@khodnimaak.com`); } catch (err) {}
+        }
+      }
+      await updateDoc(doc(db, USERS_COLLECTION, user.uid), { phone: cleanPhone });
+      const tripsQuery = query(collection(db, APP_COLLECTION_NAME), where('userId', '==', user.uid));
+      const querySnapshot = await getDocs(tripsQuery);
+      if (!querySnapshot.empty) {
+        const batch = writeBatch(db);
+        querySnapshot.forEach((tripDoc) => batch.update(tripDoc.ref, { userPhone: cleanPhone }));
+        await batch.commit();
+      }
+      if (setUserData) setUserData(prev => ({ ...prev, phone: cleanPhone }));
+      triggerToast('تم حفظ الرقم بنجاح 📱');
     } catch (e) {
-      triggerToast('حدث خطأ أثناء الحفظ');
+      triggerToast('حدث خطأ أثناء تحديث الرقم');
     } finally {
-      setIsSavingCarInfo(false);
+      setIsSavingPhone(false);
     }
   };
 
@@ -271,25 +262,13 @@ const ProfileScreen = ({
               </span>
             </div>
 
-            <div className="w-full max-w-xs mt-4 space-y-2">
+            <div className="w-full max-w-xs mt-4">
               <div className="flex items-center gap-2 bg-slate-50 dark:bg-slate-800/60 px-4 py-2.5 rounded-2xl border border-slate-200/70 dark:border-slate-700/70 cursor-default">
                 <Phone size={15} className="text-indigo-500 shrink-0"/>
                 <span className={`text-xs font-bold ${userData?.phone ? textPrimary : 'text-rose-500'}`} dir="ltr">
                   {userData?.phone || 'لم يتم إضافة رقم الموبايل'}
                 </span>
               </div>
-
-              {/* إظهار بيانات السيارة إن وجدت */}
-              {userData?.carModel && (
-                <div className="flex items-center justify-between gap-2 bg-slate-50 dark:bg-slate-800/60 px-4 py-2.5 rounded-2xl border border-slate-200/70 dark:border-slate-700/70">
-                  <div className="flex items-center gap-2 truncate">
-                    <Car size={15} className="text-indigo-500 shrink-0"/>
-                    <span className={`text-xs font-bold truncate ${textPrimary}`}>
-                      {userData.carModel} {userData.carColor ? `(${userData.carColor})` : ''}
-                    </span>
-                  </div>
-                </div>
-              )}
             </div>
 
             {userData?.email && (
@@ -308,10 +287,10 @@ const ProfileScreen = ({
                </div>
                <div>
                  <h4 className={`font-black text-sm flex items-center gap-2 ${textPrimary}`}>
-                   إعدادات الحساب والسيارة
+                   إعدادات الحساب وكلمة المرور
                  </h4>
                  <p className={`text-xs mt-1 font-medium ${textSecondary}`}>
-                   تعديل الاسم، الرقم، وبيانات سيارتك للكابتن
+                   تعديل الاسم، رقم الموبايل، وتغيير كلمة المرور
                  </p>
                </div>
              </div>
@@ -381,7 +360,7 @@ const ProfileScreen = ({
              )}
           </div>
 
-          {/* كارت مكافآت السائقين */}
+          {/* كارت المكافآت */}
           <div 
             onClick={() => setShowInternalRewards(true)} 
             className={`p-5 rounded-[1.5rem] border shadow-sm flex items-center justify-between cursor-pointer hover:border-amber-500/50 hover:shadow-md transition-all group ${bgCard}`}
@@ -405,7 +384,7 @@ const ProfileScreen = ({
              </div>
           </div>
 
-          {/* حول التطبيق والسياسات */}
+          {/* حول التطبيق */}
           <div 
             onClick={() => setShowAboutModal(true)} 
             className={`p-5 rounded-[1.5rem] border shadow-sm flex items-center justify-between cursor-pointer hover:border-blue-500/50 hover:shadow-md transition-all group mt-2 ${bgCard}`}
@@ -469,78 +448,44 @@ const ProfileScreen = ({
               </button>
             </div>
 
-            <div className="p-5 overflow-y-auto space-y-6 flex-1 [&::-webkit-scrollbar]:hidden">
+            <div className="p-5 overflow-y-auto space-y-5 flex-1 [&::-webkit-scrollbar]:hidden">
               
-              <div className="space-y-4">
-                <h4 className={`text-sm font-black flex items-center gap-1 ${textPrimary}`}><User size={16} className="text-indigo-500"/> البيانات الأساسية</h4>
-                <div className="space-y-2">
-                  <label className={`text-xs font-bold px-1 ${textSecondary}`}>الاسم الكامل</label>
-                  <div className="flex items-center gap-2">
-                    <input 
-                      type="text" 
-                      value={tempName} 
-                      onChange={(e) => setTempName(e.target.value)}
-                      placeholder="الاسم الكامل..."
-                      className={`flex-1 px-4 py-3.5 rounded-xl border text-sm font-bold outline-none focus:border-indigo-500 ${bgInput}`}
-                    />
-                  </div>
+              <div className="space-y-2">
+                <label className={`text-xs font-bold px-1 ${textSecondary}`}>الاسم الكامل</label>
+                <div className="flex items-center gap-2">
+                  <input 
+                    type="text" 
+                    value={tempName} 
+                    onChange={(e) => setTempName(e.target.value)}
+                    placeholder="الاسم الكامل..."
+                    className={`flex-1 px-4 py-3.5 rounded-xl border text-sm font-bold outline-none focus:border-indigo-500 ${bgInput}`}
+                  />
+                  <button onClick={handleSaveName} disabled={isSavingName} className="px-5 py-3.5 bg-indigo-600 hover:bg-indigo-700 text-white rounded-xl shadow-sm font-black text-sm flex items-center justify-center min-w-[80px] transition-transform active:scale-95">
+                    {isSavingName ? <Loader2 size={18} className="animate-spin"/> : 'حفظ'}
+                  </button>
                 </div>
-
-                <div className="space-y-2">
-                  <label className={`text-xs font-bold px-1 ${textSecondary}`}>رقم الموبايل / الواتساب</label>
-                  <div className="flex items-center gap-2">
-                    <input 
-                      type="tel" 
-                      dir="ltr"
-                      value={tempPhone} 
-                      onChange={(e) => setTempPhone(e.target.value)}
-                      placeholder="01xxxxxxxxx"
-                      className={`flex-1 px-4 py-3.5 rounded-xl border text-sm font-bold outline-none focus:border-indigo-500 text-left ${bgInput}`}
-                    />
-                  </div>
-                </div>
-                <button onClick={handleSaveProfileInfo} disabled={isSavingName} className="w-full py-3.5 bg-indigo-600 hover:bg-indigo-700 text-white rounded-xl shadow-md font-black text-sm flex items-center justify-center gap-2 transition-transform active:scale-95">
-                  {isSavingName ? <Loader2 size={18} className="animate-spin"/> : <Check size={18}/>} حفظ البيانات الأساسية
-                </button>
               </div>
 
-              <hr className="border-slate-200 dark:border-slate-700" />
-
-              {/* قسم بيانات السيارة للكابتن */}
-              <div className="space-y-4">
-                <h4 className={`text-sm font-black flex items-center gap-1 ${textPrimary}`}><Car size={16} className="text-emerald-500"/> بيانات السيارة (للكباتن فقط)</h4>
-                <p className="text-[10px] font-bold text-slate-500">إضافة موديل ولون السيارة يزيد من ثقة الركاب في إعلاناتك.</p>
-                
-                <div className="flex gap-2">
-                  <div className="space-y-2 flex-1">
-                    <label className={`text-xs font-bold px-1 ${textSecondary}`}>نوع وموديل السيارة</label>
-                    <input 
-                      type="text" 
-                      value={tempCarModel} 
-                      onChange={(e) => setTempCarModel(e.target.value)}
-                      placeholder="مثال: هيونداي إلنترا"
-                      className={`w-full px-4 py-3.5 rounded-xl border text-sm font-bold outline-none focus:border-emerald-500 ${bgInput}`}
-                    />
-                  </div>
-                  <div className="space-y-2 w-1/3">
-                    <label className={`text-xs font-bold px-1 ${textSecondary}`}>اللون</label>
-                    <input 
-                      type="text" 
-                      value={tempCarColor} 
-                      onChange={(e) => setTempCarColor(e.target.value)}
-                      placeholder="مثال: فضي"
-                      className={`w-full px-4 py-3.5 rounded-xl border text-sm font-bold outline-none focus:border-emerald-500 ${bgInput}`}
-                    />
-                  </div>
+              <div className="space-y-2">
+                <label className={`text-xs font-bold px-1 ${textSecondary}`}>رقم الموبايل / الواتساب</label>
+                <div className="flex items-center gap-2">
+                  <input 
+                    type="tel" 
+                    dir="ltr"
+                    value={tempPhone} 
+                    onChange={(e) => setTempPhone(e.target.value)}
+                    placeholder="01xxxxxxxxx"
+                    className={`flex-1 px-4 py-3.5 rounded-xl border text-sm font-bold outline-none focus:border-indigo-500 text-left ${bgInput}`}
+                  />
+                  <button onClick={handleSavePhone} disabled={isSavingPhone} className="px-5 py-3.5 bg-indigo-600 hover:bg-indigo-700 text-white rounded-xl shadow-sm font-black text-sm flex items-center justify-center min-w-[80px] transition-transform active:scale-95">
+                    {isSavingPhone ? <Loader2 size={18} className="animate-spin"/> : 'حفظ'}
+                  </button>
                 </div>
-                <button onClick={handleSaveCarInfo} disabled={isSavingCarInfo} className="w-full py-3.5 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl shadow-md font-black text-sm flex items-center justify-center gap-2 transition-transform active:scale-95">
-                  {isSavingCarInfo ? <Loader2 size={18} className="animate-spin"/> : <Check size={18}/>} حفظ بيانات السيارة
-                </button>
               </div>
 
-              <hr className="border-slate-200 dark:border-slate-700" />
+              <hr className="border-slate-200 dark:border-slate-700 my-2" />
 
-              <div className="space-y-2 pb-4">
+              <div className="space-y-2">
                 <label className={`text-xs font-bold px-1 flex items-center gap-1 ${textSecondary}`}>
                   <Lock size={14}/> تغيير كلمة المرور
                 </label>
@@ -707,21 +652,7 @@ const ProfileScreen = ({
                     <li>سلامة أو محتوى الأمانات المنقولة.</li>
                     <li>أي حوادث أو طوارئ تحدث أثناء الرحلة.</li>
                   </ul>
-                  <p className="mt-3 font-bold text-rose-600 dark:text-rose-400 bg-rose-100 dark:bg-rose-900/30 p-2 rounded-lg border border-rose-200 dark:border-rose-800/50">
-                    يرجى التأكد من هوية الشخص الآخر ومشاركة تفاصيل رحلتك مع أحد المقربين لضمان سلامتك.
-                  </p>
                 </div>
-              </div>
-
-              <div>
-                <h3 className={`font-black text-base mb-2 flex items-center gap-2 ${textPrimary}`}>
-                  <span className="w-2 h-2 rounded-full bg-blue-500"></span> شروط الاستخدام
-                </h3>
-                <ul className={`font-medium leading-relaxed space-y-2 text-xs ${textSecondary} list-disc list-inside mr-1`}>
-                  <li>يُمنع استخدام التطبيق لأي أغراض غير قانونية.</li>
-                  <li>يجب الحفاظ على الاحترام المتبادل والمصداقية في المواعيد.</li>
-                  <li>يحق للإدارة حظر أي حساب يخالف الشروط أو يتلقى شكاوى متكررة بدون سابق إنذار.</li>
-                </ul>
               </div>
             </div>
 
