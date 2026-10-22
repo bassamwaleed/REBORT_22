@@ -113,6 +113,14 @@ export default function App() {
     try { const stored = localStorage.getItem('khodnimaak_theme'); return stored !== 'light'; } catch (e) { return true; }
   });
 
+  useEffect(() => {
+    if (isDarkMode) {
+      document.documentElement.classList.add('dark');
+    } else {
+      document.documentElement.classList.remove('dark');
+    }
+  }, [isDarkMode]);
+
   const [realTrips, setRealTrips] = useState([]); 
   const [stations, setStations] = useState([]); 
   const [myInbox, setMyInbox] = useState([]);
