@@ -13,17 +13,15 @@ const HomeScreen = ({
 }) => {
   
   const [stationSearchQuery, setStationSearchQuery] = useState('');
-  const [showCompletedTrips, setShowCompletedTrips] = useState(false); // حالة التبديل بين المتاح والأرشيف
+  const [showCompletedTrips, setShowCompletedTrips] = useState(false); 
 
   const activeUserAreas = filterFrom 
     ? [filterFrom] 
     : (Array.isArray(userAreas) && userAreas.length > 0 ? userAreas : (userArea ? userArea.split('، ').filter(Boolean) : []));
 
-  // حساب إجمالي الرحلات المتاحة لكل قسم (لعرضها على التبويبات العلوية)
   const availableTravelCount = (realTrips || []).filter(t => t.category === 'travel' && t.status !== 'completed' && t.status !== 'cancelled').length;
   const availableParcelCount = (realTrips || []).filter(t => (t.category === 'parcel' || t.type === 'delivery') && t.status !== 'completed' && t.status !== 'cancelled').length;
 
-  // 1. تصفية الرحلات للقسم المفتوح حالياً
   const categoryTrips = (realTrips || []).filter(t => {
     if (!t || t.status === 'cancelled') return false;
     if (homeCategory === 'travel') {
@@ -35,11 +33,9 @@ const HomeScreen = ({
     return false;
   });
 
-  // فصل الرحلات المتاحة عن المكتملة
   const availableTripsList = categoryTrips.filter(t => t.status !== 'completed');
   const completedTripsList = categoryTrips.filter(t => t.status === 'completed');
 
-  // القائمة النشطة للعرض
   const currentTripsToDisplay = showCompletedTrips ? completedTripsList : availableTripsList;
 
   const isAreaMatch = (tripArea, targetArea) => {
@@ -70,7 +66,6 @@ const HomeScreen = ({
     return nearbyList.some(near => isAreaMatch(tripArea, near));
   };
 
-  // دالة فحص هل الرحلة ستنطلق قريباً (خلال 3 ساعات)
   const isLeavingSoon = (dateStr, timeStr) => {
     if (!dateStr || !timeStr) return false;
     try {
@@ -81,7 +76,6 @@ const HomeScreen = ({
     } catch(e) { return false; }
   };
 
-  // حساب درجة التطابق والأولوية
   const getTripRelevanceScore = (trip) => {
     let score = 0;
 
@@ -100,7 +94,6 @@ const HomeScreen = ({
       else if (isNearbyArea(trip.to, filterTo)) score += 45;
     }
 
-    // إعطاء دفعة قوية (Boost) للرحلات اللي ميعادها قرب (فقط للمتاحة)
     if (!showCompletedTrips && isLeavingSoon(trip.date, trip.time)) {
       score += 40; 
     }
@@ -110,7 +103,6 @@ const HomeScreen = ({
 
   const currentHour = new Date().getHours();
 
-  // 2. الرحلات المطابقة تماماً
   const exactMatchedTrips = currentTripsToDisplay.filter(t => {
     const matchFrom = activeUserAreas.length === 0 || activeUserAreas.some(a => isTripMatchingOriginOrRoute(t, a));
     const matchTo = !filterTo || isTripMatchingDestOrRoute(t, filterTo);
@@ -118,13 +110,11 @@ const HomeScreen = ({
   }).sort((a, b) => {
     const scoreDiff = getTripRelevanceScore(b) - getTripRelevanceScore(a);
     if (scoreDiff !== 0) return scoreDiff;
-    // Smart Shuffle: تبديل ذكي للرحلات اللي ليها نفس الأولوية كل ساعة
     const aVal = ((a.id?.charCodeAt(0) || 0) + currentHour) % 10;
     const bVal = ((b.id?.charCodeAt(0) || 0) + currentHour) % 10;
     return bVal - aVal;
   });
 
-  // 3. الرحلات المشابهة والبديلة 
   const similarTrips = currentTripsToDisplay.filter(t => {
     if (exactMatchedTrips.some(exact => exact.id === t.id)) return false;
     if (activeUserAreas.length === 0 && !filterTo) return false;
@@ -310,33 +300,6 @@ const HomeScreen = ({
         <div className="animate-fade-in-up">
           {(homeCategory === 'travel' || homeCategory === 'parcel') && (
             <div className="mb-6 space-y-3">
-              
-              <div className="flex items-center justify-between px-3.5 py-2.5 rounded-2xl bg-indigo-50/70 dark:bg-indigo-950/30 border border-indigo-100 dark:border-indigo-900/50">
-                <div className="flex items-center gap-2">
-                  <MapPin size={16} className="text-indigo-600 dark:text-indigo-400 shrink-0" />
-                  <span className="text-xs font-bold text-slate-600 dark:text-slate-300">
-                    منطقتك الحالية: <strong className="font-black text-indigo-600 dark:text-indigo-400">{userArea || 'جميع المناطق'}</strong>
-                  </span>
-                </div>
-                <div className="flex items-center gap-2">
-                  {filterFrom && (
-                    <button 
-                      onClick={() => setFilterFrom('')} 
-                      className="text-[11px] font-bold text-slate-500 hover:text-indigo-600 dark:text-slate-400 underline"
-                    >
-                      عرض كل المدن
-                    </button>
-                  )}
-                  {onOpenAreaModal && (
-                    <button 
-                      onClick={onOpenAreaModal} 
-                      className="text-[11px] font-black bg-white dark:bg-slate-800 text-indigo-600 dark:text-indigo-400 px-2.5 py-1 rounded-lg border border-indigo-200 dark:border-slate-700 shadow-sm hover:scale-105 transition-transform"
-                    >
-                      تغيير المنطقة
-                    </button>
-                  )}
-                </div>
-              </div>
 
               {homeCategory === 'travel' && (
                 <div className="flex gap-2">
@@ -345,18 +308,18 @@ const HomeScreen = ({
                 </div>
               )}
 
-              <div className={`flex gap-2 p-3 rounded-2xl border ${isDarkMode ? 'bg-slate-800 border-slate-700' : 'bg-slate-50 border-slate-200'}`}>
-                <select value={filterFrom} onChange={(e) => setFilterFrom(e.target.value)} className={`flex-1 p-2.5 rounded-xl border text-xs font-bold outline-none ${bgInput}`}>
+              <div className={`flex gap-1.5 p-1.5 rounded-2xl border shadow-sm ${isDarkMode ? 'bg-slate-800/50 border-slate-700' : 'bg-slate-50/50 border-slate-200'}`}>
+                <select value={filterFrom} onChange={(e) => setFilterFrom(e.target.value)} className={`flex-1 py-2 px-2 rounded-xl border text-[11px] font-bold outline-none ${bgInput}`}>
                   <option value="">{activeUserAreas.length > 0 && !filterFrom ? `منطقتك (${activeUserAreas.length})` : 'كل مناطق التحرك'}</option>
                   {SUPPORTED_AREAS.map(c => <option key={c} value={c}>{c}</option>)}
                 </select>
-                <select value={filterTo} onChange={(e) => setFilterTo(e.target.value)} className={`flex-1 p-2.5 rounded-xl border text-xs font-bold outline-none ${bgInput}`}>
+                <select value={filterTo} onChange={(e) => setFilterTo(e.target.value)} className={`flex-1 py-2 px-2 rounded-xl border text-[11px] font-bold outline-none ${bgInput}`}>
                   <option value="">كل وجهات الوصول</option>
                   {SUPPORTED_AREAS.map(c => <option key={c} value={c}>{c}</option>)}
                 </select>
                 {(filterFrom || filterTo) && ( 
-                  <button onClick={() => {setFilterFrom(''); setFilterTo('');}} className="px-3 py-2 bg-rose-100 text-rose-600 dark:bg-rose-900/30 dark:text-rose-400 rounded-xl hover:bg-rose-200 transition-colors text-xs font-black flex items-center gap-1 shrink-0" title="إلغاء الفلتر وعرض الكل">
-                    <X size={15}/> الكل
+                  <button onClick={() => {setFilterFrom(''); setFilterTo('');}} className="px-2 py-1.5 bg-rose-100 text-rose-600 dark:bg-rose-900/30 dark:text-rose-400 rounded-xl hover:bg-rose-200 transition-colors flex items-center justify-center shrink-0" title="إلغاء الفلتر">
+                    <X size={16}/>
                   </button> 
                 )}
               </div>
