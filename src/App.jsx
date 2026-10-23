@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { onAuthStateChanged, signInWithEmailAndPassword, createUserWithEmailAndPassword, signInAnonymously, updateProfile, signOut } from 'firebase/auth';
 import { collection, onSnapshot, doc, getDoc, setDoc, addDoc, updateDoc, serverTimestamp, increment, writeBatch, query, where, getDocs } from 'firebase/firestore';
-import { Loader2, Car, MessageCircle, User, Home, CheckCircle2, Plus, X, Lock, MapPin, Bell, Search, Edit2, Check, Route, Phone } from 'lucide-react';
+import { Loader2, Car, MessageCircle, User, Home, CheckCircle2, Plus, X, Lock, MapPin, Bell, Search, Edit2, Check, Route, Phone, Eye, ShieldCheck } from 'lucide-react';
 
 import { auth, db, APP_COLLECTION_NAME, USERS_COLLECTION, STATIONS_COLLECTION, ADMIN_EMAIL } from './firebase';
 import { safeMillis, useEgyptianLocation } from './utils/helpers';
@@ -13,6 +13,7 @@ import LiveTrackerBar from './components/LiveTrackerBar';
 import VerifyModal from './components/VerifyModal'; 
 import AdminPanel from './components/AdminPanel';   
 import StationModal from './components/StationModal'; 
+import PublicProfileModal from './components/PublicProfileModal';
 
 export const SUPPORTED_AREAS = [
   'حدائق أكتوبر', 'حدائق الأهرام', 'مدينة 6 أكتوبر', 'الشيخ زايد', 
@@ -65,7 +66,9 @@ export default function App() {
   const [filterType, setFilterType] = useState('offer'); 
   const [isScrolling, setIsScrolling] = useState(false);
 
-  // مراقبة السكرول لإخفاء الشريط السفلي والزر العائم أثناء التصفح وإظهارهم عند التوقف
+  // حالة فتح البروفايل العام لأي مستخدم
+  const [publicProfileUserId, setPublicProfileUserId] = useState(null);
+
   useEffect(() => {
     let scrollTimer;
     const handleWindowScroll = () => {
@@ -138,7 +141,9 @@ export default function App() {
   
   const [isLoginMode, setIsLoginMode] = useState(true);
   const [authLoading, setAuthLoading] = useState(false);
-  const [authForm, setAuthForm] = useState({ name: '', identifier: '', password: '' });
+  const [authForm, setAuthForm] = useState({ 
+    name: '', identifier: '', password: '', gender: 'male', accountRole: 'passenger' 
+  });
   
   const [newTrip, setNewTrip] = useState({ 
     type: 'offer', category: 'travel', from: '', fromDetails: '', to: '', toDetails: '', 
@@ -201,7 +206,18 @@ export default function App() {
             const userRef = doc(db, USERS_COLLECTION, currentUser.uid);
             const userDoc = await getDoc(userRef);
             if (!userDoc.exists()) {
-              const initialData = { name: currentUser.displayName || 'مستخدم', photoURL: null, isVerified: false, verificationStatus: 'none', completedTripsCount: 0, phone: currentUser.email?.split('@')[0] || '', createdAt: Date.now() };
+              const initialData = { 
+                name: currentUser.displayName || 'مستخدم', 
+                photoURL: null, 
+                isVerified: false, 
+                verificationStatus: 'none', 
+                completedTripsCount: 0, 
+                phone: currentUser.email?.split('@')[0] || '', 
+                gender: 'male',
+                accountRole: 'passenger',
+                reviews: [],
+                createdAt: Date.now() 
+              };
               await setDoc(userRef, initialData, { merge: true });
               if (localStorage.getItem('khodnimaak_hide_area_modal') !== 'true') setShowAreaModal(true);
             } else {
@@ -325,6 +341,16 @@ export default function App() {
     }
   };
 
+  const handleUpdateUserRoleOrGender = async (field, value) => {
+    if (!user || isGuest) return;
+    try {
+      await updateDoc(doc(db, USERS_COLLECTION, user.uid), { [field]: value });
+      triggerToast('تم تحديث بيانات ملفك الشخصي ✅');
+    } catch (e) {
+      triggerToast('حدث خطأ أثناء التحديث');
+    }
+  };
+
   const filteredAreas = SUPPORTED_AREAS.filter(area => {
     if (!areaSearchQuery.trim()) return true;
     return normalizeArabic(area).includes(normalizeArabic(areaSearchQuery));
@@ -363,12 +389,23 @@ export default function App() {
         if (!authForm.name || !identifier) { setAlertMsg("برجاء إدخال البيانات"); setAuthLoading(false); return; }
         const userCred = await createUserWithEmailAndPassword(auth, emailForFirebase, authForm.password);
         await updateProfile(userCred.user, { displayName: authForm.name });
-        await setDoc(doc(db, USERS_COLLECTION, userCred.user.uid), { phone: identifier.includes('@') ? '' : identifier, name: authForm.name, email: emailForFirebase, isVerified: false, verificationStatus: 'none', completedTripsCount: 0, createdAt: Date.now() });
+        await setDoc(doc(db, USERS_COLLECTION, userCred.user.uid), { 
+          phone: identifier.includes('@') ? '' : identifier, 
+          name: authForm.name, 
+          email: emailForFirebase, 
+          gender: authForm.gender || 'male',
+          accountRole: authForm.accountRole || 'passenger',
+          reviews: [],
+          isVerified: false, 
+          verificationStatus: 'none', 
+          completedTripsCount: 0, 
+          createdAt: Date.now() 
+        });
       }
     } catch (error) { setAlertMsg('تأكد من صحة البيانات أو الباسورد.'); } finally { setAuthLoading(false); }
   };
 
-  const forceSignUpScreen = async () => { try { await signOut(auth); setIsLoginMode(false); setAuthForm({ name: '', identifier: '', password: '' }); setActiveTab('home'); } catch(e){} };
+  const forceSignUpScreen = async () => { try { await signOut(auth); setIsLoginMode(false); setAuthForm({ name: '', identifier: '', password: '', gender: 'male', accountRole: 'passenger' }); setActiveTab('home'); } catch(e){} };
   const handleGuestLogin = async () => { setAuthLoading(true); try { await signInAnonymously(auth); } catch (error) {} finally { setAuthLoading(false); } };
   const toggleTheme = () => { const newTheme = !isDarkMode; setIsDarkMode(newTheme); localStorage.setItem('khodnimaak_theme', newTheme ? 'dark' : 'light'); };
   const handleLogout = async () => { try { await signOut(auth); setUserData(null); setMyInbox([]); setActiveChat(null); setActiveTab('home'); setNotifications([]); } catch(e) {} };
@@ -414,6 +451,10 @@ export default function App() {
         userName: userData?.name || 'مستخدم', 
         userPhoto: userData?.photoURL || null, 
         userPhone: userData?.phone || '', 
+        userRole: userData?.accountRole || 'passenger',
+        userGender: userData?.gender || 'male',
+        carModel: userData?.carModel || null,
+        carColor: userData?.carColor || null,
         verified: userData?.isVerified || false, 
         userBadge: userData?.customBadge || null,
         rating: userData?.rating || 0, 
@@ -467,6 +508,7 @@ export default function App() {
     } catch (error) { triggerToast('حدث خطأ.'); } finally { setIsSubmitting(false); }
   };
 
+  // شات الرحلات الشخصي (بين المستخدمين أو مع الأدمن بصفته الشخصية كمسافر)
   const openChatFromTrip = async (trip) => {
     if (!trip || typeof trip !== 'object' || !trip.userId || !trip.id) {
       triggerToast('عذراً، بيانات هذه الرحلة غير مكتملة أو بها خلل.');
@@ -512,14 +554,16 @@ export default function App() {
         chatId: chatId, tripId: trip.id, tripType: safeTripType, tripOwnerId: trip.userId, 
         otherPersonId: trip.userId, otherPersonName: safeUserName, otherPersonPhoto: safeUserPhoto, 
         otherPersonVerified: safeUserVerified, tripInfo: tripRouteName,
-        requestStatus: existingStatus, requestSenderId: existingSenderId
+        requestStatus: existingStatus, requestSenderId: existingSenderId,
+        isSupportChat: false, actingAsAdmin: false
       };
       
       const chatDataOther = { 
         chatId: chatId, tripId: trip.id, tripType: safeTripType, tripOwnerId: trip.userId, 
         otherPersonId: user.uid, otherPersonName: safeMyName, otherPersonPhoto: safeMyPhoto, 
         otherPersonVerified: safeMyVerified, tripInfo: tripRouteName,
-        requestStatus: existingStatus, requestSenderId: existingSenderId
+        requestStatus: existingStatus, requestSenderId: existingSenderId,
+        isSupportChat: false, actingAsAdmin: false
       };
 
       setActiveChat(chatDataMe); 
@@ -532,24 +576,50 @@ export default function App() {
     }
   };
 
+  // شات الإدارة الرسمي المنفصل تماماً عن حساب الأدمن الشخصي (يستخدم support_TargetUserId)
   const openAdminChat = async (targetUser) => {
-    if (!user || isGuest) return;
+    if (!user || isGuest || !targetUser?.id) return;
     try {
-      const user1 = user.uid < targetUser.id ? user.uid : targetUser.id;
-      const user2 = user.uid < targetUser.id ? targetUser.id : user.uid;
-      const chatId = `${user1}_${user2}`;
+      const supportChatId = `support_${targetUser.id}`;
 
-      const chatDataMe = { chatId, tripId: 'system', tripType: 'support', tripOwnerId: 'system', otherPersonId: targetUser.id, otherPersonName: targetUser.name || 'مستخدم', otherPersonPhoto: targetUser.photoURL || null, otherPersonVerified: targetUser.isVerified || false, tripInfo: 'الدعم الفني / الإدارة', requestStatus: 'none' };
-      const chatDataOther = { chatId, tripId: 'system', tripType: 'support', tripOwnerId: 'system', otherPersonId: user.uid, otherPersonName: 'الإدارة (الدعم الفني)', otherPersonPhoto: appSettings?.logo || null, otherPersonVerified: true, tripInfo: 'الدعم الفني / الإدارة', requestStatus: 'none' };
+      const chatDataAdmin = { 
+        chatId: supportChatId, 
+        tripId: 'system', 
+        tripType: 'support', 
+        tripOwnerId: 'system', 
+        isSupportChat: true,
+        actingAsAdmin: true,
+        otherPersonId: targetUser.id, 
+        otherPersonName: `${targetUser.name || 'مستخدم'} (دعم فني)`, 
+        otherPersonPhoto: targetUser.photoURL || null, 
+        otherPersonVerified: targetUser.isVerified || false, 
+        tripInfo: 'محادثة الإدارة الرسمية 🛡️', 
+        requestStatus: 'none' 
+      };
 
-      setActiveChat(chatDataMe); 
+      const chatDataTargetUser = { 
+        chatId: supportChatId, 
+        tripId: 'system', 
+        tripType: 'support', 
+        tripOwnerId: 'system', 
+        isSupportChat: true,
+        actingAsAdmin: false,
+        otherPersonId: 'system', 
+        otherPersonName: 'الإدارة (الدعم الفني)', 
+        otherPersonPhoto: appSettings?.logo || null, 
+        otherPersonVerified: true, 
+        tripInfo: 'الدعم الفني / الإدارة 🛡️', 
+        requestStatus: 'none' 
+      };
 
-      await setDoc(doc(db, `inbox_${user.uid}`, chatId), { ...chatDataMe, lastMessageTime: Date.now() }, { merge: true });
-      await setDoc(doc(db, `inbox_${targetUser.id}`, chatId), { ...chatDataOther }, { merge: true });
+      setActiveChat(chatDataAdmin); 
+
+      await setDoc(doc(db, `inbox_${user.uid}`, supportChatId), { ...chatDataAdmin, lastMessageTime: Date.now() }, { merge: true });
+      await setDoc(doc(db, `inbox_${targetUser.id}`, supportChatId), { ...chatDataTargetUser }, { merge: true });
       
       setShowAdminPanel(false);
     } catch (err) {
-      triggerToast('حدث خطأ في فتح الشات.');
+      triggerToast('حدث خطأ في فتح شات الإدارة.');
     }
   };
 
@@ -626,8 +696,17 @@ export default function App() {
       if (actionType === 'cancel_request') { updateDataMe.requestSenderId = null; updateDataOther.requestSenderId = null; }
       if (actionType === 'accept') { updateDataMe.tripStartTime = serverTimestamp(); updateDataOther.tripStartTime = serverTimestamp(); }
       
+      // توليد معرف دورة اكتمال جديدة لكي يظهر بوكس التقييم في كل رحلة جديدة بين نفس الشخصين
+      if (actionType === 'complete') {
+        const cycleId = Date.now();
+        updateDataMe.completedCycleId = cycleId;
+        updateDataOther.completedCycleId = cycleId;
+      }
+      
       await setDoc(doc(db, `inbox_${user.uid}`, chatId), updateDataMe, { merge: true });
-      if (chatInfo.otherPersonId && !chatInfo.isGroup) { await setDoc(doc(db, `inbox_${chatInfo.otherPersonId}`, chatId), updateDataOther, { merge: true }); }
+      if (chatInfo.otherPersonId && !chatInfo.isGroup && chatInfo.otherPersonId !== 'system') { 
+        await setDoc(doc(db, `inbox_${chatInfo.otherPersonId}`, chatId), updateDataOther, { merge: true }); 
+      }
       await addDoc(collection(db, `chats_${chatId}`), { text: systemText, senderId: 'system', isSystem: true, createdAt: serverTimestamp() });
       
       triggerToast('تم تحديث الحالة.');
@@ -656,6 +735,17 @@ export default function App() {
   return (
     <div dir="rtl" className={`min-h-screen flex flex-col relative transition-colors duration-300 ${bgMain} overflow-x-hidden pb-0`}>
       {toastMsg && ( <div className="fixed top-24 left-1/2 transform -translate-x-1/2 z-[999] bg-slate-900 text-white px-6 py-3 rounded-full shadow-2xl flex items-center gap-3 border border-slate-700"><CheckCircle2 size={18} className="text-emerald-400" /><p className="text-sm font-bold whitespace-nowrap">{toastMsg}</p></div> )}
+
+      {/* نافذة البروفايل العام لأي مستخدم (التقييمات + آراء العملاء + نوعه وصفته) */}
+      {publicProfileUserId && (
+        <PublicProfileModal
+          targetUserId={publicProfileUserId}
+          isDarkMode={isDarkMode}
+          onClose={() => setPublicProfileUserId(null)}
+          realTrips={realTrips}
+          openChatFromTrip={openChatFromTrip}
+        />
+      )}
 
       {showAreaModal && (
         <div className="fixed inset-0 bg-slate-900/95 backdrop-blur-md z-[9999] flex justify-center items-center p-4 pointer-events-auto">
@@ -751,11 +841,10 @@ export default function App() {
         </div>
       )}
 
-      {/* الهيدر المنسق بالكامل في صف واحد أنيق */}
+      {/* الهيدر المنسق بالكامل */}
       <header className={`sticky top-0 z-40 border-b ${isDarkMode ? 'bg-slate-950/90 border-slate-800/80' : 'bg-white/90 border-slate-200/70 shadow-sm'} backdrop-blur-xl pointer-events-auto`}>
         <div className="max-w-2xl mx-auto px-3 sm:px-4 py-2 flex items-center justify-between gap-2 w-full">
           
-          {/* 1. يمين الهيدر: صورة البروفايل والترحيب */}
           <div 
             className="flex items-center gap-2 cursor-pointer shrink-0" 
             onClick={() => setActiveTab('profile')}
@@ -775,7 +864,6 @@ export default function App() {
             </div>
           </div>
 
-          {/* 2. منتصف الهيدر: كبسولة "منطقتك" بالتصميم الصغير الأنيق */}
           <button 
             type="button"
             onClick={openAreaModalWithSync}
@@ -798,7 +886,6 @@ export default function App() {
             </span>
           </button>
           
-          {/* 3. يسار الهيدر: جرس الإشعارات + اسم ولوجو "طريقنا" مظبوطين بالكامل */}
           <div className="flex items-center gap-1.5 sm:gap-2 shrink-0">
             {!isGuest && (
               <button 
@@ -888,7 +975,6 @@ export default function App() {
         </div>
       )}
 
-      {/* الزر العائم (+) يختفي مع السكرول ويظهر عند التوقف */}
       {activeTab === 'home' && !isGuest && (
         <button 
           onClick={() => {
@@ -1092,6 +1178,7 @@ export default function App() {
           filterFrom={filterFrom} setFilterFrom={setFilterFrom} filterTo={filterTo} setFilterTo={setFilterTo} openChatFromTrip={openChatFromTrip}
           setSelectedStation={setSelectedStation} triggerToast={triggerToast} appSettings={appSettings} 
           userArea={userArea} userAreas={userAreas} onOpenAreaModal={openAreaModalWithSync}
+          onOpenPublicProfile={(uid) => setPublicProfileUserId(uid)}
         />
       )}
 
@@ -1100,31 +1187,105 @@ export default function App() {
       )}
 
       {activeTab === 'profile' && (
-        <ProfileScreen 
-          user={user} 
-          userData={userData} 
-          setUserData={setUserData} 
-          isGuest={isGuest} 
-          isAdmin={isAdmin} 
-          isDarkMode={isDarkMode} 
-          toggleTheme={toggleTheme} 
-          handleLogout={handleLogout} 
-          handleEditName={handleEditName} 
-          setShowVerifyModal={setShowVerifyModal} 
-          setShowAdminPanel={setShowAdminPanel} 
-          forceSignUpScreen={forceSignUpScreen}
-          realTrips={realTrips}
-          openChatFromTrip={openChatFromTrip}
-          triggerToast={triggerToast}
-        />
+        <div className="flex-1 flex flex-col">
+          {/* شريط علوي في صفحة حسابي لتحديد النوع والصفة ومعاينة البروفايل العام */}
+          {!isGuest && user && (
+            <div className="w-full max-w-2xl mx-auto px-4 pt-3">
+              <div className={`p-3.5 rounded-2xl border shadow-sm space-y-3 ${bgCard}`}>
+                <div className="flex items-center justify-between">
+                  <span className="text-xs font-black text-indigo-600 dark:text-indigo-400">هويتك وصفتك في التطبيق:</span>
+                  <button
+                    type="button"
+                    onClick={() => setPublicProfileUserId(user.uid)}
+                    className="px-3 py-1.5 rounded-xl bg-indigo-50 dark:bg-indigo-950/60 text-indigo-600 dark:text-indigo-400 border border-indigo-200 dark:border-indigo-800 text-[11px] font-black flex items-center gap-1 hover:bg-indigo-100"
+                  >
+                    <Eye size={13} /> معاينة بروفايلي العام وآراء الناس
+                  </button>
+                </div>
+
+                <div className="grid grid-cols-2 gap-2">
+                  {/* اختيار النوع */}
+                  <div className="flex rounded-xl p-0.5 border dark:border-slate-700 bg-slate-100 dark:bg-slate-800">
+                    {[
+                      { id: 'male', label: 'ذكر 👨' },
+                      { id: 'female', label: 'أنثى 👩' }
+                    ].map(g => (
+                      <button
+                        key={g.id}
+                        type="button"
+                        onClick={() => handleUpdateUserRoleOrGender('gender', g.id)}
+                        className={`flex-1 py-1.5 rounded-lg text-[11px] font-black transition-all ${
+                          (userData?.gender || 'male') === g.id 
+                            ? 'bg-indigo-600 text-white shadow-sm' 
+                            : 'text-slate-500'
+                        }`}
+                      >
+                        {g.label}
+                      </button>
+                    ))}
+                  </div>
+
+                  {/* اختيار الصفة */}
+                  <select
+                    value={userData?.accountRole || 'passenger'}
+                    onChange={(e) => handleUpdateUserRoleOrGender('accountRole', e.target.value)}
+                    className={`px-2.5 py-1.5 rounded-xl border text-[11px] font-black outline-none ${bgInput}`}
+                  >
+                    <option value="driver">🚗 كابتن (لدي سيارة)</option>
+                    <option value="passenger">🙋‍♂️ راكب</option>
+                    <option value="delivery">📦 مندوب توصيل / أمانات</option>
+                  </select>
+                </div>
+              </div>
+            </div>
+          )}
+
+          <ProfileScreen 
+            user={user} 
+            userData={userData} 
+            setUserData={setUserData} 
+            isGuest={isGuest} 
+            isAdmin={isAdmin} 
+            isDarkMode={isDarkMode} 
+            toggleTheme={toggleTheme} 
+            handleLogout={handleLogout} 
+            handleEditName={handleEditName} 
+            setShowVerifyModal={setShowVerifyModal} 
+            setShowAdminPanel={setShowAdminPanel} 
+            forceSignUpScreen={forceSignUpScreen}
+            realTrips={realTrips}
+            openChatFromTrip={openChatFromTrip}
+            triggerToast={triggerToast}
+          />
+        </div>
       )}
 
       {activeChat && !isGuest && ( 
-        <ChatModal baseChatData={activeChat} user={user} userData={userData} isDarkMode={isDarkMode} onClose={() => setActiveChat(null)} triggerToast={triggerToast} handleTripAction={handleTripAction} /> 
+        <ChatModal 
+          baseChatData={activeChat} 
+          user={user} 
+          userData={userData} 
+          isDarkMode={isDarkMode} 
+          onClose={() => setActiveChat(null)} 
+          triggerToast={triggerToast} 
+          handleTripAction={handleTripAction}
+          onOpenPublicProfile={(uid) => setPublicProfileUserId(uid)}
+        /> 
       )}
       
       {showVerifyModal && ( <VerifyModal user={user} isDarkMode={isDarkMode} onClose={() => setShowVerifyModal(false)} triggerToast={triggerToast} setUserData={setUserData} /> )}
-      {showAdminPanel && isAdmin && ( <AdminPanel isDarkMode={isDarkMode} onClose={() => setShowAdminPanel(false)} triggerToast={triggerToast} appSettings={appSettings} user={user} openAdminChat={openAdminChat} /> )}
+      {showAdminPanel && isAdmin && ( 
+        <AdminPanel 
+          isDarkMode={isDarkMode} 
+          onClose={() => setShowAdminPanel(false)} 
+          triggerToast={triggerToast} 
+          appSettings={appSettings} 
+          user={user} 
+          openAdminChat={openAdminChat}
+          realTrips={realTrips}
+          onOpenPublicProfile={(uid) => setPublicProfileUserId(uid)}
+        /> 
+      )}
 
       {activeTab === 'inbox' && (
         <div className="pb-[100px] flex-1 w-full max-w-2xl mx-auto px-4 py-6 mt-4 relative z-10 animate-fade-in-up">
@@ -1135,14 +1296,44 @@ export default function App() {
                 {myInbox.length === 0 ? (
                   <div className="text-center text-slate-500 mt-24"><MessageCircle size={48} className="mx-auto mb-4 opacity-50"/><h3 className="font-bold text-lg">لا توجد رسائل</h3></div>
                 ) : (
-                  myInbox.map(chat => (
-                    <div key={chat.chatId} onClick={() => setActiveChat(chat)} className={`p-4 rounded-2xl shadow-sm mb-3 cursor-pointer border hover:border-indigo-500 transition-colors ${isDarkMode ? 'bg-slate-800' : 'bg-slate-50'}`}>
-                      <div className="flex items-center gap-4">
-                         {chat.otherPersonPhoto ? ( <img src={chat.otherPersonPhoto} className="w-12 h-12 rounded-full object-cover shrink-0" alt="avatar" /> ) : ( <div className="w-12 h-12 bg-indigo-50 text-indigo-500 rounded-full flex items-center justify-center font-bold text-xl shrink-0">{(chat?.otherPersonName || 'م').charAt(0)}</div> )}
-                         <div className="flex-1 overflow-hidden"><h4 className={`font-bold text-sm ${textPrimary}`}>{chat?.otherPersonName}</h4><p className={`text-xs mt-1 truncate ${textSecondary}`}>{chat?.lastMessage || '...'}</p></div>
+                  myInbox.map(chat => {
+                    const isSupport = Boolean(chat.isSupportChat || String(chat.chatId).startsWith('support_'));
+                    return (
+                      <div key={chat.chatId} onClick={() => setActiveChat(chat)} className={`p-4 rounded-2xl shadow-sm mb-3 cursor-pointer border hover:border-indigo-500 transition-colors ${isSupport ? (isDarkMode ? 'bg-indigo-950/30 border-indigo-700/60' : 'bg-indigo-50/70 border-indigo-200') : (isDarkMode ? 'bg-slate-800' : 'bg-slate-50')}`}>
+                        <div className="flex items-center justify-between gap-3">
+                          <div className="flex items-center gap-3.5 overflow-hidden">
+                             {chat.otherPersonPhoto ? ( 
+                               <img src={chat.otherPersonPhoto} className="w-12 h-12 rounded-full object-cover shrink-0" alt="avatar" /> 
+                             ) : ( 
+                               <div className={`w-12 h-12 rounded-full flex items-center justify-center font-bold text-xl shrink-0 ${isSupport ? 'bg-indigo-600 text-white' : 'bg-indigo-50 text-indigo-500'}`}>
+                                 {isSupport ? '🛡️' : (chat?.otherPersonName || 'م').charAt(0)}
+                               </div> 
+                             )}
+                             <div className="flex-1 overflow-hidden">
+                               <div className="flex items-center gap-1.5">
+                                 <h4 className={`font-black text-sm truncate ${textPrimary}`}>{chat?.otherPersonName}</h4>
+                                 {isSupport && <span className="text-[9px] font-black bg-indigo-600 text-white px-2 py-0.5 rounded-full">رسمي</span>}
+                               </div>
+                               <p className={`text-xs mt-1 truncate ${textSecondary}`}>{chat?.lastMessage || '...'}</p>
+                             </div>
+                          </div>
+
+                          {!isSupport && chat.otherPersonId && chat.otherPersonId !== 'system' && (
+                            <button
+                              type="button"
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                setPublicProfileUserId(chat.otherPersonId);
+                              }}
+                              className="px-2.5 py-1.5 rounded-xl bg-slate-200/70 dark:bg-slate-700 text-[10px] font-black shrink-0 hover:bg-indigo-600 hover:text-white transition-colors"
+                            >
+                              البروفايل
+                            </button>
+                          )}
+                        </div>
                       </div>
-                    </div>
-                  ))
+                    );
+                  })
                 )}
               </div>
             ) : (<div className="flex-1 flex flex-col items-center justify-center"><Lock size={48} className="text-slate-300 mb-4"/><button onClick={forceSignUpScreen} className="bg-indigo-600 text-white px-6 py-3 rounded-xl font-bold">تسجيل الدخول للمتابعة</button></div>)}
@@ -1154,7 +1345,6 @@ export default function App() {
         <LiveTrackerBar activeTrackers={activeTrackers} isDarkMode={isDarkMode} user={user} setActiveChat={setActiveChat} setActiveTab={setActiveTab} setViewMode={setViewMode} handleTripAction={(chatInfo, actionType) => handleTripAction(chatInfo, actionType)}/>
       )}
 
-      {/* الشريط السفلي يختفي مع السكرول ويظهر عند التوقف */}
       <nav className={`fixed bottom-0 w-full z-[100] border-t ${isDarkMode ? 'bg-slate-950 border-slate-800' : 'bg-white border-slate-100'} pointer-events-auto transition-all duration-300 ${
         isScrolling ? 'translate-y-full opacity-0 pointer-events-none' : 'translate-y-0 opacity-100'
       }`}>
@@ -1168,24 +1358,77 @@ export default function App() {
       </nav>
 
       {!user && (
-        <div dir="rtl" className={`fixed inset-0 flex items-center justify-center p-4 z-[1000] ${bgMain}`}>
-          <div className={`${bgCard} p-8 rounded-[2rem] shadow-xl max-w-sm w-full border relative`}>
-            <div className="mb-8 text-center">
-              <div className="bg-indigo-600 text-white w-16 h-16 rounded-[1.25rem] flex items-center justify-center mx-auto mb-4 transform -rotate-3 shadow-lg"><Car size={32} /></div>
-              <h1 className="text-3xl font-black mb-1 text-indigo-600 dark:text-indigo-400">طريقنا</h1>
-              <p className={`${textSecondary} text-sm font-medium mt-2`}>{isLoginMode ? 'سجل دخولك للمتابعة' : 'انضم إلينا الآن'}</p>
+        <div dir="rtl" className={`fixed inset-0 flex items-center justify-center p-4 z-[1000] overflow-y-auto ${bgMain}`}>
+          <div className={`${bgCard} p-6 sm:p-8 rounded-[2rem] shadow-xl max-w-sm w-full border relative my-auto`}>
+            <div className="mb-6 text-center">
+              <div className="bg-indigo-600 text-white w-14 h-14 rounded-[1.25rem] flex items-center justify-center mx-auto mb-3 transform -rotate-3 shadow-lg"><Car size={28} /></div>
+              <h1 className="text-2xl font-black mb-1 text-indigo-600 dark:text-indigo-400">طريقنا</h1>
+              <p className={`${textSecondary} text-xs font-bold mt-1`}>{isLoginMode ? 'سجل دخولك للمتابعة' : 'انضم إلينا الآن وحدد هويتك'}</p>
             </div>
             {alertMsg && <div className="mb-4 bg-rose-100 text-rose-600 p-3 rounded-xl text-xs font-bold text-center border border-rose-200">{alertMsg}</div>}
-            <form onSubmit={handleAuth} className="space-y-4">
-              {!isLoginMode && (<input type="text" required placeholder="ادخل الاسم" value={authForm.name} onChange={e => setAuthForm({...authForm, name: e.target.value})} className={`w-full border rounded-xl py-3.5 px-4 outline-none font-bold ${bgInput}`} />)}
-              <input type="text" required placeholder="رقم الموبايل أو الإيميل" value={authForm.identifier || ''} onChange={e => setAuthForm({...authForm, identifier: e.target.value})} className={`w-full border rounded-xl py-3.5 px-4 outline-none font-bold text-left ${bgInput}`} dir="ltr" />
-              <input type="password" required placeholder="كلمة المرور" value={authForm.password} onChange={e => setAuthForm({...authForm, password: e.target.value})} className={`w-full border rounded-xl py-3.5 px-4 outline-none font-bold text-left ${bgInput}`} dir="ltr" />
-              <button type="submit" disabled={authLoading} className="w-full bg-indigo-600 text-white py-4 rounded-xl font-bold hover:bg-indigo-700 active:scale-95 flex justify-center mt-2 shadow-md">{authLoading ? <Loader2 className="animate-spin m-auto"/> : (isLoginMode ? 'تسجيل الدخول' : 'تسجيل حساب جديد')}</button>
+            <form onSubmit={handleAuth} className="space-y-3.5">
+              {!isLoginMode && (
+                <>
+                  <input type="text" required placeholder="الاسم بالكامل" value={authForm.name} onChange={e => setAuthForm({...authForm, name: e.target.value})} className={`w-full border rounded-xl py-3 px-4 outline-none font-bold text-sm ${bgInput}`} />
+                  
+                  {/* اختيار النوع: ذكر أم أنثى */}
+                  <div className="space-y-1">
+                    <label className="text-[11px] font-black text-slate-400 px-1">النوع:</label>
+                    <div className="grid grid-cols-2 gap-2">
+                      {[
+                        { id: 'male', label: 'ذكر 👨' },
+                        { id: 'female', label: 'أنثى 👩' }
+                      ].map(g => (
+                        <button
+                          key={g.id}
+                          type="button"
+                          onClick={() => setAuthForm({ ...authForm, gender: g.id })}
+                          className={`py-2.5 rounded-xl text-xs font-black border transition-all ${
+                            authForm.gender === g.id 
+                              ? 'bg-indigo-600 text-white border-indigo-600 shadow-sm' 
+                              : `${bgInput}`
+                          }`}
+                        >
+                          {g.label}
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+
+                  {/* اختيار الصفة: سائق، راكب، أم دليفري */}
+                  <div className="space-y-1">
+                    <label className="text-[11px] font-black text-slate-400 px-1">صفتك في التطبيق:</label>
+                    <div className="grid grid-cols-3 gap-1.5">
+                      {[
+                        { id: 'driver', label: 'سائق سيارة 🚗' },
+                        { id: 'passenger', label: 'راكب 🙋‍♂️' },
+                        { id: 'delivery', label: 'دليفري 📦' }
+                      ].map(r => (
+                        <button
+                          key={r.id}
+                          type="button"
+                          onClick={() => setAuthForm({ ...authForm, accountRole: r.id })}
+                          className={`py-2.5 px-1 rounded-xl text-[11px] font-black border transition-all ${
+                            authForm.accountRole === r.id 
+                              ? 'bg-emerald-600 text-white border-emerald-600 shadow-sm' 
+                              : `${bgInput}`
+                          }`}
+                        >
+                          {r.label}
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+                </>
+              )}
+              <input type="text" required placeholder="رقم الموبايل أو الإيميل" value={authForm.identifier || ''} onChange={e => setAuthForm({...authForm, identifier: e.target.value})} className={`w-full border rounded-xl py-3 px-4 outline-none font-bold text-sm text-left ${bgInput}`} dir="ltr" />
+              <input type="password" required placeholder="كلمة المرور" value={authForm.password} onChange={e => setAuthForm({...authForm, password: e.target.value})} className={`w-full border rounded-xl py-3 px-4 outline-none font-bold text-sm text-left ${bgInput}`} dir="ltr" />
+              <button type="submit" disabled={authLoading} className="w-full bg-indigo-600 text-white py-3.5 rounded-xl font-black text-sm hover:bg-indigo-700 active:scale-95 flex justify-center mt-2 shadow-md">{authLoading ? <Loader2 className="animate-spin m-auto"/> : (isLoginMode ? 'تسجيل الدخول' : 'إنشاء الحساب والبدء')}</button>
             </form>
-            <div className="mt-6 text-center space-y-4">
-              <button onClick={() => setIsLoginMode(!isLoginMode)} className="font-bold text-sm text-indigo-600 hover:underline">{isLoginMode ? 'ليس لديك حساب؟ أنشئ حساباً' : 'لديك حساب بالفعل؟ سجل دخولك'}</button>
-              <div className={`flex items-center justify-center gap-2 text-sm ${textSecondary}`}><div className="h-px w-8 bg-slate-200 dark:bg-slate-700"></div> أو <div className="h-px w-8 bg-slate-200 dark:bg-slate-700"></div></div>
-              <button onClick={handleGuestLogin} className={`w-full py-3 rounded-xl text-sm font-bold border transition-all ${isDarkMode ? 'border-slate-700 text-slate-300 hover:bg-slate-800' : 'border-slate-200 text-slate-600 hover:bg-slate-50'}`}>تصفح التطبيق كزائر</button>
+            <div className="mt-5 text-center space-y-3">
+              <button onClick={() => setIsLoginMode(!isLoginMode)} className="font-bold text-xs text-indigo-600 hover:underline">{isLoginMode ? 'ليس لديك حساب؟ أنشئ حساباً جديداً' : 'لديك حساب بالفعل؟ سجل دخولك'}</button>
+              <div className={`flex items-center justify-center gap-2 text-xs ${textSecondary}`}><div className="h-px w-8 bg-slate-200 dark:bg-slate-700"></div> أو <div className="h-px w-8 bg-slate-200 dark:bg-slate-700"></div></div>
+              <button onClick={handleGuestLogin} className={`w-full py-2.5 rounded-xl text-xs font-bold border transition-all ${isDarkMode ? 'border-slate-700 text-slate-300 hover:bg-slate-800' : 'border-slate-200 text-slate-600 hover:bg-slate-50'}`}>تصفح التطبيق كزائر</button>
             </div>
           </div>
         </div>
