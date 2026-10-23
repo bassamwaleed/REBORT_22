@@ -98,7 +98,7 @@ const BesoAssistantModal = ({ stations = [], isDarkMode, onClose, onSelectStatio
     {
       id: 'welcome',
       sender: 'beso',
-      text: `أهلاً بك يا بطل! أنا "بيسو" 🤖 مساعدك الذكي لمواقف ومواصلات مصر.\n\nأنا مسجل عندي حالياً (${stations.length}) موقف بكل خطوطهم وتعرفتهم الحية، وكمان عارف طرق السفر لكل محافظات مصر!\n\nاكتبلي عايز تروح فين؟ (مثلاً: "عايز أروح رأس البر من القاهرة" أو "مواصلات مدينة السادات" أو اسم أي منطقة) وهقولك أكتر من طريقة تركب بيها فوراً! 🚀`,
+      text: `أهلاً بك يا بطل! أنا "بيسو" 🤖 مساعدك الذكي لمواقف ومواصلات مصر.\n\nأنا مسجل عندي حالياً (${stations.length}) موقف بكل خطوطهم وتعرفتهم الحية، وكمان عارف طرق السفر لكل محافظات مصر!\n\nاكتبلي عايز تروح فين؟ (مثلاً: "عايز أروح رأس البر من القاهرة" أو "مواصلات مدينة السادات") وهقولك أكتر من طريقة تركب بيها فوراً! 🚀`,
       matchedStations: [],
       matchedRoutes: []
     }
@@ -116,15 +116,6 @@ const BesoAssistantModal = ({ stations = [], isDarkMode, onClose, onSelectStatio
   useEffect(() => {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
   }, [messages]);
-
-  // منع سكرول الخلفية أثناء فتح شات بيسو على الموبايل
-  useEffect(() => {
-    const originalOverflow = document.body.style.overflow;
-    document.body.style.overflow = 'hidden';
-    return () => {
-      document.body.style.overflow = originalOverflow;
-    };
-  }, []);
 
   const generateBesoResponse = (queryText) => {
     const normQuery = normalizeArabic(queryText);
@@ -268,52 +259,56 @@ const BesoAssistantModal = ({ stations = [], isDarkMode, onClose, onSelectStatio
     if (!textToProcess) setInput('');
   };
 
-  const bgCard = isDarkMode ? 'bg-slate-900 border-slate-800' : 'bg-white border-slate-200';
+  const bgCard = isDarkMode ? 'bg-slate-900/95 border-slate-700/80' : 'bg-white/95 border-slate-200';
   const bgInput = isDarkMode ? 'bg-slate-800 border-slate-700 text-white placeholder-slate-400' : 'bg-slate-100 border-slate-200 text-slate-900';
 
   const modalContent = (
-    <div 
-      dir="rtl"
-      className="fixed inset-0 bg-slate-950/90 backdrop-blur-md z-[99999] flex justify-center items-end sm:items-center p-0 sm:p-4 pointer-events-auto" 
-      onClick={onClose}
-    >
+    <>
+      {/* طبقة شفافة خفيفة لإغلاق النافذة عند الضغط خارجها مع الحفاظ على رؤية الموقع وشريط التنقل */}
       <div 
+        className="fixed inset-0 bottom-[72px] bg-black/25 backdrop-blur-[1px] z-[190]" 
+        onClick={onClose}
+      />
+
+      {/* نافذة عائمة مرفوعة فوق شريط التنقل السفلي مباشرة (bottom-[82px]) */}
+      <div 
+        dir="rtl"
         onClick={(e) => e.stopPropagation()} 
-        className={`${bgCard} w-full sm:max-w-lg h-[100dvh] sm:h-[650px] sm:max-h-[88dvh] rounded-none sm:rounded-[2rem] shadow-2xl flex flex-col overflow-hidden border-0 sm:border dark:border-slate-700 animate-fade-in-up`}
+        className={`fixed bottom-[82px] left-3 right-3 sm:left-6 sm:right-auto sm:w-[390px] h-[64dvh] max-h-[500px] min-h-[340px] z-[200] ${bgCard} backdrop-blur-xl rounded-[1.75rem] shadow-[0_12px_45px_rgba(0,0,0,0.45)] flex flex-col overflow-hidden border animate-fade-in-up`}
       >
-        {/* هيدر المساعد بيسو */}
-        <div className="p-4 bg-gradient-to-r from-indigo-600 via-violet-600 to-indigo-700 text-white flex items-center justify-between shadow-md shrink-0">
-          <div className="flex items-center gap-3">
-            <div className="w-11 h-11 rounded-2xl bg-white/20 backdrop-blur-md flex items-center justify-center border border-white/30 shadow-inner relative">
-              <Bot size={25} className="text-white" />
-              <span className="absolute -bottom-0.5 -right-0.5 w-3 h-3 bg-emerald-400 rounded-full border-2 border-indigo-700"></span>
+        {/* هيدر نافذة بيسو المدمج */}
+        <div className="px-4 py-3 bg-gradient-to-r from-indigo-600 via-violet-600 to-indigo-700 text-white flex items-center justify-between shadow-sm shrink-0">
+          <div className="flex items-center gap-2.5">
+            <div className="w-9 h-9 rounded-xl bg-white/20 backdrop-blur-md flex items-center justify-center border border-white/30 relative shrink-0">
+              <Bot size={20} className="text-white" />
+              <span className="absolute -bottom-0.5 -right-0.5 w-2.5 h-2.5 bg-emerald-400 rounded-full border-2 border-indigo-700"></span>
             </div>
             <div>
               <div className="flex items-center gap-1.5">
-                <h3 className="font-black text-base">المساعد الذكي "بيسو"</h3>
-                <span className="text-[10px] font-black bg-amber-400 text-slate-950 px-2 py-0.5 rounded-full flex items-center gap-0.5">
-                  <Sparkles size={10}/> AI
+                <h3 className="font-black text-sm">المساعد الذكي "بيسو"</h3>
+                <span className="text-[9px] font-black bg-amber-400 text-slate-950 px-1.5 py-0.2 rounded-full flex items-center gap-0.5">
+                  <Sparkles size={9}/> AI
                 </span>
               </div>
-              <p className="text-[11px] text-indigo-100 font-bold mt-0.5">
-                خبير مواقف وخطوط مواصلات مصر ({stations.length} موقف نشط)
+              <p className="text-[10px] text-indigo-100 font-bold">
+                خبير مواصلات ومواقف مصر ({stations.length} موقف)
               </p>
             </div>
           </div>
 
-          <button onClick={onClose} className="p-2 bg-white/15 hover:bg-rose-500 rounded-full transition-colors">
-            <X size={20} />
+          <button onClick={onClose} className="p-1.5 bg-white/15 hover:bg-rose-500 rounded-full transition-colors">
+            <X size={18} />
           </button>
         </div>
 
         {/* منطقة المحادثة */}
-        <div className={`flex-1 min-h-0 overflow-y-auto p-4 space-y-4 [&::-webkit-scrollbar]:hidden ${isDarkMode ? 'bg-slate-950/60' : 'bg-slate-50/70'}`}>
+        <div className={`flex-1 min-h-0 overflow-y-auto p-3.5 space-y-3 [&::-webkit-scrollbar]:hidden ${isDarkMode ? 'bg-slate-950/50' : 'bg-slate-50/70'}`}>
           {messages.map((msg) => {
             const isBeso = msg.sender === 'beso';
             return (
               <div key={msg.id} className={`flex ${isBeso ? 'justify-start' : 'justify-end'}`}>
-                <div className={`max-w-[88%] flex flex-col gap-2 ${isBeso ? 'items-start' : 'items-end'}`}>
-                  <div className={`p-3.5 rounded-2xl text-xs sm:text-sm leading-relaxed whitespace-pre-line shadow-sm ${
+                <div className={`max-w-[90%] flex flex-col gap-1.5 ${isBeso ? 'items-start' : 'items-end'}`}>
+                  <div className={`p-3 rounded-2xl text-xs leading-relaxed whitespace-pre-line shadow-sm ${
                     isBeso 
                       ? (isDarkMode ? 'bg-slate-800 text-slate-100 border border-slate-700 rounded-tr-sm' : 'bg-white text-slate-800 border border-slate-200 rounded-tr-sm')
                       : 'bg-indigo-600 text-white font-bold rounded-tl-sm'
@@ -322,9 +317,9 @@ const BesoAssistantModal = ({ stations = [], isDarkMode, onClose, onSelectStatio
                   </div>
 
                   {isBeso && msg.matchedStations && msg.matchedStations.length > 0 && (
-                    <div className="w-full space-y-1.5 mt-1">
-                      <span className="text-[10px] font-black text-indigo-500 px-1 flex items-center gap-1">
-                        <Compass size={12}/> اضغط على الموقف لفتح خطوطه وتفاصيله فوراً:
+                    <div className="w-full space-y-1.5 mt-0.5">
+                      <span className="text-[10px] font-black text-indigo-400 px-1 flex items-center gap-1">
+                        <Compass size={11}/> اضغط على الموقف لفتح خطوطه:
                       </span>
                       <div className="grid grid-cols-1 gap-1.5">
                         {msg.matchedStations.map((st) => (
@@ -334,21 +329,21 @@ const BesoAssistantModal = ({ stations = [], isDarkMode, onClose, onSelectStatio
                               onClose();
                               onSelectStation(st);
                             }}
-                            className={`w-full p-2.5 rounded-xl border text-right flex items-center justify-between transition-all hover:border-indigo-500 active:scale-98 ${
+                            className={`w-full p-2 rounded-xl border text-right flex items-center justify-between transition-all hover:border-indigo-500 active:scale-98 ${
                               isDarkMode ? 'bg-slate-900 border-slate-700 text-white' : 'bg-indigo-50/70 border-indigo-200 text-slate-900'
                             }`}
                           >
-                            <div className="flex items-center gap-2.5">
-                              <div className="p-2 rounded-lg bg-indigo-600 text-white shrink-0">
-                                <BusFront size={15}/>
+                            <div className="flex items-center gap-2">
+                              <div className="p-1.5 rounded-lg bg-indigo-600 text-white shrink-0">
+                                <BusFront size={13}/>
                               </div>
                               <div>
-                                <h4 className="text-xs font-black">{st.name}</h4>
-                                <p className="text-[10px] text-slate-400 font-bold">{st.location} • {st.routes?.length || 0} خطوط</p>
+                                <h4 className="text-[11px] font-black">{st.name}</h4>
+                                <p className="text-[9px] text-slate-400 font-bold">{st.location} • {st.routes?.length || 0} خطوط</p>
                               </div>
                             </div>
                             <span className="text-[10px] font-black text-indigo-500 flex items-center gap-0.5">
-                              عرض الموقف <ChevronLeft size={14}/>
+                              عرض <ChevronLeft size={12}/>
                             </span>
                           </button>
                         ))}
@@ -363,13 +358,13 @@ const BesoAssistantModal = ({ stations = [], isDarkMode, onClose, onSelectStatio
         </div>
 
         {/* اقتراحات سريعة */}
-        <div className={`px-3 pt-2.5 pb-1.5 border-t shrink-0 flex gap-1.5 overflow-x-auto [&::-webkit-scrollbar]:hidden ${isDarkMode ? 'bg-slate-900 border-slate-800' : 'bg-white border-slate-200'}`}>
+        <div className={`px-2.5 py-1.5 border-t shrink-0 flex gap-1.5 overflow-x-auto [&::-webkit-scrollbar]:hidden ${isDarkMode ? 'bg-slate-900 border-slate-800' : 'bg-white border-slate-200'}`}>
           {quickQuestions.map((q, idx) => (
             <button
               key={idx}
               type="button"
               onClick={() => handleSend(q)}
-              className={`shrink-0 text-[10px] font-black px-3 py-1.5 rounded-full border transition-all active:scale-95 ${
+              className={`shrink-0 text-[10px] font-black px-2.5 py-1 rounded-full border transition-all active:scale-95 ${
                 isDarkMode 
                   ? 'bg-slate-800 border-slate-700 text-indigo-300 hover:bg-indigo-600 hover:text-white' 
                   : 'bg-indigo-50 border-indigo-200/80 text-indigo-700 hover:bg-indigo-600 hover:text-white'
@@ -380,32 +375,30 @@ const BesoAssistantModal = ({ stations = [], isDarkMode, onClose, onSelectStatio
           ))}
         </div>
 
-        {/* حقل كتابة السؤال وزر الإرسال ظاهر بالكامل أعلى الشاشة */}
+        {/* حقل كتابة السؤال وزر الإرسال مدمج ومرفوع بوضوح */}
         <form 
           onSubmit={(e) => { e.preventDefault(); handleSend(); }} 
-          className={`p-3 pb-4 sm:pb-3 shrink-0 flex items-center gap-2 border-t ${isDarkMode ? 'bg-slate-900 border-slate-800' : 'bg-white border-slate-100'}`}
-          style={{ paddingBottom: 'max(1rem, env(safe-area-inset-bottom))' }}
+          className={`p-2.5 shrink-0 flex items-center gap-2 border-t ${isDarkMode ? 'bg-slate-900 border-slate-800' : 'bg-white border-slate-100'}`}
         >
           <input
             type="text"
             value={input}
             onChange={(e) => setInput(e.target.value)}
-            placeholder="اسأل بيسو: عايز أروح رأس البر من القاهرة..."
-            className={`flex-1 px-4 py-3.5 rounded-2xl border text-xs sm:text-sm font-bold outline-none focus:ring-2 focus:ring-indigo-500 ${bgInput}`}
+            placeholder="اسأل بيسو: عايز أروح رأس البر..."
+            className={`flex-1 px-3.5 py-2.5 rounded-xl border text-xs font-bold outline-none focus:ring-2 focus:ring-indigo-500 ${bgInput}`}
           />
           <button
             type="submit"
             disabled={!input.trim()}
-            className="w-12 h-12 rounded-2xl bg-indigo-600 hover:bg-indigo-700 disabled:opacity-40 text-white flex items-center justify-center shadow-md transition-transform active:scale-95 shrink-0"
+            className="w-10 h-10 rounded-xl bg-indigo-600 hover:bg-indigo-700 disabled:opacity-40 text-white flex items-center justify-center shadow-md transition-transform active:scale-95 shrink-0"
           >
-            <Send size={18} className="rtl:rotate-180" />
+            <Send size={16} className="rtl:rotate-180" />
           </button>
         </form>
       </div>
-    </div>
+    </>
   );
 
-  // استخدام createPortal لإخراج النافذة خارج قيود HomeScreen تماماً لتعلو فوق الشريط السفلي والزر العائم
   return typeof document !== 'undefined' ? createPortal(modalContent, document.body) : modalContent;
 };
 
