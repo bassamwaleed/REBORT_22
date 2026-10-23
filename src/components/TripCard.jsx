@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { doc, deleteDoc, getDoc } from 'firebase/firestore';
-import { Trash2, Share2, User, ShieldCheck, Star, ArrowLeft, Clock, Car, MapPin, Package, CheckCircle2, Phone, MessageCircle, Route } from 'lucide-react';
+import { Trash2, Share2, User, ShieldCheck, Star, ArrowLeft, Clock, Car, MapPin, Package, CheckCircle2, Phone, MessageCircle, Route, FileText, Sparkles } from 'lucide-react';
 import { db, APP_COLLECTION_NAME, USERS_COLLECTION } from '../firebase';
 import { formatTripDateTime, getSeatsText } from '../utils/helpers';
 
@@ -11,13 +11,15 @@ const TripCard = ({ trip, user, isAdmin, isDarkMode, openChatFromTrip, triggerTo
   const isCompleted = trip?.status === 'completed'; 
   const isFull = trip?.status === 'full'; 
   const isFemalesOnly = Boolean(trip?.preferences?.femalesOnly);
+  const isRequest = trip?.type === 'request';
   
   const [contactPhone, setContactPhone] = useState(trip?.userPhone || '');
   const [liveVerified, setLiveVerified] = useState(Boolean(trip?.verified));
   const [liveBadge, setLiveBadge] = useState(trip?.userBadge || null);
   const [liveRating, setLiveRating] = useState(Number(trip?.rating || 0));
   const [liveReviewsCount, setLiveReviewsCount] = useState(0);
-  const [liveRole, setLiveRole] = useState(trip?.userRole || null);
+  const [liveCarModel, setLiveCarModel] = useState(trip?.carModel || '');
+  const [liveCarColor, setLiveCarColor] = useState(trip?.carColor || '');
 
   useEffect(() => {
     setLiveVerified(Boolean(trip?.verified));
@@ -48,14 +50,15 @@ const TripCard = ({ trip, user, isAdmin, isDarkMode, openChatFromTrip, triggerTo
           } else if (uData?.ratingsCount) {
             setLiveReviewsCount(Number(uData.ratingsCount));
           }
-          if (uData?.accountRole) {
-            setLiveRole(uData.accountRole);
+          if (!trip?.carModel && uData?.carModel) {
+            setLiveCarModel(uData.carModel);
+            setLiveCarColor(uData.carColor || '');
           }
         }
       })
       .catch(() => {});
     return () => { isMounted = false; };
-  }, [trip?.userPhone, trip?.userId, trip?.allowPhoneContact]);
+  }, [trip?.userPhone, trip?.userId, trip?.allowPhoneContact, trip?.carModel]);
 
   const contactMethod = trip?.contactMethod || (trip?.allowPhoneContact === false ? 'chat' : 'both');
   const hasValidPhone = Boolean(contactPhone && String(contactPhone).trim());
@@ -69,7 +72,26 @@ const TripCard = ({ trip, user, isAdmin, isDarkMode, openChatFromTrip, triggerTo
     return `https://wa.me/${intlPhone}?text=${encodeURIComponent(msg)}`;
   };
 
-  let bgCard = isDarkMode ? 'bg-slate-900 border-slate-800' : 'bg-white border-slate-200';
+  // حساب الوقت المتبقي للرحلة كميزة إضافية ذكية في الكارت
+  const getRemainingTimeBadge = () => {
+    if (!trip?.date || !trip?.time || isCompleted) return null;
+    try {
+      const tripTime = new Date(`${trip.date}T${trip.time}`).getTime();
+      const diffHours = (tripTime - Date.now()) / (1000 * 3600);
+      if (diffHours > 0 && diffHours < 1) {
+        return `خلال ${Math.max(5, Math.round(diffHours * 60))} د 🔥`;
+      }
+      if (diffHours >= 1 && diffHours <= 6) {
+        return `باقي ${Math.round(diffHours)} س ⏱️`;
+      }
+      return null;
+    } catch (e) {
+      return null;
+    }
+  };
+  const timeCountdown = getRemainingTimeBadge();
+
+  let bgCard = isDarkMode ? 'bg-slate-900/95 border-slate-800' : 'bg-white border-slate-200/90';
   let textPrimary = isDarkMode ? 'text-white' : 'text-slate-900';
   let textSecondary = isDarkMode ? 'text-slate-400' : 'text-slate-500';
 
@@ -93,9 +115,9 @@ const TripCard = ({ trip, user, isAdmin, isDarkMode, openChatFromTrip, triggerTo
 
   const handleShare = (e) => {
     e.stopPropagation(); 
-    const routeStr = Array.isArray(trip?.routeAreas) && trip.routeAreas.length > 0 ? `\n🛣️ خط السير: ${trip.routeAreas.join(' - ')}` : '';
-    const carStr = trip?.carModel ? `\n🚘 السيارة: ${trip.carModel} ${trip.carColor ? `(${trip.carColor})` : ''}` : '';
-    const text = `🚗 رحلة سفر متاحة${isFemalesOnly ? ' (بنات فقط 👩)' : ''}\n📍 من: ${trip.from}\n🏁 إلى: ${trip.to}${routeStr}${carStr}\n⏰ الموعد: ${formatTripDateTime(trip.date, trip.time)}\n💺 السعر: ${price !== 'غير محدد' ? price + ' ج' : price}`;
+    const routeStr = Array.isArray(trip?.routeAreas) && trip.routeAreas.length > 0 ? `\n🛣️ يمر بـ: ${trip.routeAreas.join(' - ')}` : '';
+    const carStr = liveCarModel ? `\n🚘 السيارة: ${liveCarModel} ${liveCarColor ? `(${liveCarColor})` : ''}` : '';
+    const text = `🚗 رحلة على تطبيق (طريقنا)${isFemalesOnly ? ' (بنات فقط 👩)' : ''}\n📍 من: ${trip.from}\n🏁 إلى: ${trip.to}${routeStr}${carStr}\n⏰ الموعد: ${formatTripDateTime(trip.date, trip.time)}\n💺 التكلفة: ${price !== 'غير محدد' ? price + ' ج' : price}`;
     if (navigator.share) {
       navigator.share({ title: 'طريقنا', text: text }).catch(() => {});
     } else {
@@ -105,10 +127,9 @@ const TripCard = ({ trip, user, isAdmin, isDarkMode, openChatFromTrip, triggerTo
 
   const preferencesLabels = { 
     ac: 'تكييف ❄️', 
-    noSmoking: 'ممنوع التدخين 🚭', 
-    luggage: 'شنط سفر 🧳', 
-    families: 'عائلات 👨‍👩‍👧‍👦',
-    femalesOnly: 'بنات فقط 👩'
+    noSmoking: 'منع التدخين 🚭', 
+    luggage: 'شنط 🧳', 
+    families: 'عائلات 👨‍👩‍👧‍👦'
   };
   
   const activePreferences = trip.preferences ? Object.keys(trip.preferences).filter(key => trip.preferences[key] && key !== 'femalesOnly') : [];
@@ -116,192 +137,242 @@ const TripCard = ({ trip, user, isAdmin, isDarkMode, openChatFromTrip, triggerTo
   return (
     <div 
       onClick={() => !isOwner && !isCompleted && !isFull && openChatFromTrip(trip)}
-      className={`p-4 sm:p-5 rounded-[1.5rem] border shadow-[0_2px_12px_rgba(0,0,0,0.03)] hover:shadow-md transition-all flex flex-col gap-3 relative cursor-pointer ${bgCard} mb-4 group ${(isCompleted || isFull) ? 'opacity-70 grayscale-[30%]' : ''} ${isFemalesOnly ? 'hover:border-pink-500' : 'hover:border-indigo-500/50'}`} 
+      className={`p-3.5 rounded-[1.35rem] border shadow-sm hover:shadow-md transition-all flex flex-col justify-between gap-2.5 relative cursor-pointer ${bgCard} group ${(isCompleted || isFull) ? 'opacity-70 grayscale-[30%]' : ''} ${isFemalesOnly ? 'hover:border-pink-500' : 'hover:border-indigo-500/60'}`} 
     >
-      {(matchBadge || isFemalesOnly) && (
-        <div className="flex items-center justify-between flex-wrap gap-1.5 -mt-1 mb-0.5">
-          {matchBadge && (
-            <span className={`text-[10px] font-black px-2.5 py-0.5 rounded-full border ${
-              matchBadge.includes('مطابق') 
-                ? 'bg-emerald-50 text-emerald-700 border-emerald-200 dark:bg-emerald-950/40 dark:text-emerald-300 dark:border-emerald-800/60' 
-                : 'bg-indigo-50 text-indigo-700 border-indigo-200 dark:bg-indigo-950/40 dark:text-indigo-300 dark:border-indigo-800/60'
-            }`}>
-              {matchBadge}
-            </span>
-          )}
-          {isFemalesOnly && (
-            <span className="text-[10px] font-black px-3 py-0.5 rounded-full border bg-pink-500 text-white border-pink-600 shadow-sm">
-              بنات فقط 👩🌸
-            </span>
-          )}
-        </div>
-      )}
-
-      <div className="flex justify-between items-start relative z-10">
-         {/* الضغط على صورة أو اسم المستخدم يفتح صفحته العامة وتقييماته وآراء الناس */}
-         <div 
-           onClick={(e) => {
-             e.stopPropagation();
-             if (onOpenPublicProfile && trip?.userId) onOpenPublicProfile(trip.userId);
-           }}
-           className="flex items-center gap-3 cursor-pointer hover:opacity-85 transition-opacity"
-           title="اضغط لعرض صفحة البروفايل وآراء العملاء"
-         >
-           {trip?.userPhoto ? (
-             <img src={trip.userPhoto} className={`w-11 h-11 rounded-full object-cover border shadow-sm ${isFemalesOnly ? 'border-pink-300 dark:border-pink-700' : 'border-slate-200 dark:border-slate-700'}`} alt="المستخدم" />
-           ) : (
-             <div className={`w-11 h-11 rounded-full flex items-center justify-center shadow-sm ${isFemalesOnly ? 'bg-pink-200/70 text-pink-700 dark:bg-pink-900/60 dark:text-pink-300' : 'bg-slate-100 dark:bg-slate-800 text-slate-500'}`}>
-               <User size={18}/>
-             </div>
-           )}
-           <div className="flex flex-col">
-             <div className="flex items-center gap-1.5 flex-wrap">
-               <span className={`text-sm font-black flex items-center gap-1 hover:underline ${textPrimary}`}>
-                 {trip?.userName?.split(' ')[0] || 'مستخدم'} 
-                 {liveVerified && <ShieldCheck size={14} className="text-emerald-500 shrink-0" title="موثق"/>}
-               </span>
-               {liveBadge && (
-                 <span className="text-[9px] font-black px-2 py-0.5 rounded-full bg-amber-100 dark:bg-amber-900/40 text-amber-800 dark:text-amber-300 border border-amber-300 dark:border-amber-700/60 shadow-sm">
-                   {liveBadge}
-                 </span>
-               )}
-             </div>
-             <div className="flex items-center gap-1.5 mt-0.5">
-               <div className="flex items-center gap-0.5">
-                 <Star size={11} className={liveRating > 0 ? "text-amber-400 fill-amber-400" : "text-slate-300 dark:text-slate-600"} />
-                 <span className="text-[10px] font-black text-amber-500">{liveRating > 0 ? liveRating.toFixed(1) : 'جديد'}</span>
-               </div>
-               <span className={`text-[9px] font-bold underline ${textSecondary}`}>
-                 ({liveReviewsCount} آراء • البروفايل)
-               </span>
-             </div>
-           </div>
-         </div>
-
-         {/* الأزرار العلوية + السعر + المقاعد */}
-         <div className="flex flex-col items-end gap-2">
-            <div className="flex items-center gap-2">
-              {isOwner && (
-                <button onClick={handleShare} className="p-1.5 bg-indigo-50 dark:bg-indigo-900/30 text-indigo-500 rounded-full hover:bg-indigo-100 transition-colors shadow-sm">
-                  <Share2 size={14}/>
-                </button>
-              )}
-              {(isAdmin || isOwner) && (
-                <button onClick={handleDelete} className="p-1.5 bg-rose-50 dark:bg-rose-900/30 text-rose-500 rounded-full hover:bg-rose-100 transition-colors shadow-sm">
-                  <Trash2 size={14}/>
-                </button>
-              )}
-            </div>
-
-            <div className="flex flex-wrap items-center justify-end gap-2">
-              <div className={`px-2 py-1 rounded-lg border flex items-center gap-1.5 w-fit ${isFull ? 'bg-rose-50 border-rose-100 text-rose-600 dark:bg-rose-900/20 dark:border-rose-800/50 dark:text-rose-400' : (isFemalesOnly ? 'bg-pink-100 border-pink-200 text-pink-700 dark:bg-pink-900/40 dark:border-pink-800 dark:text-pink-300' : (isDarkMode ? 'bg-indigo-900/20 border-indigo-800/50 text-indigo-300' : 'bg-indigo-50 border-indigo-100 text-indigo-600'))}`}>
-                {trip?.category === 'parcel' ? <Package size={12}/> : <Car size={12}/>}
-                <span className="text-[10px] font-bold">{isFull ? 'مكتملة' : getSeatsText(trip?.seats, trip?.category)}</span>
+      {/* 1. الجزء العلوي المدمج: بيانات المستخدم يمين + السعر والمقاعد وأزرار الإدارة يسار */}
+      <div className="flex items-start justify-between gap-2 relative z-10">
+        
+        {/* يمين: الصورة + الاسم + التقييم + الشارة */}
+        <div 
+          onClick={(e) => {
+            e.stopPropagation();
+            if (onOpenPublicProfile && trip?.userId) onOpenPublicProfile(trip.userId);
+          }}
+          className="flex items-center gap-2.5 min-w-0 cursor-pointer hover:opacity-90 transition-opacity"
+          title="اضغط لعرض البروفايل وآراء العملاء"
+        >
+          <div className="relative shrink-0">
+            {trip?.userPhoto ? (
+              <img src={trip.userPhoto} className={`w-10 h-10 rounded-xl object-cover border ${isFemalesOnly ? 'border-pink-300 dark:border-pink-700' : 'border-slate-200 dark:border-slate-700'}`} alt="المستخدم" />
+            ) : (
+              <div className={`w-10 h-10 rounded-xl flex items-center justify-center font-black text-sm ${isFemalesOnly ? 'bg-pink-200/70 text-pink-700 dark:bg-pink-900/60 dark:text-pink-300' : 'bg-indigo-500/10 text-indigo-500 dark:bg-slate-800 dark:text-indigo-400'}`}>
+                {(trip?.userName || 'م').charAt(0)}
               </div>
+            )}
+            {liveVerified && (
+              <span className="absolute -bottom-1 -right-1 bg-emerald-500 text-white p-0.5 rounded-full shadow-sm" title="حساب موثق وأمان">
+                <ShieldCheck size={10} />
+              </span>
+            )}
+          </div>
 
-              <div className="text-left">
-                <span className="font-extrabold text-base text-emerald-500 dark:text-emerald-400 leading-none bg-emerald-50 dark:bg-emerald-900/20 px-2 py-1 rounded-lg border border-emerald-100 dark:border-emerald-800/50">
-                  {price !== 'غير محدد' ? `${price} ج` : price}
+          <div className="flex flex-col min-w-0">
+            <div className="flex items-center gap-1 flex-wrap">
+              <span className={`text-xs sm:text-sm font-black truncate max-w-[110px] hover:underline ${textPrimary}`}>
+                {trip?.userName?.split(' ').slice(0, 2).join(' ') || 'مستخدم'}
+              </span>
+              {liveBadge && (
+                <span className="text-[9px] font-black px-1.5 py-0.2 rounded-md bg-amber-400/15 text-amber-500 border border-amber-400/30 shrink-0">
+                  {liveBadge}
                 </span>
-              </div>
+              )}
             </div>
-         </div>
-      </div>
 
-      <div className={`p-3 rounded-xl border flex flex-col gap-2 relative z-10 transition-colors ${isFemalesOnly ? (isDarkMode ? 'bg-pink-900/20 border-pink-800/60' : 'bg-pink-100/50 border-pink-200') : (isDarkMode ? 'bg-slate-800/60 border-slate-700 group-hover:bg-slate-800' : 'bg-slate-50 border-slate-100 group-hover:bg-slate-100')}`}>
-         <div className="flex items-center gap-2 flex-wrap">
-           <span className={`text-sm font-black ${textPrimary}`}>{trip?.from || 'غير محدد'}</span>
-           <ArrowLeft size={14} className={isFemalesOnly ? 'text-pink-500 shrink-0' : 'text-indigo-400 shrink-0'} />
-           <span className={`text-sm font-black ${textPrimary}`}>{trip?.to || 'غير محدد'}</span>
-         </div>
-         
-         {(trip?.fromDetails || trip?.toDetails) && (
-           <div className={`text-[11px] font-medium flex flex-col gap-1 mt-1 ${textSecondary}`}>
-              {trip?.fromDetails && <span className="truncate flex items-center gap-1"><MapPin size={12}/> من: {trip.fromDetails}</span>}
-              {trip?.toDetails && <span className="truncate flex items-center gap-1"><MapPin size={12}/> إلى: {trip.toDetails}</span>}
-           </div>
-         )}
-
-         {Array.isArray(trip?.routeAreas) && trip.routeAreas.length > 0 && (
-           <div className="flex flex-wrap items-center gap-1.5 mt-1 pt-2 border-t border-dashed border-slate-200 dark:border-slate-700">
-             <span className={`text-[10px] font-black flex items-center gap-1 ${isFemalesOnly ? 'text-pink-600 dark:text-pink-300' : 'text-indigo-600 dark:text-indigo-400'}`}>
-               <Route size={12}/> خط السير:
-             </span>
-             {trip.routeAreas.map((area, idx) => (
-               <span key={idx} className={`text-[9px] font-bold px-2 py-0.5 rounded-md ${isFemalesOnly ? 'bg-pink-200/70 text-pink-800 dark:bg-pink-900/50 dark:text-pink-200' : (isDarkMode ? 'bg-slate-700 text-slate-200' : 'bg-white text-slate-700 border border-slate-200')}`}>
-                 {area}
-               </span>
-             ))}
-           </div>
-         )}
-
-         {activePreferences.length > 0 && (
-           <div className="flex flex-wrap gap-1.5 mt-1 border-t border-slate-200/50 dark:border-slate-700/50 pt-2">
-             {activePreferences.map(key => (
-               <span key={key} className={`text-[9px] font-bold px-2 py-1 rounded-md ${isFemalesOnly ? 'bg-pink-200/60 text-pink-800 dark:bg-pink-900/40 dark:text-pink-200' : (isDarkMode ? 'bg-indigo-900/30 text-indigo-300' : 'bg-indigo-50 text-indigo-700')}`}>
-                 {preferencesLabels[key]}
-               </span>
-             ))}
-           </div>
-         )}
-      </div>
-
-      {trip?.carModel && (
-        <div className={`mx-1 -mt-1 mb-2 px-3 py-1.5 rounded-b-xl border border-t-0 flex items-center gap-2 ${isFemalesOnly ? (isDarkMode ? 'bg-pink-900/40 border-pink-800/60 text-pink-300' : 'bg-pink-100/50 border-pink-200 text-pink-700') : (isDarkMode ? 'bg-indigo-950/20 border-indigo-800/40 text-indigo-300' : 'bg-indigo-50/50 border-indigo-100 text-indigo-700')}`}>
-           <Car size={13} className="shrink-0"/> 
-           <span className="text-[11px] font-bold">السيارة: {trip.carModel} {trip.carColor ? `(${trip.carColor})` : ''}</span>
+            <div className="flex items-center gap-1.5 mt-0.5 flex-wrap">
+              <span className="inline-flex items-center gap-0.5 text-[10px] font-black text-amber-500 bg-amber-500/10 px-1.5 py-0.2 rounded-md">
+                <Star size={10} className="fill-amber-400 text-amber-400" />
+                {liveRating > 0 ? liveRating.toFixed(1) : 'جديد'}
+              </span>
+              <span className={`text-[10px] font-bold hover:text-indigo-400 whitespace-nowrap ${textSecondary}`}>
+                ({liveReviewsCount} رأي)
+              </span>
+              {matchBadge && (
+                <span className={`text-[9px] font-black px-1.5 py-0.2 rounded-md ${
+                  matchBadge.includes('قريباً') 
+                    ? 'bg-rose-500/15 text-rose-500' 
+                    : 'bg-emerald-500/15 text-emerald-500'
+                }`}>
+                  {matchBadge}
+                </span>
+              )}
+            </div>
+          </div>
         </div>
-      )}
 
-      <div className="flex flex-col gap-3 mt-1 relative z-10 pointer-events-none">
-         <div className={`flex items-center gap-1.5 text-xs font-bold ${textSecondary}`}>
-           <Clock size={12} className={isFemalesOnly ? 'text-pink-500' : 'text-indigo-400'}/> {formatTripDateTime(trip?.date, trip?.time)}
-         </div>
-         
-         {!isOwner && ( 
-           isCompleted ? (
-             <div className="w-full bg-emerald-50 dark:bg-emerald-900/20 text-emerald-600 dark:text-emerald-400 px-4 py-2.5 rounded-xl text-xs font-black flex items-center justify-center gap-1.5 border border-emerald-200 dark:border-emerald-800 pointer-events-auto">
-               <CheckCircle2 size={14}/> رحلة مكتملة ✅
-             </div>
-           ) : isFull ? (
-             <div className="w-full bg-rose-50 dark:bg-rose-900/20 text-rose-600 dark:text-rose-400 px-4 py-2.5 rounded-xl text-xs font-black flex items-center justify-center gap-1.5 border border-rose-200 dark:border-rose-800 pointer-events-auto">
-               الرحلة اكتملت 🔒
-             </div>
-           ) : (
-             <div className="flex flex-row items-stretch justify-between gap-2 w-full relative z-20 pointer-events-auto">
-               {canCall && (
-                 <a
-                   href={`tel:${contactPhone}`}
-                   onClick={(e) => e.stopPropagation()}
-                   className={`flex-1 flex justify-center items-center gap-1.5 py-2.5 px-2 rounded-xl text-[11px] sm:text-xs font-black transition-all shadow-sm ${isDarkMode ? 'bg-slate-700 text-white hover:bg-slate-600' : 'bg-slate-100 text-slate-800 hover:bg-slate-200'}`}
-                   title={`اتصال مباشر: ${contactPhone}`}
-                 >
-                   <Phone size={14} /> <span>اتصال</span>
-                 </a>
-               )}
+        {/* يسار: السعر بارز + المقاعد + أزرار سريعة في صف مدمج */}
+        <div className="flex flex-col items-end gap-1 shrink-0">
+          <div className="flex items-center gap-1">
+            {/* السعر */}
+            <span className="font-black text-xs sm:text-sm text-emerald-500 bg-emerald-500/10 border border-emerald-500/25 px-2.5 py-1 rounded-xl leading-none">
+              {price !== 'غير محدد' ? `${price} ج` : price}
+            </span>
 
-               {canWhatsapp && (
-                 <a
-                   href={getWhatsAppUrl(contactPhone)}
-                   target="_blank"
-                   rel="noreferrer"
-                   onClick={(e) => e.stopPropagation()}
-                   className="flex-1 flex justify-center items-center gap-1.5 py-2.5 px-2 bg-[#25D366] hover:bg-[#20bd5a] text-white rounded-xl text-[11px] sm:text-xs font-black shadow-sm transition-all"
-                   title="تواصل عبر واتساب"
-                 >
-                   <MessageCircle size={14} /> <span>واتساب</span>
-                 </a>
-               )}
+            {/* زر مشاركة الكارت */}
+            <button 
+              onClick={handleShare} 
+              className="p-1.5 rounded-lg bg-slate-100 dark:bg-slate-800 text-slate-400 hover:text-indigo-500 transition-colors"
+              title="مشاركة الرحلة"
+            >
+              <Share2 size={13}/>
+            </button>
 
-               <button 
-                 onClick={(e) => { e.stopPropagation(); openChatFromTrip(trip); }}
-                 className={`flex-1 text-white py-2.5 px-2 rounded-xl text-[11px] sm:text-xs font-black shadow-sm active:scale-95 transition-all flex justify-center items-center gap-1.5 ${isFemalesOnly ? 'bg-pink-600 hover:bg-pink-700' : 'bg-indigo-600 hover:bg-indigo-700'}`}
-               >
-                 <span>تواصل 💬</span>
-               </button> 
-             </div>
-           )
-         )}
+            {/* زر الحذف لصاحب الرحلة أو الأدمن */}
+            {(isAdmin || isOwner) && (
+              <button 
+                onClick={handleDelete} 
+                className="p-1.5 rounded-lg bg-rose-500/10 text-rose-500 hover:bg-rose-500 hover:text-white transition-colors"
+                title="حذف الرحلة"
+              >
+                <Trash2 size={13}/>
+              </button>
+            )}
+          </div>
+
+          {/* شارة المقاعد أو نوع الطلب أو بنات فقط */}
+          <div className="flex items-center gap-1">
+            {isFemalesOnly && (
+              <span className="text-[9px] font-black px-2 py-0.5 rounded-md bg-pink-500 text-white">
+                بنات فقط 🌸
+              </span>
+            )}
+            <span className={`text-[9px] font-black px-2 py-0.5 rounded-md border flex items-center gap-1 ${
+              isFull 
+                ? 'bg-rose-500/10 border-rose-500/30 text-rose-500' 
+                : isRequest
+                ? 'bg-amber-500/10 border-amber-500/30 text-amber-500'
+                : 'bg-indigo-500/10 border-indigo-500/25 text-indigo-400'
+            }`}>
+              {trip?.category === 'parcel' ? <Package size={10}/> : <Car size={10}/>}
+              <span>{isFull ? 'مكتمل العدد' : getSeatsText(trip?.seats, trip?.category)}</span>
+            </span>
+          </div>
+        </div>
+      </div>
+
+      {/* 2. صندوق المسار والتفاصيل المدمج (يستغل منتصف الكارت بذكاء) */}
+      <div className={`p-2.5 rounded-xl border flex flex-col gap-1.5 relative z-10 ${
+        isFemalesOnly 
+          ? (isDarkMode ? 'bg-pink-900/20 border-pink-800/50' : 'bg-pink-100/50 border-pink-200') 
+          : (isDarkMode ? 'bg-slate-800/60 border-slate-700/80' : 'bg-slate-50/90 border-slate-200/70')
+      }`}>
+        {/* خط الانطلاق والوصول */}
+        <div className="flex items-center justify-between gap-2">
+          <div className="flex items-center gap-1.5 flex-wrap min-w-0">
+            <span className={`text-xs sm:text-sm font-black ${textPrimary}`}>{trip?.from || 'غير محدد'}</span>
+            <ArrowLeft size={13} className={isFemalesOnly ? 'text-pink-500 shrink-0' : 'text-indigo-500 shrink-0'} />
+            <span className={`text-xs sm:text-sm font-black ${textPrimary}`}>{trip?.to || 'غير محدد'}</span>
+          </div>
+
+          {timeCountdown && (
+            <span className="text-[9px] font-black px-2 py-0.5 rounded-full bg-amber-500/15 text-amber-400 border border-amber-500/30 shrink-0">
+              {timeCountdown}
+            </span>
+          )}
+        </div>
+
+        {/* التفاصيل الدقيقة للمكان إن وجدت */}
+        {(trip?.fromDetails || trip?.toDetails) && (
+          <div className={`text-[10px] font-bold flex flex-wrap items-center gap-x-3 gap-y-0.5 ${textSecondary}`}>
+            {trip?.fromDetails && <span className="truncate max-w-[180px]">📍 من: {trip.fromDetails}</span>}
+            {trip?.toDetails && <span className="truncate max-w-[180px]">🏁 إلى: {trip.toDetails}</span>}
+          </div>
+        )}
+
+        {/* خط السير والسيارة والتفضيلات في شريط كبسولات مدمج */}
+        {( (Array.isArray(trip?.routeAreas) && trip.routeAreas.length > 0) || liveCarModel || activePreferences.length > 0 ) && (
+          <div className="flex flex-wrap items-center gap-1 pt-1.5 border-t border-dashed border-slate-200 dark:border-slate-700/80">
+            {Array.isArray(trip?.routeAreas) && trip.routeAreas.map((area, idx) => (
+              <span key={idx} className={`text-[9px] font-black px-1.5 py-0.5 rounded-md flex items-center gap-0.5 ${isDarkMode ? 'bg-slate-700/90 text-slate-200' : 'bg-white text-slate-700 border border-slate-200'}`}>
+                <Route size={9} className="text-indigo-400" /> {area}
+              </span>
+            ))}
+
+            {liveCarModel && (
+              <span className={`text-[9px] font-black px-2 py-0.5 rounded-md flex items-center gap-1 ${isDarkMode ? 'bg-indigo-950/70 text-indigo-300 border border-indigo-800/50' : 'bg-indigo-50 text-indigo-700 border border-indigo-100'}`}>
+                <Car size={10} /> {liveCarModel} {liveCarColor ? `(${liveCarColor})` : ''}
+              </span>
+            )}
+
+            {activePreferences.map(key => (
+              <span key={key} className={`text-[9px] font-bold px-1.5 py-0.5 rounded-md ${isDarkMode ? 'bg-slate-700/50 text-slate-300' : 'bg-slate-200/70 text-slate-700'}`}>
+                {preferencesLabels[key]}
+              </span>
+            ))}
+          </div>
+        )}
+
+        {/* عرض ملاحظات الرحلة بشكل مختصر ومرتب إن وجدت */}
+        {trip?.notes && (
+          <p className={`text-[10px] font-bold truncate pt-0.5 ${textSecondary}`} title={trip.notes}>
+            💬 ملاحظة: {trip.notes}
+          </p>
+        )}
+      </div>
+
+      {/* 3. الفوتر المدمج: الوقت + أزرار التواصل السريع في نفس الجزء السفلي */}
+      <div className="flex flex-col gap-2 pt-0.5 relative z-20 pointer-events-auto">
+        <div className="flex items-center justify-between text-[11px] font-bold px-0.5">
+          <span className={`flex items-center gap-1 ${textSecondary}`}>
+            <Clock size={12} className={isFemalesOnly ? 'text-pink-500' : 'text-indigo-400'} />
+            {formatTripDateTime(trip?.date, trip?.time)}
+          </span>
+          {liveVerified && (
+            <span className="text-[9px] font-black text-emerald-500 flex items-center gap-0.5">
+              <ShieldCheck size={11} /> كابتن موثق
+            </span>
+          )}
+        </div>
+
+        {!isOwner ? (
+          isCompleted ? (
+            <div className="w-full bg-emerald-500/10 text-emerald-500 py-2 rounded-xl text-[11px] font-black flex items-center justify-center gap-1 border border-emerald-500/20">
+              <CheckCircle2 size={13}/> رحلة مكتملة ✅
+            </div>
+          ) : isFull ? (
+            <div className="w-full bg-rose-500/10 text-rose-500 py-2 rounded-xl text-[11px] font-black flex items-center justify-center gap-1 border border-rose-500/20">
+              الرحلة مكتملة العدد 🔒
+            </div>
+          ) : (
+            <div className="flex items-center gap-1.5 w-full">
+              {canCall && (
+                <a
+                  href={`tel:${contactPhone}`}
+                  onClick={(e) => e.stopPropagation()}
+                  className={`flex-1 flex justify-center items-center gap-1 py-2 px-2 rounded-xl text-[11px] font-black transition-all ${
+                    isDarkMode ? 'bg-slate-800 text-slate-200 hover:bg-slate-700 border border-slate-700' : 'bg-slate-100 text-slate-800 hover:bg-slate-200'
+                  }`}
+                >
+                  <Phone size={12} /> <span>اتصال</span>
+                </a>
+              )}
+
+              {canWhatsapp && (
+                <a
+                  href={getWhatsAppUrl(contactPhone)}
+                  target="_blank"
+                  rel="noreferrer"
+                  onClick={(e) => e.stopPropagation()}
+                  className="flex-1 flex justify-center items-center gap-1 py-2 px-2 bg-[#25D366] hover:bg-[#20bd5a] text-white rounded-xl text-[11px] font-black shadow-sm transition-all"
+                >
+                  <MessageCircle size={12} /> <span>واتساب</span>
+                </a>
+              )}
+
+              <button 
+                onClick={(e) => { e.stopPropagation(); openChatFromTrip(trip); }}
+                className={`flex-1 text-white py-2 px-2 rounded-xl text-[11px] font-black shadow-sm active:scale-95 transition-all flex justify-center items-center gap-1 ${
+                  isFemalesOnly ? 'bg-pink-600 hover:bg-pink-700' : 'bg-indigo-600 hover:bg-indigo-700'
+                }`}
+              >
+                <span>تواصل 💬</span>
+              </button> 
+            </div>
+          )
+        ) : (
+          <div className={`w-full py-1.5 rounded-xl text-center text-[10px] font-black border border-dashed ${isDarkMode ? 'border-slate-800 text-slate-400' : 'border-slate-200 text-slate-500'}`}>
+            إعلانك الشخصي ✨
+          </div>
+        )}
       </div>
     </div>
   );

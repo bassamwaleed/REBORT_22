@@ -4,7 +4,7 @@ import {
 } from 'firebase/firestore';
 import { 
   X, ShieldCheck, Users, BusFront, Settings, Search, CheckCircle2, 
-  XCircle, Ban, Award, Crown, Eye, Plus, Trash2, Check, Loader2, Lock, MessageSquareOff, Car, Activity, Package, Clock 
+  XCircle, Ban, Award, Crown, Eye, Plus, Trash2, Check, Loader2, Lock, MessageSquareOff, Car, Activity, Gift 
 } from 'lucide-react';
 import { db, USERS_COLLECTION, APP_COLLECTION_NAME, STATIONS_COLLECTION } from '../firebase';
 import { resizeAndConvertToBase64, formatTripDateTime } from '../utils/helpers';
@@ -95,7 +95,6 @@ const AdminPanel = ({ isDarkMode, onClose, triggerToast, appSettings, user, open
     }
   };
 
-  // دالة إرسال الرسالة التلقائية في شات الإدارة المستقل (support_USERID) بدون الخلط مع شات الأدمن الشخصي
   const sendAutomatedMessage = async (targetUserId, text) => {
     if (!user) return;
     try {
@@ -169,12 +168,35 @@ const AdminPanel = ({ isDarkMode, onClose, triggerToast, appSettings, user, open
   const handleSetBadge = async (targetUser, badgeTitle) => {
     await updateUserAndSyncTrips(
       targetUser.id,
-      { customBadge: badgeTitle || null },
+      { customBadge: badgeTitle || null, pendingBadgeClaim: null },
       { userBadge: badgeTitle || null }
     );
 
     if (badgeTitle) {
       await sendAutomatedMessage(targetUser.id, `تهانينا! 🎉 تم منحك شارة (${badgeTitle}) تقديراً لنشاطك وتميزك في التطبيق. استمر في التألق! 🌟`);
+    }
+  };
+
+  // قبول أو رفض مطالبة البونص من قسم طلبات البونص
+  const handleResolveBonusClaim = async (targetUser, approve = true) => {
+    const requestedBadge = targetUser.pendingBadgeClaim;
+    if (!requestedBadge) return;
+
+    if (approve) {
+      await updateUserAndSyncTrips(
+        targetUser.id,
+        { customBadge: requestedBadge, pendingBadgeClaim: null },
+        { userBadge: requestedBadge }
+      );
+      await sendAutomatedMessage(targetUser.id, `مبارك لك يا ${targetUser.name?.split(' ')[0]}! 🎉 تمت الموافقة على مطالبتك بالبونص وتفعيل شارة (${requestedBadge}) على حسابك وجميع رحلاتك بنجاح! 🏆`);
+    } else {
+      const updatedClaims = (targetUser.claimedBadges || []).filter(b => b !== requestedBadge);
+      await updateDoc(doc(db, USERS_COLLECTION, targetUser.id), {
+        pendingBadgeClaim: null,
+        claimedBadges: updatedClaims
+      });
+      await sendAutomatedMessage(targetUser.id, `مرحباً ${targetUser.name?.split(' ')[0]}، تم مراجعة طلب البونص لشارة (${requestedBadge}) ولم يتم اعتماده حالياً. يمكنك التواصل معنا هنا للاستفسار.`);
+      triggerToast('تم رفض طلب البونص');
     }
   };
 
@@ -296,9 +318,9 @@ const AdminPanel = ({ isDarkMode, onClose, triggerToast, appSettings, user, open
   };
 
   const pendingVerifications = usersList.filter(u => u.verificationStatus === 'pending');
+  const pendingBonusClaims = usersList.filter(u => u.pendingBadgeClaim && u.customBadge !== u.pendingBadgeClaim);
   const pendingStations = stationsList.filter(s => s.status === 'pending' || (s.routes && s.routes.some(r => r.status === 'pending' || r.editRequest)));
 
-  // إحصائيات الرحلات الحية للأدمن
   const activeRunningTrips = (realTrips || []).filter(t => t.status !== 'completed' && t.status !== 'cancelled');
   const completedTripsAll = (realTrips || []).filter(t => t.status === 'completed');
   const parcelActiveTrips = activeRunningTrips.filter(t => t.category === 'parcel' || t.type === 'delivery');
@@ -336,7 +358,7 @@ const AdminPanel = ({ isDarkMode, onClose, triggerToast, appSettings, user, open
   });
 
   return (
-    <div className="fixed inset-0 bg-slate-950/90 backdrop-blur-md z-[600] flex justify-center items-end sm:items-center p-0 sm:p-4 pointer-events-auto">
+    <div className="fixed inset-0 bg-slate-950/90 backdrop-blur-md z-[1150] flex justify-center items-end sm:items-center p-0 sm:p-4 pointer-events-auto">
       <div className={`${bgCard} w-full sm:max-w-4xl h-[94vh] sm:h-[88vh] rounded-t-[2rem] sm:rounded-[2rem] shadow-2xl flex flex-col overflow-hidden border dark:border-slate-800 animate-fade-in-up`}>
         
         <div className="p-4 sm:p-5 bg-gradient-to-r from-indigo-950 via-slate-900 to-indigo-950 text-white flex justify-between items-center shrink-0 border-b border-indigo-800/50">
@@ -349,7 +371,7 @@ const AdminPanel = ({ isDarkMode, onClose, triggerToast, appSettings, user, open
                 لوحة تحكم الإدارة الشاملة
               </h2>
               <p className="text-[11px] text-indigo-200 font-bold">
-                مراقبة الرحلات الحية، الأعضاء، التوثيق، وشارات التميز
+                مراقبة الرحلات الحية، الأعضاء، التوثيق، وطلبات البونص
               </p>
             </div>
           </div>
@@ -358,16 +380,17 @@ const AdminPanel = ({ isDarkMode, onClose, triggerToast, appSettings, user, open
           </button>
         </div>
 
+        {/* شريط التبويبات مع إضافة قسم طلبات البونص */}
         <div className="flex overflow-x-auto bg-slate-100 dark:bg-slate-900/90 p-1.5 gap-1.5 border-b dark:border-slate-800 shrink-0 [&::-webkit-scrollbar]:hidden">
           <button 
             onClick={() => setActiveTab('users')} 
-            className={`flex-1 min-w-[115px] py-2.5 px-3 rounded-xl text-xs font-black flex items-center justify-center gap-1.5 transition-all ${activeTab === 'users' ? 'bg-indigo-600 text-white shadow-md' : textSecondary}`}
+            className={`flex-1 min-w-[110px] py-2.5 px-2.5 rounded-xl text-xs font-black flex items-center justify-center gap-1.5 transition-all ${activeTab === 'users' ? 'bg-indigo-600 text-white shadow-md' : textSecondary}`}
           >
             <Users size={15}/> الأعضاء ({usersList.length})
           </button>
           <button 
             onClick={() => setActiveTab('trips')} 
-            className={`flex-1 min-w-[125px] py-2.5 px-3 rounded-xl text-xs font-black flex items-center justify-center gap-1.5 transition-all ${activeTab === 'trips' ? 'bg-indigo-600 text-white shadow-md' : textSecondary}`}
+            className={`flex-1 min-w-[120px] py-2.5 px-2.5 rounded-xl text-xs font-black flex items-center justify-center gap-1.5 transition-all ${activeTab === 'trips' ? 'bg-indigo-600 text-white shadow-md' : textSecondary}`}
           >
             <Activity size={15}/> الرحلات الحية
             <span className="bg-emerald-500 text-white text-[10px] px-1.5 py-0.2 rounded-full">
@@ -375,8 +398,19 @@ const AdminPanel = ({ isDarkMode, onClose, triggerToast, appSettings, user, open
             </span>
           </button>
           <button 
+            onClick={() => setActiveTab('bonus_claims')} 
+            className={`flex-1 min-w-[125px] py-2.5 px-2.5 rounded-xl text-xs font-black flex items-center justify-center gap-1.5 transition-all relative ${activeTab === 'bonus_claims' ? 'bg-indigo-600 text-white shadow-md' : textSecondary}`}
+          >
+            <Gift size={15}/> طلبات البونص
+            {pendingBonusClaims.length > 0 && (
+              <span className="bg-rose-500 text-white text-[10px] px-1.5 py-0.2 rounded-full animate-bounce">
+                {pendingBonusClaims.length}
+              </span>
+            )}
+          </button>
+          <button 
             onClick={() => setActiveTab('verifications')} 
-            className={`flex-1 min-w-[125px] py-2.5 px-3 rounded-xl text-xs font-black flex items-center justify-center gap-1.5 transition-all relative ${activeTab === 'verifications' ? 'bg-indigo-600 text-white shadow-md' : textSecondary}`}
+            className={`flex-1 min-w-[115px] py-2.5 px-2.5 rounded-xl text-xs font-black flex items-center justify-center gap-1.5 transition-all relative ${activeTab === 'verifications' ? 'bg-indigo-600 text-white shadow-md' : textSecondary}`}
           >
             <ShieldCheck size={15}/> التوثيق
             {pendingVerifications.length > 0 && (
@@ -387,7 +421,7 @@ const AdminPanel = ({ isDarkMode, onClose, triggerToast, appSettings, user, open
           </button>
           <button 
             onClick={() => setActiveTab('stations')} 
-            className={`flex-1 min-w-[115px] py-2.5 px-3 rounded-xl text-xs font-black flex items-center justify-center gap-1.5 transition-all ${activeTab === 'stations' ? 'bg-indigo-600 text-white shadow-md' : textSecondary}`}
+            className={`flex-1 min-w-[110px] py-2.5 px-2.5 rounded-xl text-xs font-black flex items-center justify-center gap-1.5 transition-all ${activeTab === 'stations' ? 'bg-indigo-600 text-white shadow-md' : textSecondary}`}
           >
             <BusFront size={15}/> المواقف
             {pendingStations.length > 0 && (
@@ -398,7 +432,7 @@ const AdminPanel = ({ isDarkMode, onClose, triggerToast, appSettings, user, open
           </button>
           <button 
             onClick={() => setActiveTab('settings')} 
-            className={`flex-1 min-w-[105px] py-2.5 px-3 rounded-xl text-xs font-black flex items-center justify-center gap-1.5 transition-all ${activeTab === 'settings' ? 'bg-indigo-600 text-white shadow-md' : textSecondary}`}
+            className={`flex-1 min-w-[100px] py-2.5 px-2.5 rounded-xl text-xs font-black flex items-center justify-center gap-1.5 transition-all ${activeTab === 'settings' ? 'bg-indigo-600 text-white shadow-md' : textSecondary}`}
           >
             <Settings size={15}/> الواجهة
           </button>
@@ -406,10 +440,79 @@ const AdminPanel = ({ isDarkMode, onClose, triggerToast, appSettings, user, open
 
         <div className="flex-1 overflow-y-auto p-4 sm:p-5 [&::-webkit-scrollbar]:hidden">
           
+          {/* تبويب طلبات البونص والشارات الجديد */}
+          {activeTab === 'bonus_claims' && (
+            <div className="space-y-4">
+              {pendingBonusClaims.length === 0 ? (
+                <div className="text-center py-16 text-slate-400">
+                  <Gift size={48} className="mx-auto mb-3 opacity-30 text-amber-500"/>
+                  <p className="font-black text-base">لا توجد مطالبات بونص معلقة حالياً 🎁</p>
+                  <p className="text-xs mt-1">عندما يكمل أي عضو عدد الرحلات المطلوب ويضغط (مطالبة الإدارة) سيظهر طلبه هنا فوراً</p>
+                </div>
+              ) : (
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-3.5">
+                  {pendingBonusClaims.map(u => (
+                    <div key={u.id} className={`p-4 rounded-2xl border-2 border-amber-400/60 bg-amber-500/5 space-y-3.5 shadow-md`}>
+                      <div className="flex items-start justify-between gap-3">
+                        <div 
+                          onClick={() => onOpenPublicProfile && onOpenPublicProfile(u.id)}
+                          className="flex items-center gap-3 cursor-pointer"
+                        >
+                          {u.photoURL ? (
+                            <img src={u.photoURL} className="w-12 h-12 rounded-full object-cover border border-amber-400" alt="u"/>
+                          ) : (
+                            <div className="w-12 h-12 rounded-full bg-amber-500 text-white flex items-center justify-center font-black text-lg">
+                              {(u.name || 'م').charAt(0)}
+                            </div>
+                          )}
+                          <div>
+                            <h4 className={`font-black text-sm hover:underline ${textPrimary}`}>{u.name}</h4>
+                            <p className={`text-xs font-bold ${textSecondary}`} dir="ltr">{u.phone || u.email}</p>
+                            <span className="inline-block mt-1 text-[10px] font-black bg-emerald-500/15 text-emerald-500 px-2 py-0.5 rounded-md">
+                              أكمل {u.completedTripsCount || 0} رحلة بنجاح ✅
+                            </span>
+                          </div>
+                        </div>
+
+                        <button
+                          onClick={() => openAdminChat(u)}
+                          className="px-2.5 py-1.5 rounded-xl bg-indigo-500/10 text-indigo-500 text-xs font-black"
+                        >
+                          مراسلة 💬
+                        </button>
+                      </div>
+
+                      <div className={`p-3 rounded-xl border flex items-center justify-between ${isDarkMode ? 'bg-slate-900 border-slate-800' : 'bg-white border-amber-200'}`}>
+                        <span className="text-xs font-bold text-slate-400">يطالب بشارة:</span>
+                        <span className="text-xs font-black px-3 py-1 rounded-full bg-amber-400 text-slate-950 shadow-sm">
+                          {u.pendingBadgeClaim}
+                        </span>
+                      </div>
+
+                      <div className="flex gap-2">
+                        <button
+                          onClick={() => handleResolveBonusClaim(u, true)}
+                          className="flex-1 py-2.5 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl font-black text-xs flex items-center justify-center gap-1.5 shadow-md active:scale-95 transition-transform"
+                        >
+                          <CheckCircle2 size={15}/> منح الشارة واعتماد البونص
+                        </button>
+                        <button
+                          onClick={() => handleResolveBonusClaim(u, false)}
+                          className="px-4 py-2.5 bg-rose-600/15 hover:bg-rose-600 text-rose-500 hover:text-white rounded-xl font-black text-xs transition-colors"
+                        >
+                          رفض
+                        </button>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+          )}
+
           {/* تبويب مراقبة الرحلات الشغالة حالياً وإحصائياتها */}
           {activeTab === 'trips' && (
             <div className="space-y-4">
-              {/* كروت الإحصائيات العلوية */}
               <div className="grid grid-cols-2 sm:grid-cols-4 gap-2.5">
                 <div className={`p-3.5 rounded-2xl border ${isDarkMode ? 'bg-emerald-950/30 border-emerald-800/60' : 'bg-emerald-50 border-emerald-200'}`}>
                   <span className="text-[11px] font-bold text-emerald-600 dark:text-emerald-400 block">الرحلات الشغالة الآن</span>
@@ -429,7 +532,6 @@ const AdminPanel = ({ isDarkMode, onClose, triggerToast, appSettings, user, open
                 </div>
               </div>
 
-              {/* بحث وفلترة الرحلات */}
               <div className="flex flex-col sm:flex-row gap-2">
                 <div className={`flex-1 flex items-center gap-2 px-3.5 py-2.5 rounded-xl border ${bgInput}`}>
                   <Search size={17} className="text-slate-400 shrink-0" />
@@ -443,7 +545,7 @@ const AdminPanel = ({ isDarkMode, onClose, triggerToast, appSettings, user, open
                   {tripSearchQuery && <button onClick={() => setTripSearchQuery('')}><X size={14} className="text-slate-400"/></button>}
                 </div>
 
-                <div className="flex gap-1.5">
+                <div className="flex gap-1.5 overflow-x-auto">
                   {[
                     { id: 'active', label: `الشغالة حالياً (${activeRunningTrips.length})` },
                     { id: 'completed', label: `المكتملة (${completedTripsAll.length})` },
@@ -465,7 +567,6 @@ const AdminPanel = ({ isDarkMode, onClose, triggerToast, appSettings, user, open
                 </div>
               </div>
 
-              {/* قائمة الرحلات */}
               {filteredAdminTrips.length === 0 ? (
                 <div className="text-center py-14 text-slate-400 font-bold text-sm">لا توجد رحلات مطابقة للفلتر الحالي</div>
               ) : (
@@ -608,9 +709,9 @@ const AdminPanel = ({ isDarkMode, onClose, triggerToast, appSettings, user, open
                                 <span className="text-[10px] font-bold bg-amber-50 dark:bg-amber-900/20 text-amber-600 px-2 py-0.5 rounded-md">
                                   ⭐ {Number(u.rating || 0).toFixed(1)} ({u.reviews?.length || u.ratingsCount || 0})
                                 </span>
-                                {u.gender && (
-                                  <span className="text-[10px] font-bold bg-indigo-50 dark:bg-indigo-900/30 text-indigo-500 px-2 py-0.5 rounded-md">
-                                    {u.gender === 'female' ? 'أنثى 👩' : 'ذكر 👨'}
+                                {u.pendingBadgeClaim && (
+                                  <span className="text-[10px] font-black bg-rose-500 text-white px-2 py-0.5 rounded-md animate-pulse">
+                                    يطالب بـ: {u.pendingBadgeClaim}
                                   </span>
                                 )}
                               </div>
@@ -689,7 +790,6 @@ const AdminPanel = ({ isDarkMode, onClose, triggerToast, appSettings, user, open
                 <div className="text-center py-16 text-slate-400">
                   <ShieldCheck size={48} className="mx-auto mb-3 opacity-30"/>
                   <p className="font-black text-base">لا توجد طلبات توثيق معلقة حالياً</p>
-                  <p className="text-xs mt-1">يمكنك أيضاً توثيق أو سحب التوثيق من أي عضو في تبويب (الأعضاء)</p>
                 </div>
               ) : (
                 pendingVerifications.map(u => (
@@ -706,49 +806,28 @@ const AdminPanel = ({ isDarkMode, onClose, triggerToast, appSettings, user, open
                       {u.idFront && (
                         <div className="space-y-1">
                           <span className="text-[11px] font-bold text-slate-400">البطاقة (أمامي)</span>
-                          <img 
-                            src={u.idFront} 
-                            onClick={() => setPreviewImage(u.idFront)} 
-                            className="w-full h-36 object-cover rounded-xl border-2 border-indigo-500/40 cursor-pointer hover:opacity-90" 
-                            alt="ID Front"
-                          />
+                          <img src={u.idFront} onClick={() => setPreviewImage(u.idFront)} className="w-full h-36 object-cover rounded-xl border-2 border-indigo-500/40 cursor-pointer hover:opacity-90" alt="ID Front"/>
                         </div>
                       )}
                       {u.idBack && (
                         <div className="space-y-1">
                           <span className="text-[11px] font-bold text-slate-400">البطاقة (خلفي)</span>
-                          <img 
-                            src={u.idBack} 
-                            onClick={() => setPreviewImage(u.idBack)} 
-                            className="w-full h-36 object-cover rounded-xl border-2 border-indigo-500/40 cursor-pointer hover:opacity-90" 
-                            alt="ID Back"
-                          />
+                          <img src={u.idBack} onClick={() => setPreviewImage(u.idBack)} className="w-full h-36 object-cover rounded-xl border-2 border-indigo-500/40 cursor-pointer hover:opacity-90" alt="ID Back"/>
                         </div>
                       )}
                       {u.licenseImage && (
                         <div className="space-y-1">
                           <span className="text-[11px] font-bold text-indigo-400">رخصة القيادة 🚗</span>
-                          <img 
-                            src={u.licenseImage} 
-                            onClick={() => setPreviewImage(u.licenseImage)} 
-                            className="w-full h-36 object-cover rounded-xl border-2 border-emerald-500/40 cursor-pointer hover:opacity-90" 
-                            alt="License"
-                          />
+                          <img src={u.licenseImage} onClick={() => setPreviewImage(u.licenseImage)} className="w-full h-36 object-cover rounded-xl border-2 border-emerald-500/40 cursor-pointer hover:opacity-90" alt="License"/>
                         </div>
                       )}
                     </div>
 
                     <div className="flex gap-3 pt-2">
-                      <button 
-                        onClick={() => handleToggleVerify(u, true)}
-                        className="flex-1 bg-emerald-600 hover:bg-emerald-700 text-white py-3 rounded-xl font-black text-xs flex items-center justify-center gap-1.5 shadow-md"
-                      >
+                      <button onClick={() => handleToggleVerify(u, true)} className="flex-1 bg-emerald-600 hover:bg-emerald-700 text-white py-3 rounded-xl font-black text-xs flex items-center justify-center gap-1.5 shadow-md">
                         <CheckCircle2 size={16}/> قبول وتفعيل شارة التوثيق ✅
                       </button>
-                      <button 
-                        onClick={() => handleToggleVerify(u, false)}
-                        className="flex-1 bg-rose-600 hover:bg-rose-700 text-white py-3 rounded-xl font-black text-xs flex items-center justify-center gap-1.5 shadow-md"
-                      >
+                      <button onClick={() => handleToggleVerify(u, false)} className="flex-1 bg-rose-600 hover:bg-rose-700 text-white py-3 rounded-xl font-black text-xs flex items-center justify-center gap-1.5 shadow-md">
                         <XCircle size={16}/> رفض المستندات ❌
                       </button>
                     </div>
@@ -771,10 +850,7 @@ const AdminPanel = ({ isDarkMode, onClose, triggerToast, appSettings, user, open
                         <p className={`text-xs font-bold ${textSecondary}`}>{st.location}</p>
                       </div>
                       {st.status === 'pending' && (
-                        <button 
-                          onClick={() => handleApproveStation(st.id)}
-                          className="bg-emerald-600 text-white px-4 py-2 rounded-xl text-xs font-black"
-                        >
+                        <button onClick={() => handleApproveStation(st.id)} className="bg-emerald-600 text-white px-4 py-2 rounded-xl text-xs font-black">
                           اعتماد الموقف ✅
                         </button>
                       )}
@@ -785,17 +861,12 @@ const AdminPanel = ({ isDarkMode, onClose, triggerToast, appSettings, user, open
                       return (
                         <div key={idx} className="p-3 rounded-xl bg-white dark:bg-slate-900 border dark:border-slate-700 flex justify-between items-center">
                           <div>
-                            <span className={`text-xs font-black ${textPrimary}`}>
-                              خط: {r.destinationDetails || r.destination}
-                            </span>
+                            <span className={`text-xs font-black ${textPrimary}`}>خط: {r.destinationDetails || r.destination}</span>
                             <p className="text-[11px] font-bold text-amber-500">
                               {r.editRequest ? `اقتراح تعديل أجرة إلى: ${r.editRequest.proposedFare} ج` : `أجرة جديدة: ${r.fare} ج`}
                             </p>
                           </div>
-                          <button 
-                            onClick={() => handleApproveRoute(st, idx)}
-                            className="bg-indigo-600 text-white px-3 py-1.5 rounded-lg text-xs font-black"
-                          >
+                          <button onClick={() => handleApproveRoute(st, idx)} className="bg-indigo-600 text-white px-3 py-1.5 rounded-lg text-xs font-black">
                             موافقة 👍
                           </button>
                         </div>
@@ -843,10 +914,7 @@ const AdminPanel = ({ isDarkMode, onClose, triggerToast, appSettings, user, open
                   {banners.map((b, i) => (
                     <div key={i} className="relative h-28 rounded-xl overflow-hidden border">
                       <img src={b} className="w-full h-full object-cover" alt="banner"/>
-                      <button 
-                        onClick={() => setBanners(prev => prev.filter((_, idx) => idx !== i))}
-                        className="absolute top-2 left-2 p-1.5 bg-rose-600 text-white rounded-full"
-                      >
+                      <button onClick={() => setBanners(prev => prev.filter((_, idx) => idx !== i))} className="absolute top-2 left-2 p-1.5 bg-rose-600 text-white rounded-full">
                         <Trash2 size={13}/>
                       </button>
                     </div>
@@ -854,11 +922,7 @@ const AdminPanel = ({ isDarkMode, onClose, triggerToast, appSettings, user, open
                 </div>
               </div>
 
-              <button 
-                onClick={handleSaveAppSettings} 
-                disabled={isSavingSettings}
-                className="w-full bg-indigo-600 hover:bg-indigo-700 text-white py-4 rounded-2xl font-black text-sm shadow-lg flex justify-center items-center gap-2"
-              >
+              <button onClick={handleSaveAppSettings} disabled={isSavingSettings} className="w-full bg-indigo-600 hover:bg-indigo-700 text-white py-4 rounded-2xl font-black text-sm shadow-lg flex justify-center items-center gap-2">
                 {isSavingSettings ? <Loader2 className="animate-spin" size={18}/> : 'حفظ إعدادات الواجهة ✅'}
               </button>
             </div>
@@ -867,11 +931,8 @@ const AdminPanel = ({ isDarkMode, onClose, triggerToast, appSettings, user, open
         </div>
 
         {selectedUser && (
-          <div className="fixed inset-0 bg-black/80 backdrop-blur-sm z-[650] flex justify-center items-center p-4" onClick={() => setSelectedUser(null)}>
-            <div 
-              onClick={(e) => e.stopPropagation()} 
-              className={`${bgCard} w-full max-w-lg max-h-[90vh] rounded-[2rem] p-5 sm:p-6 shadow-2xl overflow-y-auto border dark:border-slate-700 space-y-5 animate-fade-in-up [&::-webkit-scrollbar]:hidden`}
-            >
+          <div className="fixed inset-0 bg-black/80 backdrop-blur-sm z-[1200] flex justify-center items-center p-4" onClick={() => setSelectedUser(null)}>
+            <div onClick={(e) => e.stopPropagation()} className={`${bgCard} w-full max-w-lg max-h-[90vh] rounded-[2rem] p-5 sm:p-6 shadow-2xl overflow-y-auto border dark:border-slate-700 space-y-5 animate-fade-in-up [&::-webkit-scrollbar]:hidden`}>
               <div className="flex justify-between items-start border-b pb-3 dark:border-slate-800">
                 <div className="flex items-center gap-3">
                   <div className="w-12 h-12 rounded-full bg-indigo-600 text-white flex items-center justify-center font-black text-lg">
@@ -899,9 +960,7 @@ const AdminPanel = ({ isDarkMode, onClose, triggerToast, appSettings, user, open
                     disabled={isUpdatingUser}
                     onClick={() => handleToggleVerify(selectedUser)}
                     className={`px-4 py-2 rounded-xl text-xs font-black transition-all ${
-                      selectedUser.isVerified 
-                        ? 'bg-rose-600 text-white hover:bg-rose-700' 
-                        : 'bg-emerald-600 text-white hover:bg-emerald-700'
+                      selectedUser.isVerified ? 'bg-rose-600 text-white hover:bg-rose-700' : 'bg-emerald-600 text-white hover:bg-emerald-700'
                     }`}
                   >
                     {selectedUser.isVerified ? 'سحب علامة التوثيق ❌' : 'منح علامة التوثيق ✅'}
@@ -910,25 +969,17 @@ const AdminPanel = ({ isDarkMode, onClose, triggerToast, appSettings, user, open
 
                 {(selectedUser.idFront || selectedUser.idBack || selectedUser.licenseImage) && (
                   <div className="grid grid-cols-3 gap-2 pt-2">
-                    {selectedUser.idFront && (
-                      <img src={selectedUser.idFront} onClick={() => setPreviewImage(selectedUser.idFront)} className="h-20 w-full object-cover rounded-lg border cursor-pointer" alt="front"/>
-                    )}
-                    {selectedUser.idBack && (
-                      <img src={selectedUser.idBack} onClick={() => setPreviewImage(selectedUser.idBack)} className="h-20 w-full object-cover rounded-lg border cursor-pointer" alt="back"/>
-                    )}
-                    {selectedUser.licenseImage && (
-                      <img src={selectedUser.licenseImage} onClick={() => setPreviewImage(selectedUser.licenseImage)} className="h-20 w-full object-cover rounded-lg border cursor-pointer" alt="license"/>
-                    )}
+                    {selectedUser.idFront && <img src={selectedUser.idFront} onClick={() => setPreviewImage(selectedUser.idFront)} className="h-20 w-full object-cover rounded-lg border cursor-pointer" alt="front"/>}
+                    {selectedUser.idBack && <img src={selectedUser.idBack} onClick={() => setPreviewImage(selectedUser.idBack)} className="h-20 w-full object-cover rounded-lg border cursor-pointer" alt="back"/>}
+                    {selectedUser.licenseImage && <img src={selectedUser.licenseImage} onClick={() => setPreviewImage(selectedUser.licenseImage)} className="h-20 w-full object-cover rounded-lg border cursor-pointer" alt="license"/>}
                   </div>
                 )}
               </div>
 
               <div className="p-4 rounded-2xl border border-amber-200/70 dark:border-amber-800/50 bg-amber-50/30 dark:bg-amber-950/10 space-y-3">
-                <div className="flex justify-between items-center">
-                  <span className={`text-xs font-black flex items-center gap-1.5 ${textPrimary}`}>
-                    <Award size={16} className="text-amber-500"/> منح شارة البونص والتميز
-                  </span>
-                </div>
+                <span className={`text-xs font-black flex items-center gap-1.5 ${textPrimary}`}>
+                  <Award size={16} className="text-amber-500"/> منح شارة البونص والتميز
+                </span>
                 <div className="grid grid-cols-2 gap-2">
                   {ADMIN_BADGE_OPTIONS.map(b => (
                     <button
@@ -965,10 +1016,7 @@ const AdminPanel = ({ isDarkMode, onClose, triggerToast, appSettings, user, open
                     <Ban size={16}/> إدارة القيود والحظر المؤقت أو الدائم
                   </span>
                   {(selectedUser.isBanned || isRestrictionActive(selectedUser.fullBanUntil) || isRestrictionActive(selectedUser.tripBanUntil) || isRestrictionActive(selectedUser.chatBanUntil)) && (
-                    <button
-                      onClick={() => handleApplyRestriction(selectedUser, 'unban_all', 0)}
-                      className="px-3 py-1 bg-emerald-600 text-white rounded-lg text-[11px] font-black shadow-sm"
-                    >
+                    <button onClick={() => handleApplyRestriction(selectedUser, 'unban_all', 0)} className="px-3 py-1 bg-emerald-600 text-white rounded-lg text-[11px] font-black shadow-sm">
                       فك جميع القيود فوراً 🔓
                     </button>
                   )}
@@ -981,11 +1029,7 @@ const AdminPanel = ({ isDarkMode, onClose, triggerToast, appSettings, user, open
                   </div>
                   <div className="flex flex-wrap gap-1.5">
                     {BAN_DURATIONS.map(d => (
-                      <button
-                        key={d.hours}
-                        onClick={() => handleApplyRestriction(selectedUser, 'trips', d.hours)}
-                        className="px-2.5 py-1.5 bg-white dark:bg-slate-800 hover:bg-orange-500 hover:text-white border dark:border-slate-700 rounded-lg text-[10px] font-black transition-colors"
-                      >
+                      <button key={d.hours} onClick={() => handleApplyRestriction(selectedUser, 'trips', d.hours)} className="px-2.5 py-1.5 bg-white dark:bg-slate-800 hover:bg-orange-500 hover:text-white border dark:border-slate-700 rounded-lg text-[10px] font-black transition-colors">
                         {d.label}
                       </button>
                     ))}
@@ -994,16 +1038,12 @@ const AdminPanel = ({ isDarkMode, onClose, triggerToast, appSettings, user, open
 
                 <div className="space-y-1.5 pt-2 border-t border-rose-200/50 dark:border-rose-800/40">
                   <div className="flex justify-between text-[11px] font-bold">
-                    <span className={textPrimary}>💬 منع من التواصل مع العملاء (الشات والطلبات):</span>
+                    <span className={textPrimary}>💬 منع من التواصل مع العملاء:</span>
                     <span className="text-rose-500">{formatRemainingBan(selectedUser.chatBanUntil) || 'غير محظور'}</span>
                   </div>
                   <div className="flex flex-wrap gap-1.5">
                     {BAN_DURATIONS.map(d => (
-                      <button
-                        key={d.hours}
-                        onClick={() => handleApplyRestriction(selectedUser, 'chat', d.hours)}
-                        className="px-2.5 py-1.5 bg-white dark:bg-slate-800 hover:bg-amber-600 hover:text-white border dark:border-slate-700 rounded-lg text-[10px] font-black transition-colors"
-                      >
+                      <button key={d.hours} onClick={() => handleApplyRestriction(selectedUser, 'chat', d.hours)} className="px-2.5 py-1.5 bg-white dark:bg-slate-800 hover:bg-amber-600 hover:text-white border dark:border-slate-700 rounded-lg text-[10px] font-black transition-colors">
                         {d.label}
                       </button>
                     ))}
@@ -1012,30 +1052,24 @@ const AdminPanel = ({ isDarkMode, onClose, triggerToast, appSettings, user, open
 
                 <div className="space-y-1.5 pt-2 border-t border-rose-200/50 dark:border-rose-800/40">
                   <div className="flex justify-between text-[11px] font-bold">
-                    <span className="text-rose-600 dark:text-rose-400 font-black">🚫 تجميد شامل (منع إجراءات التطبيق):</span>
+                    <span className="text-rose-600 dark:text-rose-400 font-black">🚫 تجميد شامل للحساب:</span>
                     <span className="text-rose-600 font-black">{formatRemainingBan(selectedUser.fullBanUntil) || (selectedUser.isBanned ? 'موقوف' : 'غير محظور')}</span>
                   </div>
                   <div className="flex flex-wrap gap-1.5">
                     {BAN_DURATIONS.map(d => (
-                      <button
-                        key={d.hours}
-                        onClick={() => handleApplyRestriction(selectedUser, 'full', d.hours)}
-                        className="px-2.5 py-1.5 bg-rose-600/10 hover:bg-rose-600 text-rose-600 hover:text-white border border-rose-300 dark:border-rose-800 rounded-lg text-[10px] font-black transition-colors"
-                      >
+                      <button key={d.hours} onClick={() => handleApplyRestriction(selectedUser, 'full', d.hours)} className="px-2.5 py-1.5 bg-rose-600/10 hover:bg-rose-600 text-rose-600 hover:text-white border border-rose-300 dark:border-rose-800 rounded-lg text-[10px] font-black transition-colors">
                         {d.label}
                       </button>
                     ))}
                   </div>
                 </div>
-
               </div>
-
             </div>
           </div>
         )}
 
         {previewImage && (
-          <div className="fixed inset-0 bg-black/95 z-[700] flex items-center justify-center p-4" onClick={() => setPreviewImage(null)}>
+          <div className="fixed inset-0 bg-black/95 z-[1250] flex items-center justify-center p-4" onClick={() => setPreviewImage(null)}>
             <img src={previewImage} className="max-w-full max-h-[85vh] rounded-2xl object-contain shadow-2xl" alt="Preview"/>
             <button className="absolute top-6 right-6 p-3 bg-white/20 text-white rounded-full"><X size={24}/></button>
           </div>

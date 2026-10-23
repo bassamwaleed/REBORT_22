@@ -1,8 +1,7 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { X, Send, Bot, Sparkles, MapPinned, Route, BusFront, Compass, ChevronLeft, RefreshCw } from 'lucide-react';
+import { X, Send, Bot, Sparkles, BusFront, Compass, ChevronLeft } from 'lucide-react';
 import { normalizeArabic } from '../App';
 
-// قاعدة المعرفة الذكية لبيسو (لتغطية خطوط المحافظات والمدن السياحية بأكثر من طريقة بجانب داتا المواقف الحية)
 const BESO_TRAVEL_GUIDES = [
   {
     keywords: ['راس البر', 'رأس البر', 'دمياط'],
@@ -117,11 +116,9 @@ const BesoAssistantModal = ({ stations = [], isDarkMode, onClose, onSelectStatio
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
   }, [messages]);
 
-  // العقل الذكي لـ "بيسو" لتحليل سؤال المستخدم والبحث في المواقف الحية + دليل الطرق
   const generateBesoResponse = (queryText) => {
     const normQuery = normalizeArabic(queryText);
 
-    // 1. لو بيسأل عن حالة الزحمة أو المواقف الرايقة
     if (normQuery.includes('رايق') || normQuery.includes('زحم') || normQuery.includes('فاضي')) {
       const emptyStations = stations.filter(s => s.crowdStatus === 'empty');
       const crowdedStations = stations.filter(s => s.crowdStatus === 'crowded');
@@ -142,18 +139,15 @@ const BesoAssistantModal = ({ stations = [], isDarkMode, onClose, onSelectStatio
       };
     }
 
-    // 2. البحث في قاعدة بيانات المواقف الحية (stations & routes) في Firebase
     const foundRoutes = [];
     const foundStations = [];
 
-    // تنظيف الكلمات الشائعة لاستخراج اسم المكان بدقة
     const stopWords = ['عايز', 'اروح', 'ازاي', 'من', 'الي', 'إلى', 'في', 'مواصلات', 'طريق', 'خط', 'خطوط', 'موقف', 'الذهاب', 'ل', 'لو', 'سمحت', 'يا', 'بيسو', 'القاهره', 'الجيزه'];
     const queryTokens = normQuery
       .split(' ')
       .map(t => t.trim())
       .filter(t => t.length >= 3 && !stopWords.includes(t));
 
-    // لو كتب "القاهرة" أو "الجيزة" فقط بدون كلمات أخرى، نحتفظ بها
     const effectiveTokens = queryTokens.length > 0 ? queryTokens : normQuery.split(' ').filter(t => t.length >= 2);
 
     stations.forEach((st) => {
@@ -186,7 +180,6 @@ const BesoAssistantModal = ({ stations = [], isDarkMode, onClose, onSelectStatio
       }
     });
 
-    // 3. البحث في دليل بيسو الشامل للمحافظات والمدن (مثل رأس البر، الإسكندرية، السادات، إلخ)
     const matchedGuides = BESO_TRAVEL_GUIDES.filter(g => 
       g.keywords.some(kw => normQuery.includes(normalizeArabic(kw))) ||
       effectiveTokens.some(tok => g.keywords.some(kw => normalizeArabic(kw).includes(tok)))
@@ -194,7 +187,6 @@ const BesoAssistantModal = ({ stations = [], isDarkMode, onClose, onSelectStatio
 
     let responseParts = [];
 
-    // إضافة خطوط المواقف المسجلة في التطبيق أولاً (البيانات الحية)
     if (foundRoutes.length > 0) {
       responseParts.push(`✅ لقيتلك (${foundRoutes.length}) خط سير مباشر مسجل في مواقف التطبيق:`);
       foundRoutes.slice(0, 5).forEach((item, idx) => {
@@ -206,7 +198,6 @@ const BesoAssistantModal = ({ stations = [], isDarkMode, onClose, onSelectStatio
       });
     }
 
-    // إضافة الطرق المتعددة من دليل بيسو الذكي
     if (matchedGuides.length > 0) {
       matchedGuides.forEach(guide => {
         responseParts.push(`\n🧭 **${guide.title}:**`);
@@ -214,7 +205,6 @@ const BesoAssistantModal = ({ stations = [], isDarkMode, onClose, onSelectStatio
       });
     }
 
-    // لو لقى موقف نفسه بالاسم
     if (foundRoutes.length === 0 && foundStations.length > 0) {
       responseParts.push(`🚏 لقيتلك موقف مطابق لبحثك في التطبيق:`);
       foundStations.forEach(st => {
@@ -222,7 +212,6 @@ const BesoAssistantModal = ({ stations = [], isDarkMode, onClose, onSelectStatio
       });
     }
 
-    // لو مفيش تطابق مباشر، يقترح أقرب المواقف المركزية + إرشاد ذكي
     if (responseParts.length === 0) {
       responseParts.push(
         `🤔 بص يا بطل، المشوار ده لسه ملوش خط مباشر متسجل بنفس الاسم في الداتا الحالية، بس خليني أقولك أفضل 3 طرق توصل بيهم لأي مكان في مصر بسهولة:\n\n` +
@@ -232,7 +221,6 @@ const BesoAssistantModal = ({ stations = [], isDarkMode, onClose, onSelectStatio
       );
     }
 
-    // تجميع المواقف المقترحة كأزرار سريعة تحت الرسالة
     const uniqueSuggestedStations = [...foundStations];
     foundRoutes.forEach(fr => {
       if (!uniqueSuggestedStations.some(s => s.id === fr.station.id)) {
@@ -274,10 +262,14 @@ const BesoAssistantModal = ({ stations = [], isDarkMode, onClose, onSelectStatio
   const bgInput = isDarkMode ? 'bg-slate-800 border-slate-700 text-white placeholder-slate-400' : 'bg-slate-100 border-slate-200 text-slate-900';
 
   return (
-    <div className="fixed inset-0 bg-slate-950/85 backdrop-blur-md z-[850] flex justify-center items-end sm:items-center p-0 sm:p-4 pointer-events-auto" onClick={onClose}>
+    /* z-[1100] يضمن ظهور النافذة فوق شريط التنقل السفلي تماماً مع دعم 85dvh للموبايل */
+    <div 
+      className="fixed inset-0 bg-slate-950/85 backdrop-blur-md z-[1100] flex justify-center items-end sm:items-center p-0 sm:p-4 pointer-events-auto" 
+      onClick={onClose}
+    >
       <div 
         onClick={(e) => e.stopPropagation()} 
-        className={`${bgCard} w-full sm:max-w-lg h-[75vh] sm:h-[600px] rounded-t-[2rem] sm:rounded-[2rem] shadow-2xl flex flex-col overflow-hidden border dark:border-slate-700 animate-fade-in-up`}
+        className={`${bgCard} w-full sm:max-w-lg h-[85dvh] sm:h-[650px] max-h-[88dvh] rounded-t-[2rem] sm:rounded-[2rem] shadow-2xl flex flex-col overflow-hidden border dark:border-slate-700 animate-fade-in-up`}
       >
         {/* هيدر المساعد بيسو */}
         <div className="p-4 bg-gradient-to-r from-indigo-600 via-violet-600 to-indigo-700 text-white flex items-center justify-between shadow-md shrink-0">
@@ -305,7 +297,7 @@ const BesoAssistantModal = ({ stations = [], isDarkMode, onClose, onSelectStatio
         </div>
 
         {/* منطقة المحادثة */}
-        <div className={`flex-1 overflow-y-auto p-4 space-y-4 [&::-webkit-scrollbar]:hidden ${isDarkMode ? 'bg-slate-950/60' : 'bg-slate-50/70'}`}>
+        <div className={`flex-1 min-h-0 overflow-y-auto p-4 space-y-4 [&::-webkit-scrollbar]:hidden ${isDarkMode ? 'bg-slate-950/60' : 'bg-slate-50/70'}`}>
           {messages.map((msg) => {
             const isBeso = msg.sender === 'beso';
             return (
@@ -319,7 +311,6 @@ const BesoAssistantModal = ({ stations = [], isDarkMode, onClose, onSelectStatio
                     {msg.text}
                   </div>
 
-                  {/* عرض كروت المواقف المقترحة للضغط المباشر */}
                   {isBeso && msg.matchedStations && msg.matchedStations.length > 0 && (
                     <div className="w-full space-y-1.5 mt-1">
                       <span className="text-[10px] font-black text-indigo-500 px-1 flex items-center gap-1">
@@ -362,7 +353,7 @@ const BesoAssistantModal = ({ stations = [], isDarkMode, onClose, onSelectStatio
         </div>
 
         {/* اقتراحات سريعة */}
-        <div className={`px-3 pt-2 pb-1 border-t flex gap-1.5 overflow-x-auto [&::-webkit-scrollbar]:hidden ${isDarkMode ? 'bg-slate-900 border-slate-800' : 'bg-white border-slate-200'}`}>
+        <div className={`px-3 pt-2 pb-1 border-t shrink-0 flex gap-1.5 overflow-x-auto [&::-webkit-scrollbar]:hidden ${isDarkMode ? 'bg-slate-900 border-slate-800' : 'bg-white border-slate-200'}`}>
           {quickQuestions.map((q, idx) => (
             <button
               key={idx}
@@ -379,10 +370,10 @@ const BesoAssistantModal = ({ stations = [], isDarkMode, onClose, onSelectStatio
           ))}
         </div>
 
-        {/* حقل كتابة السؤال */}
+        {/* حقل كتابة السؤال وزر الإرسال بمساحة أمان واضحة */}
         <form 
           onSubmit={(e) => { e.preventDefault(); handleSend(); }} 
-          className={`p-3 flex items-center gap-2 ${isDarkMode ? 'bg-slate-900' : 'bg-white'}`}
+          className={`p-3 pb-5 sm:pb-3 shrink-0 flex items-center gap-2 border-t ${isDarkMode ? 'bg-slate-900 border-slate-800' : 'bg-white border-slate-100'}`}
         >
           <input
             type="text"
