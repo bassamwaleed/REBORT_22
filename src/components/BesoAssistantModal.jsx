@@ -6,7 +6,7 @@ import { db, ADMIN_EMAIL } from '../firebase';
 import { normalizeArabic } from '../App';
 
 // ============================================================================
-// 1. موسوعة الحوار الذكي (متعددة الردود لعدم التكرار)
+// 1. موسوعة الحوار الذكي (للرد على التحيات والأسئلة العامة)
 // ============================================================================
 const BESO_CONVERSATIONAL_INTENTS = [
   {
@@ -20,7 +20,7 @@ const BESO_CONVERSATIONAL_INTENTS = [
   },
   {
     id: 'app_purpose',
-    keywords: ['هدف التطبيق', 'فكره التطبيق', 'فكرة التطبيق', 'يعني ايه طريقنا', 'ابلكيشن ايه ده', 'بيعمل ايه', 'لازمته ايه', 'فكرته ايه', 'شرح التطبيق', 'عن التطبيق', 'الموقع ده بيعمل'],
+    keywords: ['هدف التطبيق', 'فكره التطبيق', 'فكرة التطبيق', 'يعني ايه طريقنا', 'ابلكيشن ايه ده', 'بيعمل ايه', 'لازمته ايه', 'فكرته ايه', 'شرح التطبيق', 'عن التطبيق', 'البرنامج ده'],
     replies: [
       `سؤال ممتاز! 🎯 فكرة "طريقنا" ببساطة هي (المشاركة وتوفير الفلوس والوقت):\n\n1️⃣ **مشاركة المشاوير:** لو معاك عربية مسافر بيها، بتاخد معاك ناس في نفس طريقك ويقسموا معاك البنزين، ولو أنت راكب بتلاقي توصيلة مريحة ومباشرة.\n2️⃣ **توصيل الطرود 📦:** ابعت أماناتك مع مسافرين نفس الخط في نفس اليوم.\n3️⃣ **مواقف مصر 🚏:** دليل ذكي لكل مواقف الميكروباصات وتعريفتها وحالة الزحمة فيها!`,
       `"طريقنا" هو مجتمع مصري بيجمع المسافرين وأصحاب العربيات عشان يوفروا مصاريف الطريق 🚗💡.\nمش بس كده، بنوفرلك دليل كامل لمواقف مصر وتوصيل سريع للأمانات والطرود مع ناس موثوقة في نفس طريقك.`
@@ -35,7 +35,7 @@ const BESO_CONVERSATIONAL_INTENTS = [
   },
   {
     id: 'thanks',
-    keywords: ['شكرا', 'تسلم', 'ربنا يخليك', 'ممتاز', 'شاطر', 'جدع', 'الله ينور', 'عاش'],
+    keywords: ['شكرا', 'تسلم', 'ربنا يخليك', 'ممتاز', 'شاطر', 'جدع', 'الله ينور', 'عاش', 'حبيبي'],
     replies: [
       `حبيبي يا بطل، العفو! 🤍🤖 أنا موجود هنا دايماً في خدمتك.`,
       `أقل واجب يا صاحبي! لو احتجت تسأل عن أي مواصلة تانية أنا موجود 🚀`,
@@ -45,12 +45,12 @@ const BESO_CONVERSATIONAL_INTENTS = [
 ];
 
 // ============================================================================
-// 2. موسوعة مواصلات مصر الشاملة (محافظات ومدن)
+// 2. موسوعة مواصلات مصر الشاملة (دليل إرشادي للطرق الكبرى)
 // ============================================================================
 const BESO_MEGA_TRANSIT_DB = [
   {
-    keywords: ['راس البر', 'رأس البر', 'دمياط', 'دمياط الجديده', 'فارسكور'],
-    title: 'طرق المواصلات إلى رأس البر ودمياط 🏖️',
+    keywords: ['راس البر', 'رأس البر', 'دمياط'],
+    title: 'طرق الذهاب إلى رأس البر ودمياط 🏖️',
     methods: [
       '🚌 **أتوبيس مباشر:** سوبر جيت أو جو باص من موقف ألماظة أو الترجمان أو عبد المنعم رياض مباشرة لرأس البر.',
       '🚐 **ميكروباص:** من (موقف السلام) أو (موقف عبود) خط دمياط، ومن الموقف سرفيس 10 دقايق لرأس البر.'
@@ -65,59 +65,10 @@ const BESO_MEGA_TRANSIT_DB = [
     ]
   },
   {
-    keywords: ['السادات', 'مدينه السادات'],
-    title: 'طرق المواصلات إلى مدينة السادات 🏙️',
-    methods: [
-      '🚐 من القاهرة: (موقف عبود) أو (موقف السلام) مباشر صحراوي.',
-      '🚐 من أكتوبر والجيزة: (موقف الرماية) أو (الحصري).'
-    ]
-  },
-  {
-    keywords: ['شبين الكوم', 'شبين', 'المنوفيه', 'منوف', 'قويسنا', 'بركه السبع', 'اشمون', 'الباجور'],
-    title: 'طرق المواصلات إلى شبين الكوم والمنوفية 🌿',
-    methods: [
-      '🚐 **ميكروباص:** من (عبود) أو (السلام) أو (المؤسسة بشبرا) سيارات مباشرة طوال اليوم.',
-      '🚆 **القطار:** من رمسيس خط (منوف - شبين) أو تنزل محطة قويسنا وتركب سرفيس.'
-    ]
-  },
-  {
-    keywords: ['اكتوبر', '6 اكتوبر', 'الحصري', 'الشيخ زايد', 'حدائق اكتوبر', 'الرمايه', 'الهرم', 'فيصل'],
-    title: 'طرق المواصلات إلى أكتوبر وزايد والهرم 🛣️',
-    methods: [
-      '🚐 من وسط البلد: ميكروباص من عبد المنعم رياض أو الإسعاف لأكتوبر وزايد.',
-      '🚐 من الجيزة: ميكروباصات من ميدان الجيزة أو المنيب أو جامعة القاهرة.',
-      '🚇 **المترو (للهرم وفيصل):** الخط الثاني لمحطة الجيزة أو فيصل ومن تحت المحطة ميكروباص.'
-    ]
-  },
-  {
-    keywords: ['التجمع', 'التجمع الخامس', 'القاهره الجديده', 'الرحاب', 'مدينتي', 'مدينه نصر'],
-    title: 'طرق المواصلات إلى التجمع ومدينة نصر 🏙️',
-    methods: [
-      '🚇 **المترو:** الخط الثالث لمحطة (الاستاد / كلية البنات / عدلي منصور) ومنها ميكروباصات التجمع.',
-      '🚐 **ميكروباص:** من رمسيس، عبد المنعم رياض، أو موقف العاشر للحي العاشر والتجمع.'
-    ]
-  },
-  {
-    keywords: ['العاصمه الاداريه', 'الشروق', 'بدر', 'العبور', 'العاشر من رمضان'],
-    title: 'طرق المواصلات للعاصمة الإدارية والشروق والعبور 🚆',
-    methods: [
-      '🚈 **القطار الكهربائي LRT:** من محطة مترو (عدلي منصور) مباشرة لكل المدن دي لحد العاصمة الإدارية.',
-      '🚐 **ميكروباص:** من موقف العاشر (السلام) ميكروباصات مباشرة.'
-    ]
-  },
-  {
-    keywords: ['طنطا', 'المحله', 'كفر الزيات', 'الغربيه', 'المنصوره', 'الدقهليه', 'ميت غمر', 'الزقازيق', 'بنها'],
-    title: 'طرق المواصلات إلى الدلتا (طنطا، المنصورة، الزقازيق) 🌳',
-    methods: [
-      '🚐 **ميكروباص:** من (موقف عبود) أو (موقف السلام) أو (المرج) خطوط مباشرة.',
-      '🚆 **القطار:** من محطة رمسيس وشبرا الخيمة لجميع محافظات الوجه البحري.'
-    ]
-  },
-  {
     keywords: ['بورسعيد', 'الاسماعيليه', 'السويس', 'السخنه', 'شرم الشيخ', 'مطروح', 'الساحل'],
     title: 'مواصلات المدن الساحلية والقناة ⚓',
     methods: [
-      '🚐 **ميكروباص:** من (السلام) أو (عبود) للإسماعيلية وبورسعيد والسويس.',
+      '🚐 **ميكروباص:** من (موقف السلام) أو (عبود) للإسماعيلية وبورسعيد والسويس.',
       '🚌 **أتوبيس:** (جو باص / شرق الدلتا / سوبر جيت) من التحرير أو ألماظة أو الترجمان لشرم الشيخ والسخنة ومطروح والساحل.'
     ]
   },
@@ -125,14 +76,11 @@ const BESO_MEGA_TRANSIT_DB = [
     keywords: ['الفيوم', 'بني سويف', 'المنيا', 'ملوي', 'اسيوط', 'سوهاج', 'قنا', 'الاقصر', 'اسوان', 'الصعيد'],
     title: 'طرق المواصلات لمحافظات الصعيد ☀️',
     methods: [
-      '🚐 **ميكروباص:** من (موقف المنيب) أو (عبود) سيارات مباشرة على مدار 24 ساعة.',
-      '🚆 **القطار:** من محطة رمسيس أو محطة صعيد مصر (بشتيل).'
+      '🚐 **ميكروباص:** من (موقف المنيب) أو (عبود) سيارات مباشرة على مدار 24 ساعة للصعيد.',
+      '🚆 **القطار:** من محطة رمسيس أو محطة صعيد مصر (بشتيل) قطارات مستمرة طوال اليوم.'
     ]
   }
 ];
-
-// كلمات التوقف لاستخراج اسم المكان بدقة
-const STOP_WORDS = ['عايز', 'اروح', 'ازاي', 'من', 'الي', 'إلى', 'في', 'مواصلات', 'طريق', 'خط', 'خطوط', 'موقف', 'الذهاب', 'ل', 'لو', 'سمحت', 'يا', 'بيسو', 'القاهره', 'الجيزه', 'اركب', 'ايه', 'ده', 'بكام', 'فين', 'ممكن', 'تطبيق', 'برنامج', 'فكره', 'هدف'];
 
 const BesoAssistantModal = ({ stations = [], isDarkMode, onClose, onSelectStation, userAreas = [], user, isAdmin }) => {
   const [input, setInput] = useState('');
@@ -145,24 +93,23 @@ const BesoAssistantModal = ({ stations = [], isDarkMode, onClose, onSelectStatio
   const [isSubmittingCorrection, setIsSubmittingCorrection] = useState(false);
   const [correctionSuccessMsg, setCorrectionSuccessMsg] = useState('');
   
-  // ذاكرة المحادثة (عشان لو سأله "فين في المنيا؟" يفهم إن الرد الجاي تابع للمنيا)
-  const [conversationContext, setConversationContext] = useState({ expectingDetailsFor: null });
+  // ذاكرة المحادثة (الذكاء الاصطناعي لحفظ الانطلاق والوصول)
+  const [conversationContext, setConversationContext] = useState({ expectingOriginFor: null, expectingDestFor: null });
 
   const [messages, setMessages] = useState([
     {
       id: 'welcome',
       sender: 'beso',
-      text: `أهلاً بيك يا بطل! أنا "بيسو" 🤖 مساعدك الذكي لمواقف ومواصلات مصر ولتطبيق "طريقنا".\n\nأنا مسجل عندي (${stations.length}) موقف حي، وموسوعة لطرق مصر!\n\n🔹 اسألني: **"ازاي أروح المنيب؟"** أو **"إيه فكرة التطبيق ده؟"**\n🔹 ولو في مواصلة اتغيرت، اضغط **(✏️ تعديل المعلومة)** عشان نحدثها مع بعض! 🚀`,
+      text: `أهلاً بيك يا بطل! أنا "بيسو" 🤖 مساعدك الذكي لمواقف ومواصلات مصر ولتطبيق "طريقنا".\n\nأنا مسجل عندي (${stations.length}) موقف حي، وموسوعة لطرق مصر!\n\n🔹 جرب تسألني: **"انا في رمسيس ورايح أكتوبر"** أو **"ازاي أروح المنيا؟"**\n🔹 ولو في مواصلة اتغيرت، اضغط **(✏️ تعديل المعلومة)** عشان نحدثها مع بعض! 🚀`,
     }
   ]);
   const messagesEndRef = useRef(null);
 
   const quickQuestions = [
-    'إيه فكرة التطبيق ده؟ 💡',
-    'ازاي أروح رأس البر؟ 🏖️',
-    'مواصلات 6 أكتوبر والشيخ زايد 🚐',
-    'إيه المواقف اللي رايقة دلوقتي؟ 🟢',
-    'عايز أروح المنيا الصعيد 🚄'
+    'ازاي أروح رأس البر من القاهرة؟ 🏖️',
+    'أنا في رمسيس ورايح أكتوبر 🚐',
+    'عايز أروح المنيا 🚄',
+    'إيه فكرة التطبيق ده؟ 💡'
   ];
 
   useEffect(() => {
@@ -177,136 +124,148 @@ const BesoAssistantModal = ({ stations = [], isDarkMode, onClose, onSelectStatio
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
   }, [messages, correctingMsgId]);
 
-  // منع سكرول الخلفية
   useEffect(() => {
     const originalOverflow = document.body.style.overflow;
     document.body.style.overflow = 'hidden';
     return () => { document.body.style.overflow = originalOverflow; };
   }, []);
 
-  // دالة الذكاء الاصطناعي المحلي
+  // محلل الجمل العربية (Arabic NLP Parser) لاستخراج (من) و (إلى) بكافة اللهجات
+  const parseTransitQuery = (text) => {
+    const cleanText = text.replace(/[؟?.,]/g, ' ').replace(/\s+/g, ' ');
+    let origin = null;
+    let dest = null;
+
+    // نمط 1: عايز اروح [وجهة] من [انطلاق] (مثال: عايز اروح اكتوبر من رمسيس)
+    const p1 = /(?:رايح|اروح|اسافر|عايز اروح|ازاي اروح|مواصلات|اركب ايه ل)\s+([أ-يa-zA-Z0-9\s]+?)\s+(?:من|وانا في|مكاني في)\s+([أ-يa-zA-Z0-9\s]+)/;
+    const m1 = cleanText.match(p1);
+    if (m1) return { dest: m1[1].trim(), origin: m1[2].trim() };
+
+    // نمط 2: من [انطلاق] لـ [وجهة] (مثال: من التجمع لاكتوبر / انا في المعادي ورايح زايد)
+    const p2 = /(?:من|انا في|متواجد في)\s+([أ-يa-zA-Z0-9\s]+?)\s+(?:الى|إلى|ل|لـ|عايز اروح|رايح|لحد)\s+([أ-يa-zA-Z0-9\s]+)/;
+    const m2 = cleanText.match(p2);
+    if (m2) return { origin: m2[1].trim(), dest: m2[2].trim() };
+
+    // نمط 3: عايز اروح [وجهة] (بدون انطلاق)
+    const p3 = /(?:عايز اروح|ازاي اروح|رايح|سافر|مواصلات|لـ|الى|إلى)\s+([أ-يa-zA-Z0-9\s]+)/;
+    const m3 = cleanText.match(p3);
+    if (m3) return { origin: null, dest: m3[1].trim() };
+
+    // نمط 4: انا في [انطلاق] (بدون وجهة)
+    const p4 = /(?:انا في|مكاني|من)\s+([أ-يa-zA-Z0-9\s]+)/;
+    const m4 = cleanText.match(p4);
+    if (m4) return { origin: m4[1].trim(), dest: null };
+
+    return { origin: null, dest: null };
+  };
+
+  // العقل الذكي لتوليد الردود
   const generateBesoResponse = (queryText) => {
     const normQuery = normalizeArabic(queryText);
-    
-    // 1. فحص ذاكرة الحوار (لو بيسو كان سأله "فين بالظبط في كذا؟")
-    if (conversationContext.expectingDetailsFor) {
-      const place = conversationContext.expectingDetailsFor;
-      setConversationContext({ expectingDetailsFor: null });
-      return {
-        text: `تمام، عشان تروح (${queryText}) في ${place}:\nأفضل طريقة إنك تركب من (موقف المنيب أو عبود) عربيات ${place} الرئيسية، ومن الموقف هناك تركب مواصلة داخلية لـ ${queryText}.. \n\nلو عندك تفاصيل أدق للطريق ده، اضغط (تعديل المعلومة) وضيفها عشان تفيد غيرك! ✨`,
-        queryContext: `${place} - ${queryText}`
-      };
-    }
 
-    // 2. فحص النوايا الحوارية (الأسئلة العامة، الشكر، إلخ) باستخدام تطابق مرن
+    // 1. فحص النوايا الحوارية العامة (الأسئلة، الشكر، الشرح)
     const matchedIntent = BESO_CONVERSATIONAL_INTENTS.find(intent => {
       return intent.keywords.some(kw => {
         const normKw = normalizeArabic(kw);
-        // نتحقق إن الكلمة موجودة، مع دعم التعبيرات الشائعة
         return normQuery.includes(normKw) || normQuery.replace(/\s/g, '').includes(normKw.replace(/\s/g, ''));
       });
     });
 
-    const isAskingAboutTransit = ['اروح', 'مواصلات', 'طريق', 'خط', 'موقف', 'سافر'].some(w => normQuery.includes(w));
-
-    // لو لقى نية حوارية واضحة ومش بيسأل عن مواصلة مكان محدد
-    if (matchedIntent && (!isAskingAboutTransit || matchedIntent.id === 'app_purpose')) {
+    const isTransitQuery = ['اروح', 'مواصلات', 'طريق', 'خط', 'موقف', 'من', 'الى', 'رايح', 'انا في'].some(w => normQuery.includes(w));
+    if (matchedIntent && (!isTransitQuery || matchedIntent.id === 'app_purpose')) {
       const randomReply = matchedIntent.replies[Math.floor(Math.random() * matchedIntent.replies.length)];
       return { text: randomReply, queryContext: queryText };
     }
 
-    // 3. لو بيسأل عن المواقف الرايقة والزحمة
-    if (normQuery.includes('رايق') || normQuery.includes('زحم') || normQuery.includes('فاضي')) {
-      const emptyStations = stations.filter(s => s.crowdStatus === 'empty');
-      const crowdedStations = stations.filter(s => s.crowdStatus === 'crowded');
-      let reply = '📊 تقرير بيسو المباشر لحالة المواقف الآن:\n\n';
-      if (emptyStations.length > 0) reply += `🟢 مواقف رايقة: (${emptyStations.map(s => s.name).join('، ')})\n`;
-      if (crowdedStations.length > 0) reply += `🔴 مواقف زحمة: (${crowdedStations.map(s => s.name).join('، ')})\n`;
-      if (emptyStations.length === 0 && crowdedStations.length === 0) reply += 'كل المواقف المسجلة حالتها طبيعية! 👍';
-      return { text: reply, matchedStations: emptyStations.length > 0 ? emptyStations : stations.slice(0, 3) };
+    // 2. تحليل الجملة لاستخراج الانطلاق والوصول
+    const parsed = parseTransitQuery(normQuery);
+    let o = parsed.origin;
+    let d = parsed.dest;
+
+    // 3. استخدام الذاكرة لربط الجمل ببعضها
+    if (conversationContext.expectingOriginFor) {
+      d = conversationContext.expectingOriginFor;
+      o = o || normQuery; // لو كتب "رمسيس" بس
+      setConversationContext({ expectingOriginFor: null, expectingDestFor: null });
+    } else if (conversationContext.expectingDestFor) {
+      o = conversationContext.expectingDestFor;
+      d = d || normQuery;
+      setConversationContext({ expectingOriginFor: null, expectingDestFor: null });
+    } else if (d && !o) {
+      setConversationContext({ expectingOriginFor: d, expectingDestFor: null });
+      return {
+        text: `تمام، عشان أقدر أظبطلك أسرع وأوفر طريق لـ **(${d})** 📍\nقولي أنت هتركب منين بالظبط؟ (مثلاً: أنا في رمسيس، أو من المعادي)`,
+        queryContext: queryText
+      };
+    } else if (o && !d) {
+      setConversationContext({ expectingDestFor: o, expectingOriginFor: null });
+      return {
+        text: `أنت دلوقتي في **(${o})**.. تمام جداً 👍\nرايح فين بقى عشان أقولك تركب إيه من هناك؟`,
+        queryContext: queryText
+      };
     }
 
-    // 4. استخراج اسم المكان (الكلمات غير المعروفة)
-    const effectiveTokens = normQuery.split(' ').map(t => t.trim()).filter(t => t.length > 2 && !STOP_WORDS.includes(t));
-    let responseParts = [];
+    // 4. لو معانا الانطلاق والوصول (o, d) هنجيب الطريق
+    if (o && d) {
+      let responseParts = [];
+      const foundRoutes = [];
+      const matchedStations = [];
 
-    // 5. البحث في تصحيحات المستخدمين (beso_knowledge_updates)
-    const approvedOrMyUpdates = customGuides.filter(cg => {
-      if (cg.status !== 'approved' && (!user || cg.submittedBy !== user.uid)) return false;
-      const normPlace = normalizeArabic(cg.placeKeywords || '');
-      return normPlace && (normQuery.includes(normPlace) || effectiveTokens.some(tok => normPlace.includes(tok)));
-    });
+      // البحث في المواقف الحية (stations)
+      stations.forEach(st => {
+        const stName = normalizeArabic(st.name);
+        const stLoc = normalizeArabic(st.location);
+        const normO = normalizeArabic(o);
+        const normD = normalizeArabic(d);
 
-    if (approvedOrMyUpdates.length > 0) {
-      responseParts.push(`📌 **معلومات محدثة من مجتمع "طريقنا":**`);
-      approvedOrMyUpdates.slice(0, 3).forEach(upd => {
-        responseParts.push(`• **${upd.placeKeywords}:** ${upd.correctedInfo} ${upd.status === 'approved' ? '✅' : '⏳'}`);
+        // هل الموقف قريب من نقطة الانطلاق؟
+        if (stName.includes(normO) || normO.includes(stName) || stLoc.includes(normO) || normO.includes(stLoc) || o === 'القاهره' || o === 'الجيزه') {
+          if (!matchedStations.some(s => s.id === st.id)) matchedStations.push(st);
+          
+          // هل الموقف ده فيه خط للوجهة؟
+          (st.routes || []).forEach(r => {
+            if (r.status === 'pending') return;
+            const dest = normalizeArabic(r.destination);
+            const details = normalizeArabic(r.destinationDetails);
+            if (dest.includes(normD) || normD.includes(dest) || (details && (details.includes(normD) || normD.includes(details)))) {
+              foundRoutes.push({ station: st, route: r });
+            }
+          });
+        }
       });
-    }
 
-    // 6. البحث في الداتا الحية (المواقف والخطوط)
-    const foundRoutes = [];
-    const foundStations = [];
-    stations.forEach((st) => {
-      const stName = normalizeArabic(st.name);
-      if (effectiveTokens.some(tok => stName.includes(tok))) {
-        if (!foundStations.some(s => s.id === st.id)) foundStations.push(st);
-      }
-      if (Array.isArray(st.routes)) {
-        st.routes.forEach((r) => {
-          if (r.status === 'pending') return;
-          const dest = normalizeArabic(r.destination);
-          const details = normalizeArabic(r.destinationDetails);
-          if (effectiveTokens.some(tok => dest.includes(tok) || details.includes(tok))) {
-            foundRoutes.push({ station: st, route: r });
-          }
+      if (foundRoutes.length > 0) {
+        responseParts.push(`🎯 **لقيتلك خط مباشر من (${o}) لـ (${d}) متسجل في التطبيق:**`);
+        foundRoutes.slice(0, 4).forEach((item, idx) => {
+          const destName = item.route.destinationDetails ? `${item.route.destinationDetails} (${item.route.destination})` : item.route.destination;
+          responseParts.push(`${idx + 1}. تروح **${item.station.name}** (${item.station.location}) ⬅️ وتركب خط **${destName}** — الأجرة: ${item.route.fare}ج`);
         });
+      } else {
+        // لو ملقاش خط مباشر، يبحث في الإرشادات أو التحديثات
+        const approvedUpdates = customGuides.filter(cg => cg.status === 'approved' && normalizeArabic(cg.placeKeywords).includes(normalizeArabic(d)));
+        if (approvedUpdates.length > 0) {
+          responseParts.push(`📌 **معلومة من مجتمع طريقنا لـ (${d}):**\n${approvedUpdates[0].correctedInfo}`);
+        } else {
+          // الرد الذكي الديناميكي للمناطق الغير مسجلة
+          responseParts.push(
+            `🤔 بص يا سيدي، دورت في كل مواقف **(${o})** على خط مباشر لـ **(${d})** ومردش عليا حاجة في داتا التطبيق لحد اللحظة دي.\n\n` +
+            `بس عموماً عشان تروح **(${d})**، أنصحك تنزل أقرب موقف مركزي كبير (زي رمسيس، عبود، أو المنيب لو أنت في القاهرة/الجيزة) ومن هناك هتلاقي عربيات ليها بسهولة 🗺️.\n\n` +
+            `💡 **عرفت المواصلة دي؟** اضغط على (✏️ تعديل المعلومة) تحت رسالتي وضيفها عشان أحفظها وأقولها لأي حد يسألني بعدك وتكسب ثوابه! ✨`
+          );
+        }
       }
-    });
 
-    if (foundRoutes.length > 0) {
-      responseParts.push(`✅ **خطوط مباشرة مسجلة في التطبيق:**`);
-      foundRoutes.slice(0, 5).forEach((item, idx) => {
-        const destName = item.route.destinationDetails ? `${item.route.destinationDetails} (${item.route.destination})` : item.route.destination;
-        responseParts.push(`${idx + 1}. من **${item.station.name}** ⬅️ لـ **${destName}** — الأجرة: ${item.route.fare}ج`);
-      });
+      return {
+        text: responseParts.join('\n\n'),
+        matchedStations: matchedStations.slice(0, 3),
+        queryContext: `${o} - ${d}`
+      };
     }
 
-    // 7. البحث في موسوعة بيسو الشاملة
-    const matchedGuides = BESO_MEGA_TRANSIT_DB.filter(g => 
-      g.keywords.some(kw => normQuery.includes(normalizeArabic(kw))) ||
-      effectiveTokens.some(tok => g.keywords.some(kw => normalizeArabic(kw).includes(tok)))
-    );
-
-    if (matchedGuides.length > 0) {
-      matchedGuides.forEach(guide => {
-        responseParts.push(`\n🧭 **${guide.title}:**`);
-        guide.methods.forEach(m => responseParts.push(m));
-      });
-    }
-
-    // 8. الرد الذكي الديناميكي (إذا لم يجد المكان أو وجده بشكل عام جداً)
-    if (responseParts.length === 0) {
-      const extractedPlace = effectiveTokens.length > 0 ? effectiveTokens.join(' ') : 'المكان ده';
-      
-      // هنا بيسو بيسأل المستخدم بتفصيل كأنه إنسان!
-      setConversationContext({ expectingDetailsFor: extractedPlace });
-      
-      responseParts.push(
-        `🤔 بص يا سيدي، أنا دورت في كل المواقف عندي على خط مباشر لـ **(${extractedPlace})** ومردش عليا حاجة صريحة.\n\n` +
-        `أنت طالع منين ورايح فين بالظبط هناك؟ (يعني رايح مركز إيه أو قرية إيه؟) اكتبلي التفصيل وهحاول ألاقي لك أقرب مسار ليه 🗺️👇`
-      );
-    }
-
-    const uniqueSuggestedStations = [...foundStations];
-    foundRoutes.forEach(fr => {
-      if (!uniqueSuggestedStations.some(s => s.id === fr.station.id)) uniqueSuggestedStations.push(fr.station);
-    });
-
+    // 5. بحث عام لو معرفناش نفصل (من) و (إلى)
     return {
-      text: responseParts.join('\n'),
-      matchedStations: uniqueSuggestedStations.slice(0, 4),
-      queryContext: effectiveTokens.length > 0 ? effectiveTokens.join(' ') : queryText
+      text: `أنا معاك يا بطل، بس مش قادر أحدد بالظبط أنت طالع منين ورايح فين 😅\nممكن تكتبهالي كده: **"أنا في [مكانك] ورايح [وجهتك]"** عشان أقدر أرد عليك بأدق طريق! 🚀`,
+      queryContext: queryText
     };
   };
 
@@ -318,7 +277,7 @@ const BesoAssistantModal = ({ stations = [], isDarkMode, onClose, onSelectStatio
     setMessages(prev => [...prev, userMsg]);
     setInput('');
 
-    // تأخير بسيط لإعطاء إحساس بالتفكير
+    // تأخير بسيط لمحاكاة تفكير الذكاء الاصطناعي
     setTimeout(() => {
       const besoReplyData = generateBesoResponse(cleanText);
       const besoMsg = {
@@ -329,10 +288,10 @@ const BesoAssistantModal = ({ stations = [], isDarkMode, onClose, onSelectStatio
         queryContext: besoReplyData.queryContext
       };
       setMessages(prev => [...prev, besoMsg]);
-    }, 400);
+    }, 500);
   };
 
-  // حفظ تعديل المواصلة
+  // حفظ تعديل المواصلة (يرسل للأدمن أو يُعتمد فوراً)
   const handleSubmitCorrection = async (e, msgObj) => {
     e.preventDefault();
     if (!correctionPlace.trim() || !correctionText.trim()) return;
@@ -381,7 +340,7 @@ const BesoAssistantModal = ({ stations = [], isDarkMode, onClose, onSelectStatio
                 <h3 className="font-black text-sm">المساعد الذكي "بيسو"</h3>
                 <span className="text-[9px] font-black bg-amber-400 text-slate-950 px-1.5 py-0.2 rounded-full flex items-center gap-0.5"><Sparkles size={9}/> AI</span>
               </div>
-              <p className="text-[10px] text-indigo-100 font-bold">خبير مواصلات ومواقف مصر</p>
+              <p className="text-[10px] text-indigo-100 font-bold">خبير مواصلات يفهمك 🧠</p>
             </div>
           </div>
           <button onClick={onClose} className="p-1.5 bg-white/15 hover:bg-rose-500 rounded-full transition-colors"><X size={18} /></button>
@@ -426,7 +385,7 @@ const BesoAssistantModal = ({ stations = [], isDarkMode, onClose, onSelectStatio
                         <div className="p-2.5 rounded-xl bg-emerald-500/15 border border-emerald-500/30 text-emerald-500 text-[11px] font-black">{correctionSuccessMsg}</div>
                       ) : (
                         <>
-                          <input type="text" required value={correctionPlace} onChange={(e) => setCorrectionPlace(e.target.value)} placeholder="المكان (مثال: المنيا / ملوي)" className={`w-full px-3 py-2 rounded-xl border text-[11px] font-bold outline-none ${bgInput}`}/>
+                          <input type="text" required value={correctionPlace} onChange={(e) => setCorrectionPlace(e.target.value)} placeholder="اسم الخط أو المكان (مثال: من رمسيس للمنيا)" className={`w-full px-3 py-2 rounded-xl border text-[11px] font-bold outline-none ${bgInput}`}/>
                           <textarea rows={2} required value={correctionText} onChange={(e) => setCorrectionText(e.target.value)} placeholder="اكتب المواصلة الصح بالتفصيل..." className={`w-full px-3 py-2 rounded-xl border text-[11px] font-bold outline-none resize-none ${bgInput}`}/>
                           <div className="flex gap-1.5">
                             <button type="submit" disabled={isSubmittingCorrection} className="flex-1 py-2 bg-amber-500 hover:bg-amber-600 text-slate-950 rounded-xl text-[11px] font-black">{isSubmittingCorrection ? 'جاري الحفظ...' : 'إرسال'}</button>
@@ -470,7 +429,7 @@ const BesoAssistantModal = ({ stations = [], isDarkMode, onClose, onSelectStatio
         </div>
 
         <form onSubmit={(e) => { e.preventDefault(); handleSend(); }} className={`p-2.5 shrink-0 flex items-center gap-2 border-t ${isDarkMode ? 'bg-slate-900 border-slate-800' : 'bg-white border-slate-100'}`}>
-          <input type="text" value={input} onChange={(e) => setInput(e.target.value)} placeholder="اسأل بيسو عن أي مواصلة..." className={`flex-1 px-3.5 py-2.5 rounded-xl border text-xs font-bold outline-none focus:ring-2 focus:ring-indigo-500 ${bgInput}`}/>
+          <input type="text" value={input} onChange={(e) => setInput(e.target.value)} placeholder="مثال: من رمسيس لزايد..." className={`flex-1 px-3.5 py-2.5 rounded-xl border text-xs font-bold outline-none focus:ring-2 focus:ring-indigo-500 ${bgInput}`}/>
           <button type="submit" disabled={!input.trim()} className="w-10 h-10 rounded-xl bg-indigo-600 hover:bg-indigo-700 disabled:opacity-40 text-white flex items-center justify-center shadow-md active:scale-95 shrink-0">
             <Send size={16} className="rtl:rotate-180" />
           </button>
