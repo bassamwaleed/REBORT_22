@@ -1,14 +1,13 @@
 import React, { useState, useEffect } from 'react';
 import { 
-  collection, onSnapshot, doc, updateDoc, setDoc, query, where, getDocs, writeBatch, addDoc, serverTimestamp 
+  collection, onSnapshot, doc, updateDoc, setDoc, deleteDoc, query, where, getDocs, writeBatch, addDoc, serverTimestamp 
 } from 'firebase/firestore';
 import { 
-  X, ShieldCheck, ShieldAlert, Users, BusFront, Settings, Search, CheckCircle2, 
-  XCircle, Ban, Award, Crown, Star, Zap, Clock, Eye, Image as ImageIcon, 
-  Plus, Trash2, Check, Loader2, Lock, MessageSquareOff, Car, MessageCircle 
+  X, ShieldCheck, Users, BusFront, Settings, Search, CheckCircle2, 
+  XCircle, Ban, Award, Crown, Eye, Plus, Trash2, Check, Loader2, Lock, MessageSquareOff, Car, Activity, Package, Clock 
 } from 'lucide-react';
 import { db, USERS_COLLECTION, APP_COLLECTION_NAME, STATIONS_COLLECTION } from '../firebase';
-import { resizeAndConvertToBase64 } from '../utils/helpers';
+import { resizeAndConvertToBase64, formatTripDateTime } from '../utils/helpers';
 
 export const ADMIN_BADGE_OPTIONS = [
   { id: '', label: 'بدون شارة إضافية', color: 'bg-slate-100 text-slate-600' },
@@ -27,13 +26,16 @@ const BAN_DURATIONS = [
   { label: 'حظر دائم ♾️', hours: 876000 }
 ];
 
-const AdminPanel = ({ isDarkMode, onClose, triggerToast, appSettings, user, openAdminChat }) => {
+const AdminPanel = ({ isDarkMode, onClose, triggerToast, appSettings, user, openAdminChat, realTrips = [], onOpenPublicProfile }) => {
   const [activeTab, setActiveTab] = useState('users'); 
   const [usersList, setUsersList] = useState([]);
   const [stationsList, setStationsList] = useState([]);
   const [loadingUsers, setLoadingUsers] = useState(true);
   const [searchQuery, setSearchQuery] = useState('');
   const [userFilter, setUserFilter] = useState('all'); 
+
+  const [tripSearchQuery, setTripSearchQuery] = useState('');
+  const [tripStatusFilter, setTripStatusFilter] = useState('active');
 
   const [selectedUser, setSelectedUser] = useState(null);
   const [previewImage, setPreviewImage] = useState(null);
@@ -93,37 +95,53 @@ const AdminPanel = ({ isDarkMode, onClose, triggerToast, appSettings, user, open
     }
   };
 
-  // دالة إرسال الرسالة التلقائية في الشات
+  // دالة إرسال الرسالة التلقائية في شات الإدارة المستقل (support_USERID) بدون الخلط مع شات الأدمن الشخصي
   const sendAutomatedMessage = async (targetUserId, text) => {
     if (!user) return;
     try {
-      const user1 = user.uid < targetUserId ? user.uid : targetUserId;
-      const user2 = user.uid < targetUserId ? targetUserId : user.uid;
-      const chatId = `${user1}_${user2}`;
+      const supportChatId = `support_${targetUserId}`;
 
-      await addDoc(collection(db, `chats_${chatId}`), {
+      await addDoc(collection(db, `chats_${supportChatId}`), {
         text: text,
-        senderId: user.uid,
+        senderId: 'admin_support',
         senderName: 'الإدارة (الدعم الفني)',
         senderPhoto: appSettings?.logo || null,
         createdAt: serverTimestamp()
       });
 
-      const inboxUpdateMe = { lastMessage: text, lastSenderId: user.uid, lastMessageTime: Date.now() };
-      const inboxUpdateOther = { 
-        ...inboxUpdateMe, 
-        otherPersonId: user.uid, 
+      const inboxUpdateAdmin = { 
+        chatId: supportChatId,
+        tripId: 'system',
+        tripType: 'support',
+        tripOwnerId: 'system',
+        isSupportChat: true,
+        actingAsAdmin: true,
+        otherPersonId: targetUserId,
+        lastMessage: text, 
+        lastSenderId: user.uid, 
+        lastMessageTime: Date.now() 
+      };
+
+      const inboxUpdateTargetUser = { 
+        chatId: supportChatId,
+        tripId: 'system',
+        tripType: 'support',
+        tripOwnerId: 'system',
+        isSupportChat: true,
+        actingAsAdmin: false,
+        otherPersonId: 'system', 
         otherPersonName: 'الإدارة (الدعم الفني)', 
         otherPersonPhoto: appSettings?.logo || null, 
         otherPersonVerified: true,
-        tripInfo: 'الدعم الفني / الإدارة',
-        tripId: 'system',
-        chatId: chatId,
-        requestStatus: 'none'
+        tripInfo: 'الدعم الفني / الإدارة 🛡️',
+        requestStatus: 'none',
+        lastMessage: text, 
+        lastSenderId: 'admin_support', 
+        lastMessageTime: Date.now() 
       };
 
-      await setDoc(doc(db, `inbox_${user.uid}`, chatId), inboxUpdateMe, { merge: true });
-      await setDoc(doc(db, `inbox_${targetUserId}`, chatId), inboxUpdateOther, { merge: true });
+      await setDoc(doc(db, `inbox_${user.uid}`, supportChatId), inboxUpdateAdmin, { merge: true });
+      await setDoc(doc(db, `inbox_${targetUserId}`, supportChatId), inboxUpdateTargetUser, { merge: true });
     } catch (e) {
       console.error("Error sending auto message:", e);
     }
@@ -139,7 +157,6 @@ const AdminPanel = ({ isDarkMode, onClose, triggerToast, appSettings, user, open
       { verified: newVerified }
     );
 
-    // إرسال إشعار الشات التلقائي
     if (newVerified) {
       await sendAutomatedMessage(targetUser.id, `مرحباً ${targetUser.name?.split(' ')[0]}، تم مراجعة مستنداتك وتوثيق حسابك بنجاح ✅. نتمنى لك رحلات آمنة موفقة!`);
     } else if (forceState === false) {
@@ -192,6 +209,16 @@ const AdminPanel = ({ isDarkMode, onClose, triggerToast, appSettings, user, open
     }
 
     await updateUserAndSyncTrips(targetUser.id, updates);
+  };
+
+  const handleDeleteTripAdmin = async (tripId) => {
+    if (!window.confirm('هل أنت متأكد من حذف هذه الرحلة نهائياً؟')) return;
+    try {
+      await deleteDoc(doc(db, APP_COLLECTION_NAME, tripId));
+      triggerToast('تم حذف الرحلة بنجاح 🗑️');
+    } catch (e) {
+      triggerToast('حدث خطأ أثناء حذف الرحلة');
+    }
   };
 
   const isRestrictionActive = (timestamp) => {
@@ -271,6 +298,26 @@ const AdminPanel = ({ isDarkMode, onClose, triggerToast, appSettings, user, open
   const pendingVerifications = usersList.filter(u => u.verificationStatus === 'pending');
   const pendingStations = stationsList.filter(s => s.status === 'pending' || (s.routes && s.routes.some(r => r.status === 'pending' || r.editRequest)));
 
+  // إحصائيات الرحلات الحية للأدمن
+  const activeRunningTrips = (realTrips || []).filter(t => t.status !== 'completed' && t.status !== 'cancelled');
+  const completedTripsAll = (realTrips || []).filter(t => t.status === 'completed');
+  const parcelActiveTrips = activeRunningTrips.filter(t => t.category === 'parcel' || t.type === 'delivery');
+
+  const filteredAdminTrips = (realTrips || []).filter(t => {
+    if (tripStatusFilter === 'active' && (t.status === 'completed' || t.status === 'cancelled')) return false;
+    if (tripStatusFilter === 'completed' && t.status !== 'completed') return false;
+    if (tripStatusFilter === 'parcel' && t.category !== 'parcel' && t.type !== 'delivery') return false;
+
+    if (tripSearchQuery.trim()) {
+      const q = tripSearchQuery.toLowerCase().trim();
+      const matchFrom = t.from?.toLowerCase().includes(q);
+      const matchTo = t.to?.toLowerCase().includes(q);
+      const matchUser = t.userName?.toLowerCase().includes(q);
+      return matchFrom || matchTo || matchUser;
+    }
+    return true;
+  });
+
   const filteredUsers = usersList.filter(u => {
     const q = searchQuery.toLowerCase().trim();
     const matchSearch = !q || 
@@ -302,7 +349,7 @@ const AdminPanel = ({ isDarkMode, onClose, triggerToast, appSettings, user, open
                 لوحة تحكم الإدارة الشاملة
               </h2>
               <p className="text-[11px] text-indigo-200 font-bold">
-                إدارة الأعضاء، التوثيق، الحظر المؤقت، وشارات البونص
+                مراقبة الرحلات الحية، الأعضاء، التوثيق، وشارات التميز
               </p>
             </div>
           </div>
@@ -314,15 +361,24 @@ const AdminPanel = ({ isDarkMode, onClose, triggerToast, appSettings, user, open
         <div className="flex overflow-x-auto bg-slate-100 dark:bg-slate-900/90 p-1.5 gap-1.5 border-b dark:border-slate-800 shrink-0 [&::-webkit-scrollbar]:hidden">
           <button 
             onClick={() => setActiveTab('users')} 
-            className={`flex-1 min-w-[125px] py-2.5 px-3 rounded-xl text-xs font-black flex items-center justify-center gap-1.5 transition-all ${activeTab === 'users' ? 'bg-indigo-600 text-white shadow-md' : textSecondary}`}
+            className={`flex-1 min-w-[115px] py-2.5 px-3 rounded-xl text-xs font-black flex items-center justify-center gap-1.5 transition-all ${activeTab === 'users' ? 'bg-indigo-600 text-white shadow-md' : textSecondary}`}
           >
-            <Users size={16}/> الأعضاء ({usersList.length})
+            <Users size={15}/> الأعضاء ({usersList.length})
+          </button>
+          <button 
+            onClick={() => setActiveTab('trips')} 
+            className={`flex-1 min-w-[125px] py-2.5 px-3 rounded-xl text-xs font-black flex items-center justify-center gap-1.5 transition-all ${activeTab === 'trips' ? 'bg-indigo-600 text-white shadow-md' : textSecondary}`}
+          >
+            <Activity size={15}/> الرحلات الحية
+            <span className="bg-emerald-500 text-white text-[10px] px-1.5 py-0.2 rounded-full">
+              {activeRunningTrips.length}
+            </span>
           </button>
           <button 
             onClick={() => setActiveTab('verifications')} 
-            className={`flex-1 min-w-[130px] py-2.5 px-3 rounded-xl text-xs font-black flex items-center justify-center gap-1.5 transition-all relative ${activeTab === 'verifications' ? 'bg-indigo-600 text-white shadow-md' : textSecondary}`}
+            className={`flex-1 min-w-[125px] py-2.5 px-3 rounded-xl text-xs font-black flex items-center justify-center gap-1.5 transition-all relative ${activeTab === 'verifications' ? 'bg-indigo-600 text-white shadow-md' : textSecondary}`}
           >
-            <ShieldCheck size={16}/> طلبات التوثيق
+            <ShieldCheck size={15}/> التوثيق
             {pendingVerifications.length > 0 && (
               <span className="bg-rose-500 text-white text-[10px] px-1.5 py-0.5 rounded-full animate-pulse">
                 {pendingVerifications.length}
@@ -331,9 +387,9 @@ const AdminPanel = ({ isDarkMode, onClose, triggerToast, appSettings, user, open
           </button>
           <button 
             onClick={() => setActiveTab('stations')} 
-            className={`flex-1 min-w-[120px] py-2.5 px-3 rounded-xl text-xs font-black flex items-center justify-center gap-1.5 transition-all ${activeTab === 'stations' ? 'bg-indigo-600 text-white shadow-md' : textSecondary}`}
+            className={`flex-1 min-w-[115px] py-2.5 px-3 rounded-xl text-xs font-black flex items-center justify-center gap-1.5 transition-all ${activeTab === 'stations' ? 'bg-indigo-600 text-white shadow-md' : textSecondary}`}
           >
-            <BusFront size={16}/> مراجعة المواقف
+            <BusFront size={15}/> المواقف
             {pendingStations.length > 0 && (
               <span className="bg-amber-500 text-white text-[10px] px-1.5 py-0.5 rounded-full">
                 {pendingStations.length}
@@ -342,14 +398,128 @@ const AdminPanel = ({ isDarkMode, onClose, triggerToast, appSettings, user, open
           </button>
           <button 
             onClick={() => setActiveTab('settings')} 
-            className={`flex-1 min-w-[110px] py-2.5 px-3 rounded-xl text-xs font-black flex items-center justify-center gap-1.5 transition-all ${activeTab === 'settings' ? 'bg-indigo-600 text-white shadow-md' : textSecondary}`}
+            className={`flex-1 min-w-[105px] py-2.5 px-3 rounded-xl text-xs font-black flex items-center justify-center gap-1.5 transition-all ${activeTab === 'settings' ? 'bg-indigo-600 text-white shadow-md' : textSecondary}`}
           >
-            <Settings size={16}/> واجهة التطبيق
+            <Settings size={15}/> الواجهة
           </button>
         </div>
 
         <div className="flex-1 overflow-y-auto p-4 sm:p-5 [&::-webkit-scrollbar]:hidden">
           
+          {/* تبويب مراقبة الرحلات الشغالة حالياً وإحصائياتها */}
+          {activeTab === 'trips' && (
+            <div className="space-y-4">
+              {/* كروت الإحصائيات العلوية */}
+              <div className="grid grid-cols-2 sm:grid-cols-4 gap-2.5">
+                <div className={`p-3.5 rounded-2xl border ${isDarkMode ? 'bg-emerald-950/30 border-emerald-800/60' : 'bg-emerald-50 border-emerald-200'}`}>
+                  <span className="text-[11px] font-bold text-emerald-600 dark:text-emerald-400 block">الرحلات الشغالة الآن</span>
+                  <span className="text-2xl font-black text-emerald-600 dark:text-emerald-400 mt-1 block">{activeRunningTrips.length}</span>
+                </div>
+                <div className={`p-3.5 rounded-2xl border ${isDarkMode ? 'bg-indigo-950/30 border-indigo-800/60' : 'bg-indigo-50 border-indigo-200'}`}>
+                  <span className="text-[11px] font-bold text-indigo-600 dark:text-indigo-400 block">الرحلات المكتملة</span>
+                  <span className="text-2xl font-black text-indigo-600 dark:text-indigo-400 mt-1 block">{completedTripsAll.length}</span>
+                </div>
+                <div className={`p-3.5 rounded-2xl border ${isDarkMode ? 'bg-amber-950/30 border-amber-800/60' : 'bg-amber-50 border-amber-200'}`}>
+                  <span className="text-[11px] font-bold text-amber-600 dark:text-amber-400 block">توصيل وأمانات نشط</span>
+                  <span className="text-2xl font-black text-amber-600 dark:text-amber-400 mt-1 block">{parcelActiveTrips.length}</span>
+                </div>
+                <div className={`p-3.5 rounded-2xl border ${isDarkMode ? 'bg-slate-800 border-slate-700' : 'bg-slate-100 border-slate-200'}`}>
+                  <span className={`text-[11px] font-bold block ${textSecondary}`}>إجمالي كل الرحلات</span>
+                  <span className={`text-2xl font-black mt-1 block ${textPrimary}`}>{(realTrips || []).length}</span>
+                </div>
+              </div>
+
+              {/* بحث وفلترة الرحلات */}
+              <div className="flex flex-col sm:flex-row gap-2">
+                <div className={`flex-1 flex items-center gap-2 px-3.5 py-2.5 rounded-xl border ${bgInput}`}>
+                  <Search size={17} className="text-slate-400 shrink-0" />
+                  <input 
+                    type="text" 
+                    placeholder="ابحث بمنطقة التحرك، الوجهة، أو اسم صاحب الرحلة..." 
+                    value={tripSearchQuery}
+                    onChange={(e) => setTripSearchQuery(e.target.value)}
+                    className="w-full bg-transparent outline-none text-xs font-bold"
+                  />
+                  {tripSearchQuery && <button onClick={() => setTripSearchQuery('')}><X size={14} className="text-slate-400"/></button>}
+                </div>
+
+                <div className="flex gap-1.5">
+                  {[
+                    { id: 'active', label: `الشغالة حالياً (${activeRunningTrips.length})` },
+                    { id: 'completed', label: `المكتملة (${completedTripsAll.length})` },
+                    { id: 'parcel', label: 'التوصيل 📦' },
+                    { id: 'all', label: 'الكل' }
+                  ].map(f => (
+                    <button
+                      key={f.id}
+                      onClick={() => setTripStatusFilter(f.id)}
+                      className={`px-3 py-2 rounded-xl text-[11px] font-black border shrink-0 transition-all ${
+                        tripStatusFilter === f.id 
+                          ? 'bg-indigo-600 text-white border-indigo-600' 
+                          : 'bg-slate-100 dark:bg-slate-800 text-slate-500 border-slate-200 dark:border-slate-700'
+                      }`}
+                    >
+                      {f.label}
+                    </button>
+                  ))}
+                </div>
+              </div>
+
+              {/* قائمة الرحلات */}
+              {filteredAdminTrips.length === 0 ? (
+                <div className="text-center py-14 text-slate-400 font-bold text-sm">لا توجد رحلات مطابقة للفلتر الحالي</div>
+              ) : (
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                  {filteredAdminTrips.map(trip => (
+                    <div key={trip.id} className={`p-4 rounded-2xl border flex flex-col justify-between gap-2.5 ${isDarkMode ? 'bg-slate-800/60 border-slate-700' : 'bg-slate-50 border-slate-200'}`}>
+                      <div className="flex items-start justify-between gap-2">
+                        <div>
+                          <div className="flex items-center gap-1.5 flex-wrap">
+                            <span className={`text-xs font-black px-2 py-0.5 rounded-md ${
+                              trip.status === 'completed' 
+                                ? 'bg-emerald-500/15 text-emerald-500' 
+                                : trip.status === 'full'
+                                ? 'bg-amber-500/15 text-amber-500'
+                                : 'bg-indigo-500/15 text-indigo-500'
+                            }`}>
+                              {trip.status === 'completed' ? 'مكتملة ✅' : trip.status === 'full' ? 'مكتملة العدد 🔒' : 'شغالة الآن 🟢'}
+                            </span>
+                            <span className="text-xs font-black text-emerald-500">{trip.cost || trip.price} ج</span>
+                          </div>
+                          <h4 className={`font-black text-sm mt-1.5 ${textPrimary}`}>
+                            {trip.from} ⬅️ {trip.to}
+                          </h4>
+                          <p className={`text-[11px] font-bold mt-0.5 ${textSecondary}`}>
+                            بواسطة: {trip.userName || 'مستخدم'} • {formatTripDateTime(trip.date, trip.time)}
+                          </p>
+                        </div>
+
+                        <div className="flex items-center gap-1.5 shrink-0">
+                          {onOpenPublicProfile && trip.userId && (
+                            <button
+                              onClick={() => onOpenPublicProfile(trip.userId)}
+                              className="p-2 bg-indigo-500/10 text-indigo-500 hover:bg-indigo-500 hover:text-white rounded-xl text-xs font-black transition-colors"
+                              title="عرض بروفايل المستخدم"
+                            >
+                              <Eye size={15}/>
+                            </button>
+                          )}
+                          <button
+                            onClick={() => handleDeleteTripAdmin(trip.id)}
+                            className="p-2 bg-rose-500/10 text-rose-500 hover:bg-rose-500 hover:text-white rounded-xl text-xs font-black transition-colors"
+                            title="حذف الرحلة"
+                          >
+                            <Trash2 size={15}/>
+                          </button>
+                        </div>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+          )}
+
           {activeTab === 'users' && (
             <div className="space-y-4">
               <div className="flex flex-col sm:flex-row gap-2">
@@ -407,7 +577,10 @@ const AdminPanel = ({ isDarkMode, onClose, triggerToast, appSettings, user, open
                         }`}
                       >
                         <div className="flex items-start justify-between gap-2">
-                          <div className="flex items-center gap-3">
+                          <div 
+                            onClick={() => onOpenPublicProfile && onOpenPublicProfile(u.id)}
+                            className="flex items-center gap-3 cursor-pointer"
+                          >
                             {u.photoURL ? (
                               <img src={u.photoURL} className="w-12 h-12 rounded-full object-cover border border-indigo-300 shrink-0" alt="u"/>
                             ) : (
@@ -417,7 +590,7 @@ const AdminPanel = ({ isDarkMode, onClose, triggerToast, appSettings, user, open
                             )}
                             <div>
                               <div className="flex items-center gap-1.5 flex-wrap">
-                                <h4 className={`font-black text-sm ${textPrimary}`}>{u.name || 'مستخدم'}</h4>
+                                <h4 className={`font-black text-sm hover:underline ${textPrimary}`}>{u.name || 'مستخدم'}</h4>
                                 {u.isVerified && <ShieldCheck size={15} className="text-emerald-500 shrink-0" title="موثق"/>}
                                 {u.customBadge && (
                                   <span className="text-[10px] font-black px-2 py-0.5 rounded-full bg-amber-100 dark:bg-amber-900/40 text-amber-700 dark:text-amber-300 border border-amber-300 dark:border-amber-700">
@@ -428,13 +601,18 @@ const AdminPanel = ({ isDarkMode, onClose, triggerToast, appSettings, user, open
                               <p className={`text-xs font-bold mt-0.5 ${textSecondary}`} dir="ltr">
                                 {u.phone || u.email || 'بدون رقم'}
                               </p>
-                              <div className="flex items-center gap-2 mt-1">
+                              <div className="flex items-center gap-1.5 mt-1 flex-wrap">
                                 <span className="text-[10px] font-bold bg-slate-200 dark:bg-slate-700 px-2 py-0.5 rounded-md">
                                   رحلات: {u.completedTripsCount || 0}
                                 </span>
                                 <span className="text-[10px] font-bold bg-amber-50 dark:bg-amber-900/20 text-amber-600 px-2 py-0.5 rounded-md">
-                                  ⭐ {Number(u.rating || 0).toFixed(1)}
+                                  ⭐ {Number(u.rating || 0).toFixed(1)} ({u.reviews?.length || u.ratingsCount || 0})
                                 </span>
+                                {u.gender && (
+                                  <span className="text-[10px] font-bold bg-indigo-50 dark:bg-indigo-900/30 text-indigo-500 px-2 py-0.5 rounded-md">
+                                    {u.gender === 'female' ? 'أنثى 👩' : 'ذكر 👨'}
+                                  </span>
+                                )}
                               </div>
                             </div>
                           </div>
@@ -444,7 +622,7 @@ const AdminPanel = ({ isDarkMode, onClose, triggerToast, appSettings, user, open
                               onClick={() => openAdminChat(u)}
                               className="px-2 py-1.5 bg-indigo-50 dark:bg-indigo-900/40 hover:bg-indigo-100 dark:hover:bg-indigo-800 text-indigo-700 dark:text-indigo-300 rounded-xl text-xs font-black shadow-sm transition-transform active:scale-95 border border-indigo-200 dark:border-indigo-700"
                             >
-                              مراسلة 💬
+                              مراسلة كإدارة 💬
                             </button>
                             <button 
                               onClick={() => setSelectedUser(u)}
@@ -511,7 +689,7 @@ const AdminPanel = ({ isDarkMode, onClose, triggerToast, appSettings, user, open
                 <div className="text-center py-16 text-slate-400">
                   <ShieldCheck size={48} className="mx-auto mb-3 opacity-30"/>
                   <p className="font-black text-base">لا توجد طلبات توثيق معلقة حالياً</p>
-                  <p className="text-xs mt-1">يمكنك أيضاً توثيق أو سحب التوثيق من أي عضو في تبويب (الأعضاء والتحكم)</p>
+                  <p className="text-xs mt-1">يمكنك أيضاً توثيق أو سحب التوثيق من أي عضو في تبويب (الأعضاء)</p>
                 </div>
               ) : (
                 pendingVerifications.map(u => (

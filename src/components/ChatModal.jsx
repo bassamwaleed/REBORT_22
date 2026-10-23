@@ -1,17 +1,21 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { collection, onSnapshot, addDoc, doc, setDoc, serverTimestamp, getDoc, updateDoc } from 'firebase/firestore';
+import { collection, onSnapshot, addDoc, doc, setDoc, serverTimestamp, getDoc, updateDoc, arrayUnion } from 'firebase/firestore';
 import { ChevronLeft, Users, User, Loader2, Send, ShieldAlert, CheckCircle2, MessageCircle, Ban, Star, Phone, ShieldCheck, Check, X } from 'lucide-react';
 
 import { db, USERS_COLLECTION } from '../firebase';
 import { safeMillis } from '../utils/helpers';
 
-const ChatModal = ({ baseChatData, user, userData, isDarkMode, onClose, triggerToast, handleTripAction }) => {
+const ChatModal = ({ baseChatData, user, userData, isDarkMode, onClose, triggerToast, handleTripAction, onOpenPublicProfile }) => {
   const [messages, setMessages] = useState([]);
   const [newMessage, setNewMessage] = useState('');
   const [isChatLoading, setIsChatLoading] = useState(true);
   const [showPassengerConfirm, setShowPassengerConfirm] = useState(false);
   
-  const [hasRated, setHasRated] = useState(false);
+  const [selectedStars, setSelectedStars] = useState(5);
+  const [reviewComment, setReviewComment] = useState('');
+  const [isSubmittingReview, setIsSubmittingReview] = useState(false);
+  const [hasRatedCurrentTrip, setHasRatedCurrentTrip] = useState(false);
+
   const [otherUserPhone, setOtherUserPhone] = useState('');
   const [showBlockConfirm, setShowBlockConfirm] = useState(false);
 
@@ -28,6 +32,13 @@ const ChatModal = ({ baseChatData, user, userData, isDarkMode, onClose, triggerT
     "تمام، في انتظارك 👍"
   ];
 
+  // مفتاح فريد للرحلة الحالية داخل هذا الشات بحيث لو عملوا رحلة تانية يظهر التقييم من جديد
+  const getCurrentTripRatingKey = (chatObj) => {
+    const tId = chatObj?.tripId || 'general';
+    const compCycle = chatObj?.completedCycleId || '';
+    return `${tId}_${compCycle}`;
+  };
+
   useEffect(() => {
     if(!user || !baseChatData?.chatId) return;
     
@@ -36,20 +47,25 @@ const ChatModal = ({ baseChatData, user, userData, isDarkMode, onClose, triggerT
     const unsub = onSnapshot(doc(db, `inbox_${user.uid}`, baseChatData.chatId), (docSnap) => {
       if(docSnap.exists()) {
         const data = docSnap.data();
-        
         const mergedData = { ...data };
-        if (baseChatData.tripId && baseChatData.tripId !== data.tripId) {
+
+        // إذا فتح المحادثة من رحلة جديدة مختلفة عن الرحلة السابقة المسجلة في نفس الشات
+        if (baseChatData.tripId && baseChatData.tripId !== 'system' && baseChatData.tripId !== data.tripId) {
             mergedData.tripId = baseChatData.tripId;
             mergedData.tripOwnerId = baseChatData.tripOwnerId;
             mergedData.tripInfo = baseChatData.tripInfo;
             mergedData.requestStatus = 'none';
-            mergedData.hasRated = false;
         }
 
         setLiveChatInfo(prev => ({...prev, ...mergedData}));
         
-        if (mergedData.hasRated) {
-          setHasRated(true);
+        // فحص هل تم تقييم هذه الرحلة تحديداً أم لا
+        const currentKey = getCurrentTripRatingKey(mergedData);
+        const ratedKeys = Array.isArray(mergedData.ratedTripKeys) ? mergedData.ratedTripKeys : [];
+        if (ratedKeys.includes(currentKey)) {
+          setHasRatedCurrentTrip(true);
+        } else {
+          setHasRatedCurrentTrip(false);
         }
 
         if (mergedData.requestStatus === 'arrived' && mergedData.requestSenderId === user.uid) {
@@ -64,7 +80,7 @@ const ChatModal = ({ baseChatData, user, userData, isDarkMode, onClose, triggerT
 
   useEffect(() => {
     const fetchOtherPhone = async () => {
-      if (!liveChatInfo?.otherPersonId || liveChatInfo.otherPersonId === 'system' || liveChatInfo?.isGroup) return;
+      if (!liveChatInfo?.otherPersonId || liveChatInfo.otherPersonId === 'system' || liveChatInfo?.isSupportChat || liveChatInfo?.isGroup) return;
       try {
         const userDoc = await getDoc(doc(db, USERS_COLLECTION, liveChatInfo.otherPersonId));
         if (userDoc.exists() && userDoc.data().phone) {
@@ -75,7 +91,7 @@ const ChatModal = ({ baseChatData, user, userData, isDarkMode, onClose, triggerT
       }
     };
     fetchOtherPhone();
-  }, [liveChatInfo?.otherPersonId, liveChatInfo?.isGroup]);
+  }, [liveChatInfo?.otherPersonId, liveChatInfo?.isGroup, liveChatInfo?.isSupportChat]);
 
   useEffect(() => {
     if (!user || !baseChatData?.chatId) return;
@@ -90,26 +106,53 @@ const ChatModal = ({ baseChatData, user, userData, isDarkMode, onClose, triggerT
     return () => unsub();
   }, [user, baseChatData?.chatId]);
 
-  const submitRating = async (stars) => {
-    if(!liveChatInfo?.otherPersonId || hasRated) return;
+  // إرسال التقييم بالنجوم + التعليق المكتوب وحفظه في بروفايل العميل الآخر
+  const submitRatingAndReview = async (e) => {
+    if (e) e.preventDefault();
+    if (!liveChatInfo?.otherPersonId || liveChatInfo.otherPersonId === 'system' || hasRatedCurrentTrip || isSubmittingReview) return;
+    
+    setIsSubmittingReview(true);
     try {
       const userRef = doc(db, USERS_COLLECTION, liveChatInfo.otherPersonId);
       const snap = await getDoc(userRef);
-      if(snap.exists()){
+      if (snap.exists()) {
         const data = snap.data();
         const currentRating = Number(data.rating) || 0;
         const ratingsCount = Number(data.ratingsCount) || 0;
         const newCount = ratingsCount + 1;
-        const newRating = ((currentRating * ratingsCount) + stars) / newCount;
+        const newRating = ((currentRating * ratingsCount) + selectedStars) / newCount;
         
-        await updateDoc(userRef, { rating: newRating, ratingsCount: newCount });
+        const newReviewObj = {
+          id: `${user.uid}_${Date.now()}`,
+          reviewerId: user.uid,
+          reviewerName: userData?.name || 'مستخدم طريقنا',
+          reviewerPhoto: userData?.photoURL || null,
+          stars: selectedStars,
+          comment: reviewComment.trim(),
+          tripId: liveChatInfo.tripId || '',
+          tripRoute: liveChatInfo.tripInfo || '',
+          createdAt: Date.now()
+        };
+
+        await updateDoc(userRef, { 
+          rating: newRating, 
+          ratingsCount: newCount,
+          reviews: arrayUnion(newReviewObj)
+        });
       }
-      // حفظ حالة التقييم في الـ inbox لمنع التقييم المتكرر
-      await setDoc(doc(db, `inbox_${user.uid}`, baseChatData.chatId), { hasRated: true }, { merge: true });
-      setHasRated(true);
-      triggerToast('تم إرسال التقييم بنجاح! شكراً لك ⭐');
-    } catch(e) {
-      triggerToast('حدث خطأ أثناء التقييم');
+
+      const currentKey = getCurrentTripRatingKey(liveChatInfo);
+      await setDoc(doc(db, `inbox_${user.uid}`, baseChatData.chatId), { 
+        ratedTripKeys: arrayUnion(currentKey)
+      }, { merge: true });
+
+      setHasRatedCurrentTrip(true);
+      setReviewComment('');
+      triggerToast('تم نشر تقييمك ورأيك في بروفايل العميل بنجاح! ⭐');
+    } catch (e) {
+      triggerToast('حدث خطأ أثناء إرسال التقييم');
+    } finally {
+      setIsSubmittingReview(false);
     }
   };
 
@@ -120,19 +163,33 @@ const ChatModal = ({ baseChatData, user, userData, isDarkMode, onClose, triggerT
       return;
     }
     const chatId = baseChatData.chatId;
+    const isSupport = Boolean(liveChatInfo?.isSupportChat || liveChatInfo?.tripId === 'system' || String(chatId).startsWith('support_'));
+    const isAdminSender = Boolean(isSupport && liveChatInfo?.actingAsAdmin);
+
+    const senderDisplayName = isAdminSender ? 'الإدارة (الدعم الفني)' : (userData?.name || 'مستخدم');
+    const senderDisplayPhoto = isAdminSender ? null : (userData?.photoURL || null);
+
     try {
       await addDoc(collection(db, `chats_${chatId}`), { 
         text: textToSend.trim(), 
-        senderId: user.uid, 
-        senderName: userData?.name || 'مستخدم', 
-        senderPhoto: userData?.photoURL || null, 
+        senderId: isAdminSender ? 'admin_support' : user.uid, 
+        senderName: senderDisplayName, 
+        senderPhoto: senderDisplayPhoto, 
         createdAt: serverTimestamp() 
       });
+
       const inboxUpdateMe = { lastMessage: textToSend.trim(), lastSenderId: user.uid, lastMessageTime: Date.now() };
-      const inboxUpdateOther = { ...inboxUpdateMe, otherPersonId: user.uid, otherPersonName: userData?.name || 'مستخدم', otherPersonPhoto: userData?.photoURL || null, otherPersonVerified: userData?.isVerified || false };
-      
       await setDoc(doc(db, `inbox_${user.uid}`, chatId), inboxUpdateMe, { merge: true });
+
       if (liveChatInfo.otherPersonId && !liveChatInfo.isGroup && liveChatInfo.otherPersonId !== 'system') { 
+        const inboxUpdateOther = { 
+          ...inboxUpdateMe, 
+          otherPersonId: isAdminSender ? 'system' : user.uid, 
+          otherPersonName: senderDisplayName, 
+          otherPersonPhoto: senderDisplayPhoto, 
+          otherPersonVerified: isAdminSender ? true : (userData?.isVerified || false),
+          isSupportChat: isSupport
+        };
         await setDoc(doc(db, `inbox_${liveChatInfo.otherPersonId}`, chatId), inboxUpdateOther, { merge: true }); 
       }
     } catch(e) { 
@@ -159,32 +216,39 @@ const ChatModal = ({ baseChatData, user, userData, isDarkMode, onClose, triggerT
   const isActualDriver = (liveChatInfo?.tripType === 'offer' || liveChatInfo?.tripType === 'delivery') ? isTripOwner : !isTripOwner;
   const isRequestSender = liveChatInfo?.requestSenderId === user?.uid;
   const isApprovedState = ['accepted', 'moving', 'arrived', 'in_progress_trip'].includes(reqStatus);
+  const isSupportChat = Boolean(liveChatInfo?.isSupportChat || liveChatInfo?.tripId === 'system' || String(baseChatData?.chatId).startsWith('support_'));
 
   return (
     <div className="fixed inset-0 bg-slate-900/95 backdrop-blur-md z-[400] flex justify-center items-end sm:items-center p-0 sm:p-4 pointer-events-auto">
       <div className={`bg-white dark:bg-slate-900 w-full h-[92vh] sm:h-[680px] sm:max-w-md md:max-w-2xl rounded-t-[2rem] sm:rounded-[2rem] shadow-2xl flex flex-col overflow-hidden animate-fade-in-up relative border dark:border-slate-700`}>
         
         {/* الهيدر */}
-        <div className={`text-white p-4 flex items-center justify-between shadow-md z-20 ${liveChatInfo?.isGroup ? 'bg-purple-600' : 'bg-indigo-600'}`}>
+        <div className={`text-white p-4 flex items-center justify-between shadow-md z-20 ${isSupportChat ? 'bg-gradient-to-r from-amber-600 to-indigo-700' : liveChatInfo?.isGroup ? 'bg-purple-600' : 'bg-indigo-600'}`}>
           <div className="flex items-center gap-3 overflow-hidden">
             <button onClick={onClose} className="p-2 rounded-full hover:bg-black/20 transition-colors shrink-0"><ChevronLeft size={24} /></button>
-            <div className="w-11 h-11 bg-white/20 rounded-full flex items-center justify-center shrink-0 font-bold overflow-hidden border border-white/30">
-              {liveChatInfo?.isGroup ? <Users size={20}/> : liveChatInfo?.otherPersonPhoto ? <img src={liveChatInfo.otherPersonPhoto} alt="U" className="w-full h-full object-cover"/> : (liveChatInfo?.otherPersonName || 'م').charAt(0)}
-            </div>
-            <div className="flex flex-col overflow-hidden">
-              <div className="flex items-center gap-1">
-                <h3 className="font-black text-sm truncate">{liveChatInfo?.otherPersonName || 'مستخدم'}</h3>
-                {liveChatInfo?.otherPersonVerified && <ShieldCheck size={14} className="text-emerald-300 shrink-0" title="موثق"/>}
+            
+            <div 
+              onClick={() => !isSupportChat && liveChatInfo?.otherPersonId && onOpenPublicProfile && onOpenPublicProfile(liveChatInfo.otherPersonId)}
+              className={`flex items-center gap-3 overflow-hidden ${!isSupportChat ? 'cursor-pointer hover:opacity-90' : ''}`}
+              title={!isSupportChat ? 'اضغط لعرض صفحة البروفايل والتقييمات' : ''}
+            >
+              <div className="w-11 h-11 bg-white/20 rounded-full flex items-center justify-center shrink-0 font-bold overflow-hidden border border-white/30">
+                {liveChatInfo?.isGroup ? <Users size={20}/> : liveChatInfo?.otherPersonPhoto ? <img src={liveChatInfo.otherPersonPhoto} alt="U" className="w-full h-full object-cover"/> : (liveChatInfo?.otherPersonName || 'م').charAt(0)}
               </div>
-              {!liveChatInfo?.isGroup && (
-                <span className="text-[11px] text-indigo-100 font-medium truncate opacity-90">{liveChatInfo?.tripInfo || 'محادثة'}</span>
-              )}
+              <div className="flex flex-col overflow-hidden">
+                <div className="flex items-center gap-1">
+                  <h3 className="font-black text-sm truncate">{liveChatInfo?.otherPersonName || 'مستخدم'}</h3>
+                  {liveChatInfo?.otherPersonVerified && <ShieldCheck size={14} className="text-emerald-300 shrink-0" title="موثق"/>}
+                </div>
+                <span className="text-[10px] text-indigo-100 font-bold truncate opacity-90">
+                  {isSupportChat ? 'محادثة رسمية مع إدارة التطبيق 🛡️' : `${liveChatInfo?.tripInfo || 'محادثة'} • اضغط لعرض البروفايل`}
+                </span>
+              </div>
             </div>
           </div>
 
           <div className="flex items-center gap-1.5 shrink-0">
-            {/* أزرار الاتصال والواتساب تظهر بعد القبول لو الرقم متاح */}
-            {isApprovedState && otherUserPhone && (
+            {isApprovedState && otherUserPhone && !isSupportChat && (
               <>
                 <a 
                   href={`tel:${otherUserPhone}`} 
@@ -205,7 +269,7 @@ const ChatModal = ({ baseChatData, user, userData, isDarkMode, onClose, triggerT
               </>
             )}
 
-            {reqStatus !== 'blocked' && (
+            {reqStatus !== 'blocked' && !isSupportChat && (
               showBlockConfirm ? (
                 <div className="flex items-center gap-1 bg-black/30 p-1 rounded-full animate-fade-in-up">
                   <button onClick={() => onActionClick('block')} className="p-1.5 bg-rose-500 text-white rounded-full hover:bg-rose-600" title="تأكيد الحظر"><Check size={14}/></button>
@@ -221,7 +285,7 @@ const ChatModal = ({ baseChatData, user, userData, isDarkMode, onClose, triggerT
         </div>
 
         {/* نافذة تأكيد وصول الكابتن للراكب */}
-        {showPassengerConfirm && !isActualDriver && (
+        {showPassengerConfirm && !isActualDriver && !isSupportChat && (
           <div className="absolute top-20 left-4 right-4 bg-emerald-50 dark:bg-slate-800 border-2 border-emerald-500 dark:border-emerald-600 rounded-2xl p-4 shadow-xl z-50 animate-fade-in-up">
             <div className="flex items-start gap-3">
               <CheckCircle2 size={24} className="text-emerald-500 shrink-0 mt-1"/>
@@ -237,13 +301,12 @@ const ChatModal = ({ baseChatData, user, userData, isDarkMode, onClose, triggerT
           </div>
         )}
 
-        {}
         {reqStatus === 'blocked' ? (
           <div className="p-4 bg-rose-50 dark:bg-rose-900/30 text-rose-600 dark:text-rose-400 text-center font-bold text-xs border-b border-rose-200 dark:border-rose-800">
             تم حظر التعامل في هذا الشات 🚫
           </div>
         ) : (
-          !liveChatInfo?.isGroup && liveChatInfo?.tripInfo !== 'system' && (
+          !liveChatInfo?.isGroup && !isSupportChat && (
             <div className={`p-3 border-b text-center shadow-sm z-10 space-y-3 ${isDarkMode ? 'bg-slate-800 border-slate-700' : 'bg-slate-50 border-slate-200'}`}>
               
               {reqStatus === 'none' && !isTripOwner && ( 
@@ -281,23 +344,48 @@ const ChatModal = ({ baseChatData, user, userData, isDarkMode, onClose, triggerT
                 </div>
               )}
               
+              {/* صندوق التقييم وكتابة الرأي بعد اكتمال كل رحلة */}
               {reqStatus === 'completed' && (
                 <div className="flex flex-col gap-2">
-                  <div className="text-center text-emerald-500 font-bold text-xs p-3 bg-emerald-50 dark:bg-emerald-900/20 rounded-xl border border-emerald-200 dark:border-emerald-800">
+                  <div className="text-center text-emerald-500 font-bold text-xs p-2.5 bg-emerald-50 dark:bg-emerald-900/20 rounded-xl border border-emerald-200 dark:border-emerald-800">
                     الحمد لله على السلامة! الرحلة مكتملة ✅
                   </div>
                   
-                  {!hasRated && liveChatInfo?.otherPersonId && liveChatInfo.otherPersonId !== 'system' && !liveChatInfo?.isGroup && (
-                    <div className="bg-white dark:bg-slate-800 p-3 rounded-xl border border-slate-200 dark:border-slate-700 text-center shadow-sm animate-fade-in-up">
-                      <p className="text-xs font-bold mb-2 text-slate-700 dark:text-slate-300">ما تقييمك لتجربتك مع {liveChatInfo?.otherPersonName?.split(' ')[0]}؟</p>
-                      <div className="flex justify-center gap-1 flex-row-reverse" dir="ltr">
-                        {[5, 4, 3, 2, 1].map(star => (
-                          <button key={star} onClick={() => submitRating(star)} className="p-1.5 rounded-full transition-transform hover:scale-125">
-                            <Star size={26} className="text-amber-400 hover:fill-amber-400 transition-colors" />
+                  {!hasRatedCurrentTrip && liveChatInfo?.otherPersonId && liveChatInfo.otherPersonId !== 'system' && !liveChatInfo?.isGroup && (
+                    <form onSubmit={submitRatingAndReview} className="bg-white dark:bg-slate-900 p-3.5 rounded-2xl border border-indigo-200 dark:border-slate-700 text-center shadow-md space-y-2.5 animate-fade-in-up">
+                      <p className="text-xs font-black text-slate-800 dark:text-white">
+                        قيّم تجربتك في هذه الرحلة مع {liveChatInfo?.otherPersonName?.split(' ')[0]} واكتب رأيك:
+                      </p>
+                      
+                      <div className="flex justify-center gap-1.5" dir="ltr">
+                        {[1, 2, 3, 4, 5].map(star => (
+                          <button 
+                            key={star} 
+                            type="button"
+                            onClick={() => setSelectedStars(star)} 
+                            className="p-1 rounded-full transition-transform hover:scale-125"
+                          >
+                            <Star size={26} className={star <= selectedStars ? "text-amber-400 fill-amber-400" : "text-slate-300 dark:text-slate-600"} />
                           </button>
                         ))}
                       </div>
-                    </div>
+
+                      <input
+                        type="text"
+                        value={reviewComment}
+                        onChange={(e) => setReviewComment(e.target.value)}
+                        placeholder="اكتب رأيك في العميل (مثال: محترم وملتزم بالمواعيد)..."
+                        className={`w-full px-3 py-2 rounded-xl border text-xs font-bold outline-none ${bgInput}`}
+                      />
+
+                      <button
+                        type="submit"
+                        disabled={isSubmittingReview}
+                        className="w-full py-2.5 bg-indigo-600 hover:bg-indigo-700 text-white rounded-xl text-xs font-black shadow-sm flex items-center justify-center gap-1.5"
+                      >
+                        {isSubmittingReview ? <Loader2 size={14} className="animate-spin"/> : 'إرسال التقييم والرأي ⭐'}
+                      </button>
+                    </form>
                   )}
                 </div>
               )}
@@ -313,20 +401,20 @@ const ChatModal = ({ baseChatData, user, userData, isDarkMode, onClose, triggerT
           )
         )}
 
-        {}
+        {/* الرسائل */}
         <div className={`flex-1 overflow-y-auto p-4 space-y-4 ${isDarkMode ? 'bg-slate-900/80' : 'bg-slate-100/50'}`}>
           {isChatLoading ? ( 
             <div className="flex justify-center items-center h-full"><Loader2 className="animate-spin text-indigo-500" size={30}/></div> 
           ) : messages.length === 0 ? ( 
             <div className="flex flex-col items-center justify-center h-full text-slate-400"><MessageCircle size={40} className="mb-3 opacity-50"/><p className="text-sm font-bold">ابدأ المحادثة لتنسيق تفاصيل المشوار!</p></div> 
           ) : messages.map(msg => {
-            const isMe = user && msg.senderId === user.uid;
+            const isMe = user && (msg.senderId === user.uid || (liveChatInfo?.actingAsAdmin && msg.senderId === 'admin_support'));
             if (msg.isSystem) return (<div key={msg.id} className="flex justify-center my-3"><span className="text-[10px] font-bold px-4 py-2 bg-indigo-100 dark:bg-indigo-900/50 text-indigo-700 dark:text-indigo-300 rounded-full border border-indigo-200 dark:border-indigo-800/50 text-center">{msg.text || ''}</span></div>);
             return (
               <div key={msg.id} className={`flex ${isMe ? 'justify-end' : 'justify-start'}`}>
                 {!isMe && liveChatInfo?.isGroup && ( <div className="w-6 h-6 rounded-full bg-slate-300 ml-2 overflow-hidden shrink-0 mt-auto">{msg.senderPhoto ? <img src={msg.senderPhoto} alt="u"/> : <User size={12} className="m-auto mt-1 text-slate-500"/>}</div> )}
                 <div className="flex flex-col max-w-[80%]">
-                  {!isMe && liveChatInfo?.isGroup && <span className="text-[9px] text-slate-500 mr-2 mb-0.5">{msg.senderName?.split(' ')[0] || 'مستخدم'}</span>}
+                  {!isMe && (liveChatInfo?.isGroup || isSupportChat) && <span className="text-[9px] font-bold text-indigo-500 mr-2 mb-0.5">{msg.senderName || 'مستخدم'}</span>}
                   <div className={`p-3.5 rounded-2xl text-sm shadow-sm leading-relaxed ${isMe ? 'bg-indigo-600 text-white rounded-tl-sm' : 'bg-white dark:bg-slate-800 text-slate-800 dark:text-white rounded-tr-sm border dark:border-slate-700'}`}>
                     {msg.text || ''}
                     <div className={`text-[9px] mt-1.5 text-left w-full font-medium ${isMe ? 'text-indigo-200' : 'text-slate-400'}`}>
@@ -343,19 +431,20 @@ const ChatModal = ({ baseChatData, user, userData, isDarkMode, onClose, triggerT
         {/* شريط الردود السريعة ومربع الكتابة */}
         {reqStatus !== 'blocked' && (
           <div className={`border-t ${isDarkMode ? 'bg-slate-800 border-slate-700' : 'bg-white border-slate-200'}`}>
-            {/* الردود السريعة */}
-            <div className="flex gap-2 overflow-x-auto px-3 pt-2.5 pb-1 [&::-webkit-scrollbar]:hidden [-ms-overflow-style:none] [scrollbar-width:none]">
-              {quickReplies.map((reply, i) => (
-                <button
-                  key={i}
-                  type="button"
-                  onClick={() => sendTextMessage(reply)}
-                  className={`shrink-0 text-[11px] font-bold px-3 py-1.5 rounded-full border transition-all active:scale-95 ${isDarkMode ? 'bg-slate-700/60 border-slate-600 text-slate-200 hover:bg-indigo-600 hover:text-white hover:border-indigo-500' : 'bg-slate-50 border-slate-200 text-slate-600 hover:bg-indigo-50 hover:text-indigo-600 hover:border-indigo-200'}`}
-                >
-                  {reply}
-                </button>
-              ))}
-            </div>
+            {!isSupportChat && (
+              <div className="flex gap-2 overflow-x-auto px-3 pt-2.5 pb-1 [&::-webkit-scrollbar]:hidden [-ms-overflow-style:none] [scrollbar-width:none]">
+                {quickReplies.map((reply, i) => (
+                  <button
+                    key={i}
+                    type="button"
+                    onClick={() => sendTextMessage(reply)}
+                    className={`shrink-0 text-[11px] font-bold px-3 py-1.5 rounded-full border transition-all active:scale-95 ${isDarkMode ? 'bg-slate-700/60 border-slate-600 text-slate-200 hover:bg-indigo-600 hover:text-white hover:border-indigo-500' : 'bg-slate-50 border-slate-200 text-slate-600 hover:bg-indigo-50 hover:text-indigo-600 hover:border-indigo-200'}`}
+                  >
+                    {reply}
+                  </button>
+                ))}
+              </div>
+            )}
 
             <form onSubmit={handleSendMessage} className="p-3 flex gap-2 items-center">
               <input type="text" value={newMessage} onChange={(e) => setNewMessage(e.target.value)} placeholder="اكتب رسالتك..." className={`flex-1 rounded-2xl px-4 py-3.5 text-sm outline-none focus:ring-2 focus:ring-indigo-500 ${bgInput}`} />
