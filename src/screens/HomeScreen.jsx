@@ -1,5 +1,10 @@
 import React, { useState, useEffect, useMemo } from 'react';
-import { Bell, BusFront, MapPinned, List, X, ChevronRight, ChevronLeft, Route, Plus, Loader2, ChevronLeft as ChevronLeftIcon, Search, MapPin, Sparkles, Compass, Car, CheckCircle2, Package, Shuffle, Bot, Layers, Eye } from 'lucide-react';
+import { 
+  Bell, BusFront, MapPinned, List, X, ChevronRight, ChevronLeft, Route, Plus, 
+  Loader2, ChevronLeft as ChevronLeftIcon, Search, MapPin, Sparkles, Compass, 
+  Car, CheckCircle2, Package, Shuffle, Bot, Layers, ArrowLeftRight, ShieldCheck, 
+  Flame, Snowflake 
+} from 'lucide-react';
 import TripCard from '../components/TripCard';
 import BesoAssistantModal from '../components/BesoAssistantModal';
 import { collection, addDoc } from 'firebase/firestore';
@@ -15,10 +20,14 @@ const HomeScreen = ({
 }) => {
   
   const [stationSearchQuery, setStationSearchQuery] = useState('');
+  const [stationCrowdFilter, setStationCrowdFilter] = useState('all'); // 'all' | 'empty' | 'crowded'
   const [showCompletedTrips, setShowCompletedTrips] = useState(false); 
   const [isScrolling, setIsScrolling] = useState(false);
 
-  // حالات العرض الذكي الجديدة (الكارت المتحرك لمنطقتك + زر عرض الكل + الخلط الذكي + المساعد بيسو)
+  // فلاتر سريعة إضافية لراحة المستخدم
+  const [quickFilter, setQuickFilter] = useState('all'); // 'all' | 'urgent' | 'verified' | 'females' | 'ac'
+
+  // حالات العرض الذكي الجديدة
   const [areaSlideIndex, setAreaSlideIndex] = useState(0);
   const [showAllAreaTrips, setShowAllAreaTrips] = useState(false);
   const [isAreaCarouselPaused, setIsAreaCarouselPaused] = useState(false);
@@ -27,7 +36,7 @@ const HomeScreen = ({
   const [shuffleSeed, setShuffleSeed] = useState(() => Math.random());
   const [showBesoModal, setShowBesoModal] = useState(false);
 
-  // تأثير إخفاء الشريط السفلي أثناء السكرول وإظهاره عند التوقف
+  // تأثير إخفاء الشريط السفلي والأزرار العائمة أثناء السكرول وإظهارهم عند التوقف
   useEffect(() => {
     let scrollTimeout;
     const handleScroll = () => {
@@ -52,18 +61,39 @@ const HomeScreen = ({
     ? [filterFrom] 
     : (Array.isArray(userAreas) && userAreas.length > 0 ? userAreas : (userArea ? userArea.split('، ').filter(Boolean) : []));
 
+  // هل المستخدم محدد منطقة حالية أو مختار فلتر بحث؟
+  const hasAreaOrSearchFilter = activeUserAreas.length > 0 || Boolean(filterFrom) || Boolean(filterTo);
+
   const availableTravelCount = (realTrips || []).filter(t => t.category === 'travel' && t.status !== 'completed' && t.status !== 'cancelled').length;
   const availableParcelCount = (realTrips || []).filter(t => (t.category === 'parcel' || t.type === 'delivery') && t.status !== 'completed' && t.status !== 'cancelled').length;
+
+  const isLeavingSoon = (dateStr, timeStr) => {
+    if (!dateStr || !timeStr) return false;
+    try {
+      const tripTime = new Date(`${dateStr}T${timeStr}`).getTime();
+      const now = Date.now();
+      const diffHours = (tripTime - now) / (1000 * 60 * 60);
+      return diffHours > 0 && diffHours <= 3; 
+    } catch(e) { return false; }
+  };
 
   const categoryTrips = (realTrips || []).filter(t => {
     if (!t || t.status === 'cancelled') return false;
     if (homeCategory === 'travel') {
-      return t.category === 'travel' && (!t.type || t.type === filterType);
+      if (t.category !== 'travel' || (t.type && t.type !== filterType)) return false;
+    } else if (homeCategory === 'parcel') {
+      if (t.category !== 'parcel' && t.type !== 'delivery') return false;
+    } else {
+      return false;
     }
-    if (homeCategory === 'parcel') {
-      return (t.category === 'parcel' || t.type === 'delivery');
-    }
-    return false;
+
+    // تطبيق الفلاتر السريعة الذكية
+    if (quickFilter === 'urgent' && !isLeavingSoon(t.date, t.time)) return false;
+    if (quickFilter === 'verified' && !t.verified) return false;
+    if (quickFilter === 'females' && !t.preferences?.femalesOnly) return false;
+    if (quickFilter === 'ac' && !t.preferences?.ac) return false;
+
+    return true;
   });
 
   const availableTripsList = categoryTrips.filter(t => t.status !== 'completed');
@@ -99,16 +129,6 @@ const HomeScreen = ({
     return nearbyList.some(near => isAreaMatch(tripArea, near));
   };
 
-  const isLeavingSoon = (dateStr, timeStr) => {
-    if (!dateStr || !timeStr) return false;
-    try {
-      const tripTime = new Date(`${dateStr}T${timeStr}`).getTime();
-      const now = Date.now();
-      const diffHours = (tripTime - now) / (1000 * 60 * 60);
-      return diffHours > 0 && diffHours <= 3; 
-    } catch(e) { return false; }
-  };
-
   const getTripRelevanceScore = (trip) => {
     let score = 0;
 
@@ -134,7 +154,7 @@ const HomeScreen = ({
     return score;
   };
 
-  // خوارزمية خلط ذكية (Smart Weighted Shuffle) تجعل المستخدم يرى رحلات متجددة مع إعطاء أولوية للمناطق المجاورة
+  // خوارزمية خلط ذكية (Smart Weighted Shuffle)
   const smartShuffleList = (list, seed) => {
     if (!Array.isArray(list) || list.length <= 1) return list;
     const copy = [...list];
@@ -151,15 +171,16 @@ const HomeScreen = ({
     return copy;
   };
 
-  // 1. الرحلات المطابقة لمنطقتك أو خط سيرك (مخلوطة بذكاء لتتبدل في الكارت المتحرك)
+  // 1. الرحلات المطابقة لمنطقتك أو بحثك (تُملأ فقط إذا كان المستخدم محدداً لمنطقة أو باحثاً عن وجهة)
   const exactMatchedTrips = useMemo(() => {
+    if (!hasAreaOrSearchFilter) return [];
+
     const matched = currentTripsToDisplay.filter(t => {
       const matchFrom = activeUserAreas.length === 0 || activeUserAreas.some(a => isTripMatchingOriginOrRoute(t, a));
       const matchTo = !filterTo || isTripMatchingDestOrRoute(t, filterTo);
       return matchFrom && matchTo;
     });
 
-    // تقسيم للرحلات العاجلة/الأعلى تطابقاً وخلطها بذكاء عشان المستخدم يشوف تنوع كبير
     const urgentOrTop = matched.filter(t => getTripRelevanceScore(t) >= 85);
     const others = matched.filter(t => getTripRelevanceScore(t) < 85);
 
@@ -167,22 +188,27 @@ const HomeScreen = ({
       ...smartShuffleList(urgentOrTop, shuffleSeed),
       ...smartShuffleList(others, shuffleSeed + 0.37)
     ];
-  }, [currentTripsToDisplay, activeUserAreas.join(','), filterTo, shuffleSeed, showCompletedTrips]);
+  }, [currentTripsToDisplay, activeUserAreas.join(','), filterTo, shuffleSeed, showCompletedTrips, hasAreaOrSearchFilter]);
 
-  // 2. الرحلات في المناطق المجاورة والأخرى (مخلوطة بذكاء في كل ريفرش أو ضغطة زر)
+  // 2. الرحلات العامة أو رحلات المناطق المجاورة
   const similarTrips = useMemo(() => {
+    if (!hasAreaOrSearchFilter) {
+      const urgent = currentTripsToDisplay.filter(t => !showCompletedTrips && isLeavingSoon(t.date, t.time));
+      const regular = currentTripsToDisplay.filter(t => !urgent.some(u => u.id === t.id));
+      return [
+        ...smartShuffleList(urgent, shuffleSeed),
+        ...smartShuffleList(regular, shuffleSeed + 0.51)
+      ];
+    }
+
     const remaining = currentTripsToDisplay.filter(t => {
       if (exactMatchedTrips.some(exact => exact.id === t.id)) return false;
-      if (activeUserAreas.length === 0 && !filterTo) return false;
-
       const fromNearby = activeUserAreas.length > 0 && activeUserAreas.some(a => isNearbyArea(t.from, a) || isAreaMatch(t.to, a));
       const toNearby = filterTo && (isAreaMatch(t.to, filterTo) || isNearbyArea(t.to, filterTo));
       const sameCategoryFallback = currentTripsToDisplay.length > 0;
-
       return fromNearby || toNearby || sameCategoryFallback;
     });
 
-    // فصل رحلات المناطق القريبة جداً في المقدمة مع خلطها، ثم باقي المناطق مخلوطة
     const strictlyNearby = remaining.filter(t => 
       activeUserAreas.some(a => isNearbyArea(t.from, a) || isAreaMatch(t.to, a) || (Array.isArray(t.routeAreas) && t.routeAreas.some(r => isNearbyArea(r, a))))
     );
@@ -192,21 +218,20 @@ const HomeScreen = ({
       ...smartShuffleList(strictlyNearby, shuffleSeed + 0.19),
       ...smartShuffleList(otherGeneral, shuffleSeed + 0.73)
     ];
-  }, [currentTripsToDisplay, exactMatchedTrips, activeUserAreas.join(','), filterTo, shuffleSeed]);
+  }, [currentTripsToDisplay, exactMatchedTrips, activeUserAreas.join(','), filterTo, shuffleSeed, hasAreaOrSearchFilter, showCompletedTrips]);
 
-  // إعادة ضبط مؤشر الكارت المتحرك عند تغير القائمة
   useEffect(() => {
     setAreaSlideIndex(0);
-  }, [homeCategory, filterType, filterFrom, filterTo, showCompletedTrips]);
+  }, [homeCategory, filterType, filterFrom, filterTo, showCompletedTrips, quickFilter]);
 
-  // تحريك تلقائي لكارت رحلات منطقتك من الشمال لليمين كل 4.5 ثانية
+  // تحريك تلقائي لكارت رحلات منطقتك فقط عندما يكون الفلتر أو المنطقة مفعلاً
   useEffect(() => {
-    if (showAllAreaTrips || isAreaCarouselPaused || exactMatchedTrips.length <= 1) return;
+    if (!hasAreaOrSearchFilter || showAllAreaTrips || isAreaCarouselPaused || exactMatchedTrips.length <= 1) return;
     const timer = setInterval(() => {
       setAreaSlideIndex(prev => (prev + 1) % exactMatchedTrips.length);
     }, 4500);
     return () => clearInterval(timer);
-  }, [showAllAreaTrips, isAreaCarouselPaused, exactMatchedTrips.length]);
+  }, [hasAreaOrSearchFilter, showAllAreaTrips, isAreaCarouselPaused, exactMatchedTrips.length]);
 
   const nextAreaTrip = () => {
     if (exactMatchedTrips.length <= 1) return;
@@ -242,9 +267,23 @@ const HomeScreen = ({
     triggerToast('تم تبديل وخلط الرحلات بذكاء 🔀✨');
   };
 
+  // تبديل منطقتي الانطلاق والوصول بضغطة واحدة
+  const handleSwapLocations = () => {
+    if (!filterFrom && !filterTo && activeUserAreas.length === 1) {
+      setFilterFrom('');
+      setFilterTo(activeUserAreas[0]);
+      return;
+    }
+    const temp = filterFrom || (activeUserAreas.length === 1 ? activeUserAreas[0] : '');
+    setFilterFrom(filterTo);
+    setFilterTo(temp);
+  };
+
   const visibleStations = (stations || []).filter(s => {
     const isApprovedOrAdmin = isAdmin ? true : (s.status === 'approved' || !s.status);
     if (!isApprovedOrAdmin) return false;
+
+    if (stationCrowdFilter !== 'all' && s.crowdStatus !== stationCrowdFilter) return false;
     
     if (stationSearchQuery.trim() !== '') {
       const query = stationSearchQuery.toLowerCase().trim();
@@ -348,6 +387,20 @@ const HomeScreen = ({
     return null;
   };
 
+  // إحصائيات سريعة للمناطق لعرضها في وضع الخريطة التفاعلي
+  const areaTripCounts = useMemo(() => {
+    const counts = {};
+    SUPPORTED_AREAS.forEach(a => { counts[a] = 0; });
+    availableTripsList.forEach(t => {
+      SUPPORTED_AREAS.forEach(a => {
+        if (isTripMatchingOriginOrRoute(t, a) || isAreaMatch(t.to, a)) {
+          counts[a] = (counts[a] || 0) + 1;
+        }
+      });
+    });
+    return counts;
+  }, [availableTripsList]);
+
   const bgInput = isDarkMode ? 'bg-slate-800 border-slate-700 text-white placeholder-slate-400 focus:border-indigo-500' : 'bg-white border-slate-200 text-slate-900 focus:border-indigo-500';
   const textPrimary = isDarkMode ? 'text-white' : 'text-slate-900';
   const bgCard = isDarkMode ? 'bg-slate-900 border-slate-800' : 'bg-white border-slate-200';
@@ -355,7 +408,7 @@ const HomeScreen = ({
   const currentSpotlightTrip = exactMatchedTrips[areaSlideIndex] || exactMatchedTrips[0];
 
   return (
-    <main className="flex-1 w-full max-w-2xl mx-auto px-3 sm:px-4 pt-2 pb-28 relative z-10">
+    <main className="flex-1 w-full max-w-6xl mx-auto px-3 sm:px-6 pt-3 pb-28 relative z-10">
       
       <style>{`
         @keyframes scrollRoutesRtl {
@@ -369,34 +422,31 @@ const HomeScreen = ({
           animation-play-state: paused;
         }
         @keyframes slideCardFromLeft {
-          0% { opacity: 0; transform: translateX(-28px) scale(0.98); }
+          0% { opacity: 0; transform: translateX(-24px) scale(0.98); }
           100% { opacity: 1; transform: translateX(0) scale(1); }
         }
         .animate-card-slide-ltr {
-          animation: slideCardFromLeft 0.38s cubic-bezier(0.16, 1, 0.3, 1) forwards;
-        }
-        /* إخفاء ناعم للشريط السفلي والزر العائم أثناء السكرول */
-        nav.fixed.bottom-0,
-        .bottom-nav-bar,
-        button.fixed.bottom-20,
-        button.fixed.bottom-24 {
-          transition: transform 0.3s cubic-bezier(0.4, 0, 0.2, 1), opacity 0.25s ease !important;
-        }
-        body.user-is-scrolling nav.fixed.bottom-0,
-        body.user-is-scrolling .bottom-nav-bar {
-          transform: translateY(100%) !important;
-          opacity: 0 !important;
-          pointer-events: none !important;
-        }
-        body.user-is-scrolling button.fixed.bottom-20,
-        body.user-is-scrolling button.fixed.bottom-24 {
-          transform: translateY(120px) scale(0.8) !important;
-          opacity: 0 !important;
-          pointer-events: none !important;
+          animation: slideCardFromLeft 0.35s cubic-bezier(0.16, 1, 0.3, 1) forwards;
         }
       `}</style>
 
-      {/* 1. البانر في الأعلى مباشرة */}
+      {/* أيقونة المساعد الذكي "بيسو" العائمة في الصفحة الرئيسية وصفحة المواقف */}
+      <button
+        type="button"
+        onClick={() => setShowBesoModal(true)}
+        className={`fixed bottom-[90px] left-4 sm:left-8 z-50 flex items-center gap-2 px-3.5 py-3 rounded-full bg-gradient-to-r from-indigo-600 via-violet-600 to-indigo-700 text-white shadow-xl shadow-indigo-500/30 border border-white/20 hover:scale-105 active:scale-95 transition-all duration-300 ${
+          isScrolling ? 'translate-y-28 opacity-0 pointer-events-none scale-75' : 'translate-y-0 opacity-100 scale-100'
+        }`}
+        title="اسأل المساعد الذكي بيسو عن أي مواصلات أو خط سير"
+      >
+        <div className="relative flex items-center justify-center">
+          <Bot size={22} className="animate-bounce" />
+          <span className="absolute -top-1 -right-1 w-2.5 h-2.5 bg-emerald-400 rounded-full border border-indigo-900"></span>
+        </div>
+        <span className="text-xs font-black tracking-tight">اسأل بيسو 🤖</span>
+      </button>
+
+      {/* 1. البانر في الأعلى */}
       {viewMode === 'list' && (
         <div className="mb-3.5 animate-fade-in-up">
           {appSettings?.bannerText && (
@@ -407,7 +457,7 @@ const HomeScreen = ({
 
           {banners.length > 0 && (
             <div 
-              className="relative w-full h-40 sm:h-48 rounded-[1.5rem] overflow-hidden shadow-md border dark:border-slate-800 bg-slate-100 dark:bg-slate-800 group"
+              className="relative w-full h-40 sm:h-52 lg:h-60 rounded-[1.5rem] overflow-hidden shadow-md border dark:border-slate-800 bg-slate-100 dark:bg-slate-800 group"
               onTouchStart={onTouchStart} onTouchMove={onTouchMove} onTouchEnd={onTouchEndHandler}
             >
                {banners.map((imgUrl, idx) => (
@@ -430,10 +480,10 @@ const HomeScreen = ({
       )}
 
       {/* 2. شريط الأيقونات المربعة في صف واحد */}
-      <div className="grid grid-cols-4 gap-2 mb-3.5 pointer-events-auto relative z-10">
+      <div className="grid grid-cols-4 gap-2 sm:gap-3 mb-3.5 pointer-events-auto relative z-10">
         <button
           onClick={() => { setViewMode('list'); setHomeCategory('travel'); setFilterTo(''); setShowCompletedTrips(false); }}
-          className={`relative flex flex-col items-center justify-center py-2.5 px-1 rounded-2xl border transition-all duration-200 ${
+          className={`relative flex flex-col items-center justify-center py-2.5 sm:py-3 px-1 rounded-2xl border transition-all duration-200 ${
             viewMode === 'list' && homeCategory === 'travel'
               ? 'bg-indigo-600 text-white border-indigo-600 shadow-md shadow-indigo-500/20 scale-[1.02]'
               : `${bgCard} text-slate-600 dark:text-slate-300 hover:border-indigo-400`
@@ -447,12 +497,12 @@ const HomeScreen = ({
             </span>
           )}
           <Car size={19} className="mb-1 shrink-0" />
-          <span className="text-[11px] font-black tracking-tight">سفريات</span>
+          <span className="text-[11px] sm:text-xs font-black tracking-tight">سفريات</span>
         </button>
 
         <button
           onClick={() => { setViewMode('list'); setHomeCategory('parcel'); setFilterTo(''); setShowCompletedTrips(false); }}
-          className={`relative flex flex-col items-center justify-center py-2.5 px-1 rounded-2xl border transition-all duration-200 ${
+          className={`relative flex flex-col items-center justify-center py-2.5 sm:py-3 px-1 rounded-2xl border transition-all duration-200 ${
             viewMode === 'list' && homeCategory === 'parcel'
               ? 'bg-indigo-600 text-white border-indigo-600 shadow-md shadow-indigo-500/20 scale-[1.02]'
               : `${bgCard} text-slate-600 dark:text-slate-300 hover:border-indigo-400`
@@ -466,31 +516,31 @@ const HomeScreen = ({
             </span>
           )}
           <Package size={19} className="mb-1 shrink-0" />
-          <span className="text-[11px] font-black tracking-tight">توصيل</span>
+          <span className="text-[11px] sm:text-xs font-black tracking-tight">توصيل</span>
         </button>
 
         <button
           onClick={() => { setViewMode('list'); setHomeCategory('stations'); setFilterTo(''); }}
-          className={`relative flex flex-col items-center justify-center py-2.5 px-1 rounded-2xl border transition-all duration-200 ${
+          className={`relative flex flex-col items-center justify-center py-2.5 sm:py-3 px-1 rounded-2xl border transition-all duration-200 ${
             viewMode === 'list' && homeCategory === 'stations'
               ? 'bg-indigo-600 text-white border-indigo-600 shadow-md shadow-indigo-500/20 scale-[1.02]'
               : `${bgCard} text-slate-600 dark:text-slate-300 hover:border-indigo-400`
           }`}
         >
           <BusFront size={19} className="mb-1 shrink-0" />
-          <span className="text-[11px] font-black tracking-tight">مواقف مصر</span>
+          <span className="text-[11px] sm:text-xs font-black tracking-tight">مواقف مصر</span>
         </button>
 
         <button
           onClick={() => setViewMode(viewMode === 'list' ? 'map' : 'list')}
-          className={`relative flex flex-col items-center justify-center py-2.5 px-1 rounded-2xl border transition-all duration-200 ${
+          className={`relative flex flex-col items-center justify-center py-2.5 sm:py-3 px-1 rounded-2xl border transition-all duration-200 ${
             viewMode === 'map'
               ? 'bg-emerald-600 text-white border-emerald-600 shadow-md shadow-emerald-500/20 scale-[1.02]'
               : `${bgCard} text-slate-600 dark:text-slate-300 hover:border-indigo-400`
           }`}
         >
           {viewMode === 'map' ? <List size={19} className="mb-1 shrink-0" /> : <MapPinned size={19} className="mb-1 shrink-0" />}
-          <span className="text-[11px] font-black tracking-tight">
+          <span className="text-[11px] sm:text-xs font-black tracking-tight">
             {viewMode === 'map' ? 'القائمة' : 'الخريطة'}
           </span>
         </button>
@@ -499,7 +549,7 @@ const HomeScreen = ({
       {viewMode === 'list' && (
         <div className="animate-fade-in-up">
           {(homeCategory === 'travel' || homeCategory === 'parcel') && (
-            <div className={`mb-4 p-2 rounded-2xl border shadow-sm space-y-2 ${isDarkMode ? 'bg-slate-900/90 border-slate-800' : 'bg-white border-slate-200/80'}`}>
+            <div className={`mb-4 p-2.5 rounded-2xl border shadow-sm space-y-2 ${isDarkMode ? 'bg-slate-900/90 border-slate-800' : 'bg-white border-slate-200/80'}`}>
               
               {/* الصف الأول من الفلتر */}
               <div className="flex items-center justify-between gap-1.5 overflow-x-auto [&::-webkit-scrollbar]:hidden">
@@ -507,13 +557,13 @@ const HomeScreen = ({
                   <div className={`flex p-0.5 rounded-xl border shrink-0 ${isDarkMode ? 'bg-slate-800 border-slate-700' : 'bg-slate-100 border-slate-200'}`}>
                     <button 
                       onClick={() => setFilterType('offer')} 
-                      className={`px-2.5 py-1.5 rounded-lg text-[11px] font-black transition-all ${filterType === 'offer' ? 'bg-indigo-600 text-white shadow-sm' : 'text-slate-500 dark:text-slate-400'}`}
+                      className={`px-3 py-1.5 rounded-lg text-[11px] font-black transition-all ${filterType === 'offer' ? 'bg-indigo-600 text-white shadow-sm' : 'text-slate-500 dark:text-slate-400'}`}
                     >
                       سائق
                     </button>
                     <button 
                       onClick={() => setFilterType('request')} 
-                      className={`px-2.5 py-1.5 rounded-lg text-[11px] font-black transition-all ${filterType === 'request' ? 'bg-indigo-600 text-white shadow-sm' : 'text-slate-500 dark:text-slate-400'}`}
+                      className={`px-3 py-1.5 rounded-lg text-[11px] font-black transition-all ${filterType === 'request' ? 'bg-indigo-600 text-white shadow-sm' : 'text-slate-500 dark:text-slate-400'}`}
                     >
                       راكب
                     </button>
@@ -544,25 +594,39 @@ const HomeScreen = ({
                 </div>
               </div>
 
-              {/* الصف الثاني من الفلتر: من / إلى + زر الخلط الذكي */}
+              {/* الصف الثاني من الفلتر: من / عكس الاتجاه / إلى / زر الخلط الذكي */}
               <div className="flex gap-1.5 items-center">
-                <select value={filterFrom} onChange={(e) => setFilterFrom(e.target.value)} className={`flex-1 py-1.5 px-2 rounded-xl border text-[11px] font-bold outline-none ${bgInput}`}>
+                <select value={filterFrom} onChange={(e) => setFilterFrom(e.target.value)} className={`flex-1 py-2 px-2 rounded-xl border text-[11px] sm:text-xs font-bold outline-none min-w-0 ${bgInput}`}>
                   <option value="">{activeUserAreas.length > 0 && !filterFrom ? `من: منطقتك (${activeUserAreas.length})` : 'من: كل المناطق'}</option>
                   {SUPPORTED_AREAS.map(c => <option key={c} value={c}>{c}</option>)}
                 </select>
-                <span className="text-slate-400 text-xs font-bold">←</span>
-                <select value={filterTo} onChange={(e) => setFilterTo(e.target.value)} className={`flex-1 py-1.5 px-2 rounded-xl border text-[11px] font-bold outline-none ${bgInput}`}>
+
+                {/* زر عكس الاتجاه السريع (ميزة جديدة) */}
+                <button
+                  type="button"
+                  onClick={handleSwapLocations}
+                  className={`p-2 rounded-xl border transition-all active:scale-90 shrink-0 ${
+                    isDarkMode ? 'bg-slate-800 border-slate-700 text-indigo-400 hover:bg-slate-700' : 'bg-slate-100 border-slate-200 text-indigo-600 hover:bg-indigo-50'
+                  }`}
+                  title="عكس نقطة الانطلاق والوصول"
+                >
+                  <ArrowLeftRight size={13} />
+                </button>
+
+                <select value={filterTo} onChange={(e) => setFilterTo(e.target.value)} className={`flex-1 py-2 px-2 rounded-xl border text-[11px] sm:text-xs font-bold outline-none min-w-0 ${bgInput}`}>
                   <option value="">إلى: كل الوجهات</option>
                   {SUPPORTED_AREAS.map(c => <option key={c} value={c}>{c}</option>)}
                 </select>
+
                 {(filterFrom || filterTo) && ( 
-                  <button onClick={() => {setFilterFrom(''); setFilterTo('');}} className="p-1.5 bg-rose-100 text-rose-600 dark:bg-rose-900/30 dark:text-rose-400 rounded-xl hover:bg-rose-200 transition-colors flex items-center justify-center shrink-0" title="إلغاء الفلتر">
+                  <button onClick={() => {setFilterFrom(''); setFilterTo('');}} className="p-2 bg-rose-100 text-rose-600 dark:bg-rose-900/30 dark:text-rose-400 rounded-xl hover:bg-rose-200 transition-colors flex items-center justify-center shrink-0" title="إلغاء الفلتر">
                     <X size={15}/>
                   </button> 
                 )}
+
                 <button
                   onClick={handleReshuffleTrips}
-                  className="p-1.5 px-2.5 bg-indigo-50 text-indigo-600 dark:bg-indigo-950/60 dark:text-indigo-400 border border-indigo-200 dark:border-indigo-800/70 rounded-xl hover:bg-indigo-100 transition-all active:scale-95 flex items-center gap-1 text-[10px] font-black shrink-0"
+                  className="py-2 px-2.5 bg-indigo-50 text-indigo-600 dark:bg-indigo-950/60 dark:text-indigo-400 border border-indigo-200 dark:border-indigo-800/70 rounded-xl hover:bg-indigo-100 transition-all active:scale-95 flex items-center gap-1 text-[10px] sm:text-xs font-black shrink-0"
                   title="خلط وتبديل الكروت بذكاء"
                 >
                   <Shuffle size={13} />
@@ -570,20 +634,45 @@ const HomeScreen = ({
                 </button>
               </div>
 
+              {/* الصف الثالث (ميزة جديدة): كبسولات الفلترة الذكية السريعة بضغطة واحدة */}
+              <div className="flex items-center gap-1.5 overflow-x-auto pt-0.5 [&::-webkit-scrollbar]:hidden">
+                {[
+                  { id: 'all', label: 'الكل ✨' },
+                  { id: 'urgent', label: 'تنطلق قريباً 🔥' },
+                  { id: 'verified', label: 'كابتن موثق 🛡️' },
+                  { id: 'females', label: 'بنات فقط 🌸' },
+                  { id: 'ac', label: 'مكيفة ❄️' }
+                ].map(chip => (
+                  <button
+                    key={chip.id}
+                    type="button"
+                    onClick={() => setQuickFilter(chip.id)}
+                    className={`px-2.5 py-1 rounded-lg text-[10px] font-black border shrink-0 transition-all active:scale-95 ${
+                      quickFilter === chip.id
+                        ? (chip.id === 'females' ? 'bg-pink-600 text-white border-pink-600 shadow-sm' : 'bg-indigo-600 text-white border-indigo-600 shadow-sm')
+                        : (isDarkMode ? 'bg-slate-800/80 border-slate-700 text-slate-300 hover:border-indigo-500/40' : 'bg-slate-50 border-slate-200 text-slate-600 hover:border-indigo-300')
+                    }`}
+                  >
+                    {chip.label}
+                  </button>
+                ))}
+              </div>
+
             </div>
           )}
 
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-3.5">
+          {/* شبكة الكروت متوافقة مع الموبايل (عمود)، التابلت (عمودين)، واللابتوب (3 أعمدة) */}
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3.5">
              {homeCategory === 'stations' ? (
                <>
                  {/* بطاقة المساعد الذكي "بيسو" في أعلى صفحة مواقف مصر */}
                  <div 
                    onClick={() => setShowBesoModal(true)}
-                   className="col-span-1 md:col-span-2 p-3.5 rounded-[1.5rem] bg-gradient-to-r from-indigo-600 via-violet-600 to-indigo-700 text-white shadow-lg cursor-pointer hover:shadow-indigo-500/25 transition-all active:scale-[0.99] flex items-center justify-between gap-3 border border-indigo-400/30"
+                   className="col-span-1 md:col-span-2 lg:col-span-3 p-3.5 sm:p-4 rounded-[1.5rem] bg-gradient-to-r from-indigo-600 via-violet-600 to-indigo-700 text-white shadow-lg cursor-pointer hover:shadow-indigo-500/25 transition-all active:scale-[0.99] flex items-center justify-between gap-3 border border-indigo-400/30"
                  >
                    <div className="flex items-center gap-3">
-                     <div className="w-12 h-12 rounded-2xl bg-white/20 backdrop-blur-md flex items-center justify-center border border-white/30 shrink-0 relative">
-                       <Bot size={26} className="text-white animate-bounce" />
+                     <div className="w-11 h-11 rounded-2xl bg-white/20 backdrop-blur-md flex items-center justify-center border border-white/30 shrink-0 relative">
+                       <Bot size={24} className="text-white animate-bounce" />
                        <span className="absolute -top-1 -right-1 bg-amber-400 text-slate-950 text-[8px] font-black px-1.5 py-0.2 rounded-full">
                          بيسو
                        </span>
@@ -592,7 +681,7 @@ const HomeScreen = ({
                        <h3 className="font-black text-sm sm:text-base flex items-center gap-1.5">
                          اسأل المساعد الذكي "بيسو" 🤖
                        </h3>
-                       <p className="text-[11px] text-indigo-100 font-bold mt-0.5 leading-snug">
+                       <p className="text-[11px] sm:text-xs text-indigo-100 font-bold mt-0.5 leading-snug">
                          قوله رايح فين (مثلاً: رأس البر، السادات، إسكندرية) وهيقولك تركب إيه ومنين بأكتر من طريقة!
                        </p>
                      </div>
@@ -602,28 +691,53 @@ const HomeScreen = ({
                    </span>
                  </div>
 
-                 <div className="flex gap-2 mb-2 h-11 col-span-1 md:col-span-2">
-                   <div className={`flex-1 flex items-center gap-2 px-3.5 rounded-2xl border ${bgInput} h-full`}>
-                     <Search size={16} className="text-slate-400 shrink-0" />
-                     <input 
-                       type="text" 
-                       placeholder="ابحث عن موقف أو خط سير (مثال: السلام، عبود، دمياط...)" 
-                       value={stationSearchQuery}
-                       onChange={(e) => setStationSearchQuery(e.target.value)}
-                       className="w-full bg-transparent outline-none text-xs font-bold h-full"
-                     />
-                     {stationSearchQuery && <button onClick={() => setStationSearchQuery('')}><X size={15} className="text-slate-400 hover:text-rose-500"/></button>}
+                 {/* شريط البحث عن موقف + فلتر الزحام السريع */}
+                 <div className="col-span-1 md:col-span-2 lg:col-span-3 flex flex-col sm:flex-row gap-2 mb-1">
+                   <div className="flex-1 flex gap-2 h-11">
+                     <div className={`flex-1 flex items-center gap-2 px-3.5 rounded-2xl border ${bgInput} h-full`}>
+                       <Search size={16} className="text-slate-400 shrink-0" />
+                       <input 
+                         type="text" 
+                         placeholder="ابحث عن موقف أو خط سير (مثال: السلام، عبود، دمياط...)" 
+                         value={stationSearchQuery}
+                         onChange={(e) => setStationSearchQuery(e.target.value)}
+                         className="w-full bg-transparent outline-none text-xs sm:text-sm font-bold h-full"
+                       />
+                       {stationSearchQuery && <button onClick={() => setStationSearchQuery('')}><X size={15} className="text-slate-400 hover:text-rose-500"/></button>}
+                     </div>
+                     {!isGuest && (
+                       <button onClick={() => setShowAddStation(true)} className="flex items-center justify-center gap-1 px-3.5 bg-indigo-50 text-indigo-700 dark:bg-indigo-900/30 dark:text-indigo-400 border border-indigo-200 dark:border-indigo-800 rounded-2xl hover:bg-indigo-100 transition-colors shrink-0 h-full text-xs font-black">
+                         <Plus size={18}/>
+                         <span className="hidden sm:inline">إضافة موقف</span>
+                       </button>
+                     )}
                    </div>
-                   {!isGuest && (
-                     <button onClick={() => setShowAddStation(true)} className="flex items-center justify-center gap-1 px-3.5 bg-indigo-50 text-indigo-700 dark:bg-indigo-900/30 dark:text-indigo-400 border border-indigo-200 dark:border-indigo-800 rounded-2xl hover:bg-indigo-100 transition-colors shrink-0 h-full text-xs font-black">
-                       <Plus size={18}/>
-                       <span className="hidden sm:inline">إضافة موقف</span>
-                     </button>
-                   )}
+
+                   {/* فلتر حالة الزحام في المواقف */}
+                   <div className="flex gap-1.5">
+                     {[
+                       { id: 'all', label: 'كل المواقف' },
+                       { id: 'empty', label: '🟢 رايق الآن' },
+                       { id: 'crowded', label: '🔴 زحمة' }
+                     ].map(cf => (
+                       <button
+                         key={cf.id}
+                         type="button"
+                         onClick={() => setStationCrowdFilter(cf.id)}
+                         className={`flex-1 sm:flex-none px-3 py-2 rounded-xl text-[11px] font-black border transition-all ${
+                           stationCrowdFilter === cf.id
+                             ? 'bg-indigo-600 text-white border-indigo-600 shadow-sm'
+                             : `${bgCard} text-slate-500`
+                         }`}
+                       >
+                         {cf.label}
+                       </button>
+                     ))}
+                   </div>
                  </div>
 
                  {visibleStations.length === 0 ? (
-                   <div className={`text-center py-14 px-4 rounded-[2rem] border-2 border-dashed col-span-1 md:col-span-2 ${isDarkMode ? 'border-slate-800 bg-slate-900/50' : 'border-slate-200 bg-slate-50'}`}>
+                   <div className={`text-center py-14 px-4 rounded-[2rem] border-2 border-dashed col-span-1 md:col-span-2 lg:col-span-3 ${isDarkMode ? 'border-slate-800 bg-slate-900/50' : 'border-slate-200 bg-slate-50'}`}>
                      <BusFront size={36} className="mx-auto text-slate-300 mb-2"/>
                      <h3 className="font-bold text-sm text-slate-500 mb-3">لا توجد مواقف مطابقة لبحثك</h3>
                      <button
@@ -635,7 +749,7 @@ const HomeScreen = ({
                    </div>
                  ) : (
                    visibleStations.map(station => (
-                      <div key={station.id} onClick={() => setSelectedStation(station)} className={`station-card-wrapper relative overflow-hidden p-0 rounded-[1.5rem] border shadow-sm hover:shadow-xl cursor-pointer transition-all duration-300 group ${bgCard}`}>
+                      <div key={station.id} onClick={() => setSelectedStation(station)} className={`station-card-wrapper relative overflow-hidden p-0 rounded-[1.5rem] border shadow-sm hover:shadow-xl cursor-pointer transition-all duration-300 group flex flex-col justify-between ${bgCard}`}>
                         
                         <div className="absolute top-0 right-0 w-32 h-32 bg-indigo-500/10 dark:bg-indigo-500/5 rounded-full blur-3xl -mr-10 -mt-10 pointer-events-none transition-all duration-500 group-hover:scale-150"></div>
 
@@ -718,77 +832,49 @@ const HomeScreen = ({
                </>
              ) : (
                <>
-                 {/* 1. المربع الأول الذكي: كارت متحرك لرحلات منطقتك أو التي تمر بعنوانك (يتبدل من الشمال لليمين + زر عرض الكل) */}
-                 {exactMatchedTrips.length > 0 && (
-                   <div className="col-span-1 md:col-span-2 mb-2">
-                     <div className={`p-3 rounded-[1.75rem] border-2 transition-all ${
+                 {/* 1. الكارت المتحرك المدمج (يظهر فقط عند تحديد منطقة أو بحث وبحجم رشيق وملموم) */}
+                 {hasAreaOrSearchFilter && exactMatchedTrips.length > 0 && (
+                   <div className="col-span-1 md:col-span-2 lg:col-span-3 mb-1">
+                     <div className={`p-2.5 sm:p-3 rounded-[1.5rem] border transition-all max-w-2xl mx-auto ${
                        isDarkMode 
-                         ? 'bg-gradient-to-b from-indigo-950/35 to-slate-900/90 border-indigo-500/40 shadow-lg shadow-indigo-950/20' 
-                         : 'bg-gradient-to-b from-indigo-50/70 to-white border-indigo-200 shadow-md'
+                         ? 'bg-gradient-to-b from-indigo-950/30 to-slate-900/90 border-indigo-500/35 shadow-md' 
+                         : 'bg-gradient-to-b from-indigo-50/60 to-white border-indigo-200 shadow-sm'
                      }`}>
-                       {/* رأس صندوق رحلات منطقتك */}
-                       <div className="flex flex-wrap items-center justify-between gap-2 mb-2.5 px-1">
-                         <div className="flex items-center gap-1.5">
-                           <span className="w-6 h-6 rounded-full bg-emerald-500/15 text-emerald-500 flex items-center justify-center shrink-0">
-                             <Sparkles size={14} />
+                       {/* شريط علوي رفيع يجمع العنوان + أزرار التقليب + زر عرض الكل في سطر واحد */}
+                       <div className="flex items-center justify-between gap-1.5 mb-2 px-1">
+                         <div className="flex items-center gap-1.5 min-w-0">
+                           <span className="w-5 h-5 rounded-full bg-emerald-500/15 text-emerald-500 flex items-center justify-center shrink-0">
+                             <Sparkles size={12} />
                            </span>
-                           <div>
-                             <h3 className="text-xs sm:text-sm font-black text-emerald-600 dark:text-emerald-400 flex items-center gap-1.5">
-                               <span>رحلات منطقتك وخط سيرك</span>
-                               <span className="px-2 py-0.5 text-[10px] rounded-full bg-emerald-500 text-white font-black">
-                                 {exactMatchedTrips.length}
-                               </span>
-                             </h3>
-                           </div>
+                           <h3 className="text-[11px] sm:text-xs font-black text-emerald-600 dark:text-emerald-400 truncate">
+                             مطابق لمنطقتك ({exactMatchedTrips.length})
+                           </h3>
                          </div>
 
-                         <div className="flex items-center gap-1.5">
-                           {/* أزرار التقليب السريع بين رحلات منطقتك */}
+                         <div className="flex items-center gap-1 shrink-0">
                            {!showAllAreaTrips && exactMatchedTrips.length > 1 && (
-                             <div className="flex items-center gap-1 bg-white/80 dark:bg-slate-800 px-1.5 py-1 rounded-xl border border-slate-200 dark:border-slate-700">
-                               <button
-                                 type="button"
-                                 onClick={prevAreaTrip}
-                                 className="p-1 rounded-lg hover:bg-indigo-50 dark:hover:bg-slate-700 text-slate-600 dark:text-slate-300"
-                                 title="السابق"
-                               >
-                                 <ChevronRight size={14} />
-                               </button>
-                               <span className="text-[10px] font-black text-indigo-600 dark:text-indigo-400 px-1">
-                                 {areaSlideIndex + 1} / {exactMatchedTrips.length}
-                               </span>
-                               <button
-                                 type="button"
-                                 onClick={nextAreaTrip}
-                                 className="p-1 rounded-lg hover:bg-indigo-50 dark:hover:bg-slate-700 text-slate-600 dark:text-slate-300"
-                                 title="التالي"
-                               >
-                                 <ChevronLeft size={14} />
-                               </button>
+                             <div className="flex items-center gap-0.5 bg-white/80 dark:bg-slate-800 px-1.5 py-0.5 rounded-lg border border-slate-200 dark:border-slate-700">
+                               <button type="button" onClick={prevAreaTrip} className="p-0.5 hover:text-indigo-500"><ChevronRight size={13} /></button>
+                               <span className="text-[10px] font-black text-indigo-500 px-1">{areaSlideIndex + 1}/{exactMatchedTrips.length}</span>
+                               <button type="button" onClick={nextAreaTrip} className="p-0.5 hover:text-indigo-500"><ChevronLeft size={13} /></button>
                              </div>
                            )}
 
-                           {/* زر عرض كل الرحلات الموجودة في منطقته أو ضمها في كارت متحرك */}
                            {exactMatchedTrips.length > 1 && (
                              <button
                                type="button"
                                onClick={() => setShowAllAreaTrips(prev => !prev)}
-                               className={`px-3 py-1.5 rounded-xl text-[10px] sm:text-[11px] font-black flex items-center gap-1 transition-all shadow-sm active:scale-95 ${
-                                 showAllAreaTrips
-                                   ? 'bg-slate-800 text-white dark:bg-slate-700'
-                                   : 'bg-indigo-600 text-white hover:bg-indigo-700'
+                               className={`px-2.5 py-1 rounded-lg text-[10px] font-black flex items-center gap-1 transition-all ${
+                                 showAllAreaTrips ? 'bg-slate-800 text-white dark:bg-slate-700' : 'bg-indigo-600 text-white hover:bg-indigo-700'
                                }`}
                              >
-                               <Layers size={12} />
-                               <span>
-                                 {showAllAreaTrips ? 'وضع الكارت المتحرك' : `عرض الكل (${exactMatchedTrips.length})`}
-                               </span>
+                               <Layers size={11} />
+                               <span>{showAllAreaTrips ? 'ضم ببطاقة واحدة' : 'عرض الكل'}</span>
                              </button>
                            )}
                          </div>
                        </div>
 
-                       {/* محتوى الصندوق: إما الكارت المتحرك من الشمال لليمين أو كل رحلات المنطقة */}
                        {!showAllAreaTrips ? (
                          <div
                            onMouseEnter={() => setIsAreaCarouselPaused(true)}
@@ -799,7 +885,7 @@ const HomeScreen = ({
                            className="relative overflow-hidden"
                          >
                            {currentSpotlightTrip && (
-                             <div key={currentSpotlightTrip.id + '_' + areaSlideIndex} className="animate-card-slide-ltr [&>div]:mb-1">
+                             <div key={currentSpotlightTrip.id + '_' + areaSlideIndex} className="animate-card-slide-ltr">
                                <TripCard 
                                  trip={currentSpotlightTrip} 
                                  user={user} 
@@ -812,40 +898,21 @@ const HomeScreen = ({
                                />
                              </div>
                            )}
-
-                           {/* مؤشر النقاط السفلي للتنقل بين رحلات المنطقة */}
-                           {exactMatchedTrips.length > 1 && (
-                             <div className="flex items-center justify-center gap-1.5 pt-2 pb-0.5">
-                               {exactMatchedTrips.slice(0, 10).map((t, idx) => (
-                                 <button
-                                   key={t.id}
-                                   type="button"
-                                   onClick={() => setAreaSlideIndex(idx)}
-                                   className={`h-1.5 rounded-full transition-all duration-300 ${
-                                     idx === areaSlideIndex 
-                                       ? 'w-6 bg-indigo-600 dark:bg-indigo-400' 
-                                       : 'w-2 bg-slate-300 dark:bg-slate-700 hover:bg-indigo-400'
-                                   }`}
-                                 />
-                               ))}
-                             </div>
-                           )}
                          </div>
                        ) : (
                          <div className="grid grid-cols-1 md:grid-cols-2 gap-3 pt-1 animate-fade-in-up">
                            {exactMatchedTrips.map(trip => (
-                             <div key={trip.id} className="[&>div]:mb-0">
-                               <TripCard 
-                                 trip={trip} 
-                                 user={user} 
-                                 isAdmin={isAdmin} 
-                                 isDarkMode={isDarkMode} 
-                                 openChatFromTrip={openChatFromTrip} 
-                                 triggerToast={triggerToast} 
-                                 matchBadge={getMatchBadgeForTrip(trip)}
-                                 onOpenPublicProfile={onOpenPublicProfile}
-                               />
-                             </div>
+                             <TripCard 
+                               key={trip.id}
+                               trip={trip} 
+                               user={user} 
+                               isAdmin={isAdmin} 
+                               isDarkMode={isDarkMode} 
+                               openChatFromTrip={openChatFromTrip} 
+                               triggerToast={triggerToast} 
+                               matchBadge={getMatchBadgeForTrip(trip)}
+                               onOpenPublicProfile={onOpenPublicProfile}
+                             />
                            ))}
                          </div>
                        )}
@@ -853,42 +920,53 @@ const HomeScreen = ({
                    </div>
                  )}
 
-                 {/* 2. تنبيه سلس في حال عدم وجود رحلات مطابقة */}
-                 {exactMatchedTrips.length === 0 && currentTripsToDisplay.length > 0 && (activeUserAreas.length > 0 || filterTo) && (
-                   <div className="col-span-1 md:col-span-2 flex flex-col sm:flex-row items-center justify-between gap-2.5 px-3.5 py-2.5 mb-2 rounded-2xl bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-800/50">
-                     <span className="text-[11px] font-bold text-amber-700 dark:text-amber-400 flex items-center gap-1.5 text-center sm:text-right leading-relaxed">
-                       <Compass size={15} className="shrink-0"/> 
-                       لم نجد رحلات مطابقة لـ "{filterFrom || filterTo || activeUserAreas.join('، ')}"، نعرض لك رحلات المناطق المجاورة:
+                 {/* 2. تنبيه سلس في حال عدم وجود رحلات مطابقة للبحث */}
+                 {hasAreaOrSearchFilter && exactMatchedTrips.length === 0 && currentTripsToDisplay.length > 0 && (
+                   <div className="col-span-1 md:col-span-2 lg:col-span-3 flex flex-col sm:flex-row items-center justify-between gap-2.5 px-4 py-3 mb-1 rounded-2xl bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-800/50">
+                     <span className="text-xs font-bold text-amber-700 dark:text-amber-400 flex items-center gap-1.5 text-center sm:text-right leading-relaxed">
+                       <Compass size={16} className="shrink-0"/> 
+                       لم نجد رحلات مطابقة لـ "{filterFrom || filterTo || activeUserAreas.join('، ')}" حالياً، نعرض لك الرحلات المتاحة في المناطق المجاورة:
                      </span>
                      {(filterFrom || activeUserAreas.length > 0) && filterTo && !showCompletedTrips && (
-                       <button onClick={handleSetAlert} className="shrink-0 text-[10px] font-black bg-white dark:bg-slate-800 text-amber-600 dark:text-amber-400 px-3 py-1.5 rounded-xl shadow-sm flex items-center gap-1 hover:scale-105 transition-transform border border-amber-200 dark:border-slate-700">
+                       <button onClick={handleSetAlert} className="shrink-0 text-[11px] font-black bg-white dark:bg-slate-800 text-amber-600 dark:text-amber-400 px-3 py-1.5 rounded-xl shadow-sm flex items-center gap-1 hover:scale-105 transition-transform border border-amber-200 dark:border-slate-700">
                          <Bell size={13} className="animate-pulse" /> بلّغني عند توفرها
                        </button>
                      )}
                    </div>
                  )}
 
-                 {/* 3. في حال كان النظام بالكامل فارغاً من أي رحلات في القسم المختار */}
+                 {/* 3. في حال كان النظام بالكامل فارغاً */}
                  {currentTripsToDisplay.length === 0 && (
-                    <div className={`text-center py-10 px-4 rounded-[2rem] border-2 border-dashed col-span-1 md:col-span-2 ${isDarkMode ? 'border-slate-800 bg-slate-900/50' : 'border-slate-200 bg-slate-50'}`}>
-                      <Car size={36} className="mx-auto text-slate-400 mb-2 opacity-50"/>
-                      <h3 className="font-bold text-xs text-slate-500">
-                        {showCompletedTrips ? 'لا توجد رحلات مكتملة في هذا القسم' : 'لا توجد رحلات متاحة في هذا القسم حالياً'}
+                    <div className={`text-center py-12 px-4 rounded-[2rem] border-2 border-dashed col-span-1 md:col-span-2 lg:col-span-3 ${isDarkMode ? 'border-slate-800 bg-slate-900/50' : 'border-slate-200 bg-slate-50'}`}>
+                      <Car size={38} className="mx-auto text-slate-400 mb-2 opacity-50"/>
+                      <h3 className="font-bold text-xs sm:text-sm text-slate-500">
+                        {showCompletedTrips ? 'لا توجد رحلات مكتملة في هذا القسم' : 'لا توجد رحلات مطابقة لهذا الفلتر حالياً'}
                       </h3>
+                      {quickFilter !== 'all' && (
+                        <button
+                          onClick={() => setQuickFilter('all')}
+                          className="mt-3 px-4 py-1.5 bg-indigo-600 text-white rounded-xl text-xs font-black"
+                        >
+                          إظهار كل الرحلات
+                        </button>
+                      )}
                     </div>
                  )}
 
-                 {/* 4. عرض الرحلات من المناطق المجاورة والأخرى (تتلخبط بذكاء في كل مرة) */}
+                 {/* 4. عرض الكروت العادية */}
                  {similarTrips.length > 0 && (
                    <>
-                     <div className="col-span-1 md:col-span-2 flex items-center justify-between px-1 mt-2 pt-2 border-t border-slate-200 dark:border-slate-800">
-                       <span className="text-[11px] sm:text-xs font-black text-indigo-600 dark:text-indigo-400 flex items-center gap-1.5">
-                         <Compass size={15}/> رحلات من المناطق المجاورة ومقترحات ذكية ({similarTrips.length})
+                     <div className="col-span-1 md:col-span-2 lg:col-span-3 flex items-center justify-between px-1 mt-1 pt-2 border-t border-slate-200 dark:border-slate-800">
+                       <span className="text-xs font-black text-indigo-600 dark:text-indigo-400 flex items-center gap-1.5">
+                         <Compass size={15}/> 
+                         {hasAreaOrSearchFilter 
+                           ? `رحلات من المناطق المجاورة ومقترحات ذكية (${similarTrips.length})`
+                           : `جميع الرحلات المتاحة (${similarTrips.length})`}
                        </span>
                        <button
                          type="button"
                          onClick={handleReshuffleTrips}
-                         className="text-[10px] font-black text-indigo-600 dark:text-indigo-400 bg-indigo-50 dark:bg-indigo-950/50 px-2.5 py-1 rounded-lg border border-indigo-200 dark:border-indigo-800/60 flex items-center gap-1 hover:bg-indigo-100 active:scale-95 transition-all"
+                         className="text-[10px] sm:text-xs font-black text-indigo-600 dark:text-indigo-400 bg-indigo-50 dark:bg-indigo-950/50 px-2.5 py-1 rounded-lg border border-indigo-200 dark:border-indigo-800/60 flex items-center gap-1 hover:bg-indigo-100 active:scale-95 transition-all"
                        >
                          <Shuffle size={12} /> خلط الكروت
                        </button>
@@ -896,6 +974,12 @@ const HomeScreen = ({
 
                      {similarTrips.map(trip => {
                        const isNear = activeUserAreas.length > 0 && activeUserAreas.some(a => isNearbyArea(trip.from, a));
+                       const isUrgent = !showCompletedTrips && isLeavingSoon(trip.date, trip.time);
+                       let badge = null;
+                       if (isUrgent) badge = 'تنطلق قريباً 🔥';
+                       else if (isNear) badge = 'منطقة قريبة منك 📍';
+                       else if (hasAreaOrSearchFilter) badge = 'مقترح ذكي 💡';
+
                        return (
                          <TripCard 
                            key={trip.id} 
@@ -905,7 +989,7 @@ const HomeScreen = ({
                            isDarkMode={isDarkMode} 
                            openChatFromTrip={openChatFromTrip} 
                            triggerToast={triggerToast} 
-                           matchBadge={isNear ? 'منطقة قريبة منك 📍' : 'مقترح ذكي 💡'}
+                           matchBadge={badge}
                            onOpenPublicProfile={onOpenPublicProfile}
                          />
                        );
@@ -918,8 +1002,97 @@ const HomeScreen = ({
         </div>
       )}
 
+      {/* مستكشف الخريطة التفاعلي للمناطق والمواقف (ميزة جديدة بدلاً من شاشة قيد التطوير الفارغة) */}
       {viewMode === 'map' && (
-         <div className={`text-center py-16 rounded-[2rem] border-2 border-dashed mt-4 ${isDarkMode ? 'border-slate-800 bg-slate-900/50' : 'border-slate-200 bg-slate-50'}`}><MapPinned size={44} className="mx-auto text-slate-400 mb-3 opacity-50"/><h3 className="font-bold text-base text-slate-700 dark:text-slate-300">الخريطة قيد التطوير...</h3></div>
+        <div className="space-y-4 animate-fade-in-up">
+          <div className={`p-5 rounded-[2rem] border shadow-sm ${bgCard}`}>
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 mb-4">
+              <div>
+                <h3 className={`font-black text-base sm:text-lg flex items-center gap-2 ${textPrimary}`}>
+                  <MapPinned size={22} className="text-emerald-500" /> مستكشف مناطق وخطوط "طريقنا" التفاعلي
+                </h3>
+                <p className="text-xs font-bold text-slate-400 mt-0.5">
+                  اضغط على أي منطقة لاستعراض الرحلات النشطة بها فوراً أو افتح موقع المواقف على Google Maps
+                </p>
+              </div>
+              <button
+                onClick={() => setShowBesoModal(true)}
+                className="px-3.5 py-2 rounded-xl bg-indigo-600 text-white text-xs font-black flex items-center gap-1.5 self-start sm:self-auto shadow-sm"
+              >
+                <Bot size={15} /> اسأل بيسو عن طريقك
+              </button>
+            </div>
+
+            {/* شبكة المناطق الحية وعدد الرحلات في كل منطقة */}
+            <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-2.5">
+              {SUPPORTED_AREAS.map(area => {
+                const count = areaTripCounts[area] || 0;
+                const isMyArea = activeUserAreas.includes(area);
+                return (
+                  <button
+                    key={area}
+                    onClick={() => {
+                      setFilterFrom(area);
+                      setViewMode('list');
+                      setHomeCategory('travel');
+                      triggerToast(`تم عرض رحلات منطقة: ${area} 📍`);
+                    }}
+                    className={`p-3 rounded-2xl border text-right transition-all hover:scale-[1.02] active:scale-95 flex flex-col justify-between gap-2 ${
+                      isMyArea
+                        ? 'bg-indigo-600/10 border-indigo-500 text-indigo-400'
+                        : count > 0
+                        ? (isDarkMode ? 'bg-slate-800/80 border-slate-700 hover:border-emerald-500/50' : 'bg-slate-50 border-slate-200 hover:border-emerald-400')
+                        : (isDarkMode ? 'bg-slate-900/40 border-slate-800/80 opacity-60' : 'bg-slate-50/50 border-slate-200/60 opacity-60')
+                    }`}
+                  >
+                    <div className="flex items-center justify-between w-full">
+                      <span className={`text-xs font-black truncate ${textPrimary}`}>{area}</span>
+                      <MapPin size={13} className={count > 0 ? 'text-emerald-500 shrink-0' : 'text-slate-400 shrink-0'} />
+                    </div>
+                    <div className="flex items-center justify-between w-full">
+                      <span className={`text-[10px] font-black px-2 py-0.5 rounded-md ${
+                        count > 0 ? 'bg-emerald-500/15 text-emerald-500' : 'bg-slate-500/10 text-slate-400'
+                      }`}>
+                        {count > 0 ? `${count} رحلة نشطة` : 'لا توجد رحلات'}
+                      </span>
+                      {isMyArea && <span className="text-[9px] font-black text-indigo-400">منطقتك ⭐</span>}
+                    </div>
+                  </button>
+                );
+              })}
+            </div>
+          </div>
+
+          {/* خريطة الوصول السريع للمواقف المسجلة */}
+          {visibleStations.length > 0 && (
+            <div className={`p-5 rounded-[2rem] border shadow-sm ${bgCard}`}>
+              <h4 className={`font-black text-sm mb-3 flex items-center gap-1.5 ${textPrimary}`}>
+                <BusFront size={18} className="text-indigo-500" /> مواقع المواقف المباشرة على الخريطة ({visibleStations.length})
+              </h4>
+              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-2.5">
+                {visibleStations.map(st => (
+                  <a
+                    key={st.id}
+                    href={st.mapUrl || `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(st.name + ' ' + st.location)}`}
+                    target="_blank"
+                    rel="noreferrer"
+                    className={`p-3 rounded-xl border flex items-center justify-between transition-all hover:border-rose-500 ${
+                      isDarkMode ? 'bg-slate-800/60 border-slate-700' : 'bg-slate-50 border-slate-200'
+                    }`}
+                  >
+                    <div>
+                      <p className={`text-xs font-black ${textPrimary}`}>{st.name}</p>
+                      <p className="text-[10px] font-bold text-slate-400">{st.location} • {st.routes?.length || 0} خطوط</p>
+                    </div>
+                    <span className="px-2.5 py-1.5 rounded-lg bg-rose-500/10 text-rose-500 text-[10px] font-black flex items-center gap-1">
+                      <MapPinned size={12} /> فتح الخريطة
+                    </span>
+                  </a>
+                ))}
+              </div>
+            </div>
+          )}
+        </div>
       )}
 
       {/* نافذة المساعد الذكي "بيسو" */}

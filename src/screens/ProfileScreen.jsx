@@ -3,7 +3,7 @@ import { doc, updateDoc, collection, query, where, getDocs, writeBatch, addDoc, 
 import { 
   User, ShieldCheck, Star, Car, Package, Settings, Award, Info, LogOut, 
   Moon, Sun, Camera, CheckCircle2, Clock, Gift, ChevronLeft, Eye, Crown, 
-  Sparkles, Phone, Edit2, X, Check, HeartHandshake, BusFront, Bot, Lock, MessageSquareQuote 
+  X, Check, HeartHandshake, Bot, Lock, MessageSquareQuote 
 } from 'lucide-react';
 import { db, USERS_COLLECTION, APP_COLLECTION_NAME } from '../firebase';
 import { resizeAndConvertToBase64 } from '../utils/helpers';
@@ -17,12 +17,6 @@ const BONUS_MILESTONES = [
   { id: 'سفير طريقنا 👑', title: 'سفير طريقنا 👑', target: 100, desc: 'أكمل 100 رحلة لتصبح سفيراً رسمياً لتطبيق طريقنا في محافظتك.', color: 'from-indigo-600 to-rose-600' }
 ];
 
-const ROLE_LABELS = {
-  driver: 'كابتن (لدي سيارة) 🚗',
-  passenger: 'راكب 🙋‍♂️',
-  delivery: 'مندوب توصيل / أمانات 📦'
-};
-
 const ProfileScreen = ({
   user, userData, setUserData, isGuest, isAdmin, isDarkMode,
   toggleTheme, handleLogout, handleEditName, setShowVerifyModal,
@@ -34,7 +28,6 @@ const ProfileScreen = ({
   const [isSavingSettings, setIsSavingSettings] = useState(false);
   const [claimingBadgeId, setClaimingBadgeId] = useState(null);
 
-  // حقول نافذة إعدادات الحساب الموحدة
   const [settingsForm, setSettingsForm] = useState({
     name: '',
     phone: '',
@@ -89,6 +82,10 @@ const ProfileScreen = ({
   const claimedBadges = Array.isArray(userData?.claimedBadges) ? userData.claimedBadges : [];
   const reviewsList = Array.isArray(userData?.reviews) ? userData.reviews : [];
 
+  // حساب المرحلة القادمة في البونص لعرضها بشكل متناسق تحت كارت البروفايل على اللابتوب
+  const nextMilestone = BONUS_MILESTONES.find(m => completedCount < m.target) || BONUS_MILESTONES[BONUS_MILESTONES.length - 1];
+  const nextProgress = Math.min(100, Math.round((completedCount / nextMilestone.target) * 100));
+
   const handlePhotoChange = async (e) => {
     const file = e.target.files?.[0];
     if (!file) return;
@@ -128,7 +125,6 @@ const ProfileScreen = ({
 
       await updateDoc(doc(db, USERS_COLLECTION, user.uid), updates);
 
-      // مزامنة البيانات مع رحلات المستخدم المنشورة
       const q = query(collection(db, APP_COLLECTION_NAME), where('userId', '==', user.uid));
       const snap = await getDocs(q);
       if (!snap.empty) {
@@ -154,7 +150,6 @@ const ProfileScreen = ({
     }
   };
 
-  // دالة المطالبة بالبونص وإرسال إشعار وطلب للإدارة
   const handleClaimBonusBadge = async (milestone) => {
     if (completedCount < milestone.target) return;
     setClaimingBadgeId(milestone.id);
@@ -166,7 +161,6 @@ const ProfileScreen = ({
         badgeClaimedAt: Date.now()
       });
 
-      // إرسال رسالة تلقائية في شات الدعم الفني للإدارة لكي تمنحه الشارة
       const supportChatId = `support_${user.uid}`;
       const claimMsg = `🎁 طلب مطالبة بونص: أكملت (${completedCount}) رحلة وأطالب بشارة (${milestone.title})!`;
       await addDoc(collection(db, `chats_${supportChatId}`), {
@@ -187,11 +181,10 @@ const ProfileScreen = ({
   return (
     <div className="flex-1 w-full max-w-5xl mx-auto px-3 sm:px-6 py-4 pb-28 animate-fade-in-up">
       
-      {/* الشبكة الرئيسية المتوافقة مع الموبايل واللابتوب */}
-      <div className="grid grid-cols-1 lg:grid-cols-12 gap-5">
+      <div className="grid grid-cols-1 lg:grid-cols-12 gap-5 items-start">
         
-        {/* العمود الأيمن (بطاقة الهوية والإحصائيات) */}
-        <div className="lg:col-span-5 space-y-4">
+        {/* العمود الأيمن: كارت الهوية + بطاقة تقدم البونص السريعة + لوحة الأدمن (متوازن تماماً على اللابتوب) */}
+        <div className="lg:col-span-5 space-y-3.5">
           <div className={`p-5 sm:p-6 rounded-[2rem] border shadow-sm relative overflow-hidden ${bgCard}`}>
             <div className="absolute top-0 left-0 right-0 h-24 bg-gradient-to-r from-indigo-600 via-violet-600 to-indigo-700 opacity-90"></div>
             
@@ -225,15 +218,6 @@ const ProfileScreen = ({
                 </span>
               )}
 
-              <div className="flex items-center justify-center gap-2 mt-2 flex-wrap">
-                <span className={`text-[11px] font-bold px-2.5 py-0.5 rounded-lg ${isDarkMode ? 'bg-slate-800 text-slate-300' : 'bg-slate-100 text-slate-600'}`}>
-                  {ROLE_LABELS[userData?.accountRole] || 'راكب 🙋‍♂️'}
-                </span>
-                <span className={`text-[11px] font-bold px-2.5 py-0.5 rounded-lg ${isDarkMode ? 'bg-slate-800 text-slate-300' : 'bg-slate-100 text-slate-600'}`}>
-                  {userData?.gender === 'female' ? 'أنثى 👩' : 'ذكر 👨'}
-                </span>
-              </div>
-
               {/* إحصائيات سريعة */}
               <div className="grid grid-cols-3 gap-2 w-full mt-5 pt-4 border-t dark:border-slate-800">
                 <div className="text-center">
@@ -252,19 +236,36 @@ const ProfileScreen = ({
                   <span className={`text-[10px] font-bold block mt-0.5 ${textSecondary}`}>آراء العملاء</span>
                 </div>
               </div>
-
-              {/* زر معاينة البروفايل العام كما يراه الآخرون */}
-              <button
-                type="button"
-                onClick={() => onOpenPublicProfile && onOpenPublicProfile(user.uid)}
-                className="w-full mt-4 py-2.5 px-4 rounded-xl bg-indigo-50 hover:bg-indigo-100 dark:bg-indigo-950/50 dark:hover:bg-indigo-900/60 text-indigo-600 dark:text-indigo-400 border border-indigo-200 dark:border-indigo-800/70 text-xs font-black flex items-center justify-center gap-1.5 transition-all"
-              >
-                <Eye size={15} /> معاينة صفحتي العامة وآراء الناس عني
-              </button>
             </div>
           </div>
 
-          {/* زر لوحة تحكم الأدمن (يظهر للأدمن فقط) */}
+          {/* بطاقة شريط التقدم نحو شارة البونص التالية (تملأ الفراغ على اللابتوب بشكل رائع) */}
+          <div 
+            onClick={() => setActiveModal('bonus')}
+            className={`p-4 rounded-[1.5rem] border cursor-pointer hover:border-amber-500/60 transition-all ${bgCard}`}
+          >
+            <div className="flex items-center justify-between mb-2">
+              <span className="text-xs font-black flex items-center gap-1.5 text-amber-500">
+                <Award size={16} /> الهدف القادم: {nextMilestone.title}
+              </span>
+              <span className={`text-[11px] font-black ${textSecondary}`}>
+                {completedCount} / {nextMilestone.target} رحلة
+              </span>
+            </div>
+            <div className="w-full h-2 bg-slate-200 dark:bg-slate-800 rounded-full overflow-hidden">
+              <div 
+                className={`h-full bg-gradient-to-r ${nextMilestone.color} transition-all duration-500`} 
+                style={{ width: `${nextProgress}%` }}
+              />
+            </div>
+            <p className={`text-[10px] font-bold mt-2 ${textSecondary}`}>
+              {completedCount >= nextMilestone.target 
+                ? '🎉 لقد حققت الهدف! اضغط هنا للمطالبة بشارتك من الإدارة' 
+                : `أكمل ${nextMilestone.target - completedCount} رحلات إضافية للمطالبة بهذه الشارة!`}
+            </p>
+          </div>
+
+          {/* زر لوحة تحكم الإدارة الشاملة (يظهر للأدمن دائماً بوضوح) */}
           {isAdmin && (
             <button
               onClick={() => setShowAdminPanel(true)}
@@ -279,10 +280,48 @@ const ProfileScreen = ({
           )}
         </div>
 
-        {/* العمود الأيسر (القوائم المنظمة والرايقة) */}
+        {/* العمود الأيسر: قائمة الخيارات المنظمة والرايقة */}
         <div className="lg:col-span-7 space-y-3">
           
-          {/* 1. بطاقة توثيق الحساب */}
+          {/* 1. خانه إعدادات الحساب الشاملة */}
+          <button
+            onClick={() => setActiveModal('settings')}
+            className={`w-full p-4 rounded-2xl border flex items-center justify-between transition-all hover:border-indigo-500 ${bgCard}`}
+          >
+            <div className="flex items-center gap-3.5 text-right">
+              <div className="w-11 h-11 rounded-2xl bg-indigo-500/10 text-indigo-500 flex items-center justify-center shrink-0">
+                <Settings size={22} />
+              </div>
+              <div>
+                <h3 className={`font-black text-sm ${textPrimary}`}>إعدادات الحساب والبيانات الشخصية ⚙️</h3>
+                <p className={`text-[11px] font-bold mt-0.5 ${textSecondary}`}>
+                  الاسم، الهاتف، النوع (ذكر/أنثى)، نوع الخدمة (سائق/راكب/توصيل)، السيارة، والمظهر
+                </p>
+              </div>
+            </div>
+            <ChevronLeft size={18} className="text-slate-400 shrink-0" />
+          </button>
+
+          {/* 2. معاينة صفحتي العامة وآراء الناس عني */}
+          <button
+            onClick={() => onOpenPublicProfile && onOpenPublicProfile(user.uid)}
+            className={`w-full p-4 rounded-2xl border flex items-center justify-between transition-all hover:border-indigo-500 ${bgCard}`}
+          >
+            <div className="flex items-center gap-3.5 text-right">
+              <div className="w-11 h-11 rounded-2xl bg-cyan-500/10 text-cyan-500 flex items-center justify-center shrink-0">
+                <Eye size={22} />
+              </div>
+              <div>
+                <h3 className={`font-black text-sm ${textPrimary}`}>صفحتي العامة وآراء العملاء عني 🌟</h3>
+                <p className={`text-[11px] font-bold mt-0.5 ${textSecondary}`}>
+                  شاهد كيف يظهر بروفايلك وتقييماتك وتعليقات الناس للآخرين
+                </p>
+              </div>
+            </div>
+            <ChevronLeft size={18} className="text-slate-400 shrink-0" />
+          </button>
+
+          {/* 3. توثيق الحساب */}
           <div 
             onClick={() => !userData?.isVerified && userData?.verificationStatus !== 'pending' && setShowVerifyModal(true)}
             className={`p-4 rounded-2xl border flex items-center justify-between cursor-pointer transition-all ${
@@ -317,26 +356,7 @@ const ProfileScreen = ({
             )}
           </div>
 
-          {/* 2. خانه إعدادات الحساب الشاملة (الاسم، الهاتف، الجنس، نوع الخدمة، السيارة، المظهر) */}
-          <button
-            onClick={() => setActiveModal('settings')}
-            className={`w-full p-4 rounded-2xl border flex items-center justify-between transition-all hover:border-indigo-500 ${bgCard}`}
-          >
-            <div className="flex items-center gap-3.5 text-right">
-              <div className="w-11 h-11 rounded-2xl bg-indigo-500/10 text-indigo-500 flex items-center justify-center shrink-0">
-                <Settings size={22} />
-              </div>
-              <div>
-                <h3 className={`font-black text-sm ${textPrimary}`}>إعدادات الحساب والبيانات الشخصية ⚙️</h3>
-                <p className={`text-[11px] font-bold mt-0.5 ${textSecondary}`}>
-                  تعديل الاسم، الموبايل، الجنس (ذكر/أنثى)، نوع الخدمة (سائق/راكب/توصيل)، والسيارة
-                </p>
-              </div>
-            </div>
-            <ChevronLeft size={18} className="text-slate-400 shrink-0" />
-          </button>
-
-          {/* 3. صفحة البونص والمكافآت مع زر المطالبة */}
+          {/* 4. صفحة البونص والمكافآت مع زر المطالبة */}
           <button
             onClick={() => setActiveModal('bonus')}
             className={`w-full p-4 rounded-2xl border flex items-center justify-between transition-all hover:border-amber-500 ${bgCard}`}
@@ -350,7 +370,7 @@ const ProfileScreen = ({
                   <h3 className={`font-black text-sm ${textPrimary}`}>جوائز وبونص "طريقنا" 🏆</h3>
                   {BONUS_MILESTONES.some(m => completedCount >= m.target && !claimedBadges.includes(m.id)) && (
                     <span className="text-[10px] font-black bg-rose-500 text-white px-2 py-0.5 rounded-full animate-pulse">
-                      لديك مكافأة جاهزة للمطالبة! 🎁
+                      مكافأة جاهزة! 🎁
                     </span>
                   )}
                 </div>
@@ -362,7 +382,7 @@ const ProfileScreen = ({
             <ChevronLeft size={18} className="text-slate-400 shrink-0" />
           </button>
 
-          {/* 4. إعلاناتي ورحلاتي المنشورة */}
+          {/* 5. إعلاناتي ورحلاتي المنشورة */}
           <button
             onClick={() => setActiveModal('my_trips')}
             className={`w-full p-4 rounded-2xl border flex items-center justify-between transition-all hover:border-indigo-500 ${bgCard}`}
@@ -381,7 +401,7 @@ const ProfileScreen = ({
             <ChevronLeft size={18} className="text-slate-400 shrink-0" />
           </button>
 
-          {/* 5. صفحة عن التطبيق المفصلة */}
+          {/* 6. صفحة عن التطبيق المفصلة */}
           <button
             onClick={() => setActiveModal('about')}
             className={`w-full p-4 rounded-2xl border flex items-center justify-between transition-all hover:border-indigo-500 ${bgCard}`}
@@ -400,7 +420,7 @@ const ProfileScreen = ({
             <ChevronLeft size={18} className="text-slate-400 shrink-0" />
           </button>
 
-          {/* 6. تسجيل الخروج */}
+          {/* 7. تسجيل الخروج */}
           <button
             onClick={handleLogout}
             className={`w-full p-4 rounded-2xl border flex items-center justify-between transition-all hover:bg-rose-50 dark:hover:bg-rose-950/30 border-rose-200/70 dark:border-rose-900/50 text-rose-500`}
@@ -420,8 +440,8 @@ const ProfileScreen = ({
 
       {/* 1. نافذة إعدادات الحساب الموحدة */}
       {activeModal === 'settings' && (
-        <div className="fixed inset-0 bg-slate-950/85 backdrop-blur-md z-[700] flex justify-center items-end sm:items-center p-0 sm:p-4" onClick={() => setActiveModal(null)}>
-          <div onClick={e => e.stopPropagation()} className={`${bgCard} w-full sm:max-w-lg max-h-[90vh] rounded-t-[2rem] sm:rounded-[2rem] shadow-2xl flex flex-col overflow-hidden border dark:border-slate-800 animate-fade-in-up`}>
+        <div className="fixed inset-0 bg-slate-950/85 backdrop-blur-md z-[1100] flex justify-center items-end sm:items-center p-0 sm:p-4" onClick={() => setActiveModal(null)}>
+          <div onClick={e => e.stopPropagation()} className={`${bgCard} w-full sm:max-w-lg max-h-[88dvh] rounded-t-[2rem] sm:rounded-[2rem] shadow-2xl flex flex-col overflow-hidden border dark:border-slate-800 animate-fade-in-up`}>
             <div className="p-4 border-b dark:border-slate-800 flex justify-between items-center bg-slate-50 dark:bg-slate-800/60">
               <h3 className={`font-black text-base flex items-center gap-2 ${textPrimary}`}>
                 <Settings size={19} className="text-indigo-500" /> إعدادات الحساب والبيانات الشخصية
@@ -454,7 +474,6 @@ const ProfileScreen = ({
                 />
               </div>
 
-              {/* الجنس: ذكر أم أنثى */}
               <div className="space-y-1.5">
                 <label className="text-xs font-black text-slate-400">النوع (الجنس):</label>
                 <div className="grid grid-cols-2 gap-2.5">
@@ -479,7 +498,6 @@ const ProfileScreen = ({
                 </div>
               </div>
 
-              {/* نوع الخدمة: سائق، راكب، مندوب توصيل */}
               <div className="space-y-1.5">
                 <label className="text-xs font-black text-slate-400">نوع الخدمة / صفتك في التطبيق:</label>
                 <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
@@ -505,7 +523,6 @@ const ProfileScreen = ({
                 </div>
               </div>
 
-              {/* بيانات السيارة تظهر إذا اختار كابتن لديه سيارة */}
               {settingsForm.accountRole === 'driver' && (
                 <div className="p-3.5 rounded-2xl border border-indigo-500/30 bg-indigo-500/5 space-y-3 animate-fade-in-up">
                   <span className="text-xs font-black text-indigo-500 flex items-center gap-1.5">
@@ -530,7 +547,6 @@ const ProfileScreen = ({
                 </div>
               )}
 
-              {/* تبديل المظهر الليلي والنهاري داخل الإعدادات */}
               <div className="pt-2 border-t dark:border-slate-800 flex items-center justify-between">
                 <div className="flex items-center gap-2">
                   {isDarkMode ? <Moon size={18} className="text-indigo-400" /> : <Sun size={18} className="text-amber-500" />}
@@ -559,10 +575,10 @@ const ProfileScreen = ({
         </div>
       )}
 
-      {/* 2. نافذة جوائز وبونص "طريقنا" مع زر المطالبة للادارة */}
+      {/* 2. نافذة جوائز وبونص "طريقنا" */}
       {activeModal === 'bonus' && (
-        <div className="fixed inset-0 bg-slate-950/85 backdrop-blur-md z-[700] flex justify-center items-end sm:items-center p-0 sm:p-4" onClick={() => setActiveModal(null)}>
-          <div onClick={e => e.stopPropagation()} className={`${bgCard} w-full sm:max-w-xl max-h-[90vh] rounded-t-[2rem] sm:rounded-[2rem] shadow-2xl flex flex-col overflow-hidden border dark:border-slate-800 animate-fade-in-up`}>
+        <div className="fixed inset-0 bg-slate-950/85 backdrop-blur-md z-[1100] flex justify-center items-end sm:items-center p-0 sm:p-4" onClick={() => setActiveModal(null)}>
+          <div onClick={e => e.stopPropagation()} className={`${bgCard} w-full sm:max-w-xl max-h-[88dvh] rounded-t-[2rem] sm:rounded-[2rem] shadow-2xl flex flex-col overflow-hidden border dark:border-slate-800 animate-fade-in-up`}>
             <div className="p-4 sm:p-5 bg-gradient-to-r from-amber-500 via-orange-500 to-indigo-600 text-white flex justify-between items-center">
               <div className="flex items-center gap-3">
                 <div className="p-2.5 bg-white/20 rounded-2xl backdrop-blur-sm">
@@ -583,7 +599,7 @@ const ProfileScreen = ({
                 const progress = Math.min(100, Math.round((completedCount / m.target) * 100));
                 const isUnlocked = completedCount >= m.target;
                 const isAlreadyGranted = userData?.customBadge === m.id;
-                const isClaimedPending = claimedBadges.includes(m.id) && !isAlreadyGranted;
+                const isClaimedPending = (claimedBadges.includes(m.id) || userData?.pendingBadgeClaim === m.id) && !isAlreadyGranted;
 
                 return (
                   <div key={m.id} className={`p-4 rounded-2xl border transition-all ${
@@ -608,7 +624,6 @@ const ProfileScreen = ({
                         </p>
                       </div>
 
-                      {/* زر المطالبة يظهر بوضوح عند إكمال العدد المطلوب */}
                       <div className="shrink-0">
                         {isAlreadyGranted ? (
                           <span className="px-3 py-2 rounded-xl bg-emerald-500 text-white text-[11px] font-black flex items-center gap-1 shadow-sm">
@@ -617,7 +632,7 @@ const ProfileScreen = ({
                         ) : isUnlocked ? (
                           isClaimedPending ? (
                             <span className="px-3 py-2 rounded-xl bg-amber-500/20 text-amber-500 border border-amber-500/40 text-[11px] font-black flex items-center gap-1">
-                              <Clock size={13} /> تم إرسال المطالبة ⏳
+                              <Clock size={13} /> قيد مراجعة الإدارة ⏳
                             </span>
                           ) : (
                             <button
@@ -638,7 +653,6 @@ const ProfileScreen = ({
                       </div>
                     </div>
 
-                    {/* شريط التقدم */}
                     <div className="w-full h-2 bg-slate-200 dark:bg-slate-700 rounded-full overflow-hidden mt-3">
                       <div 
                         className={`h-full bg-gradient-to-r ${m.color} transition-all duration-500`} 
@@ -653,10 +667,10 @@ const ProfileScreen = ({
         </div>
       )}
 
-      {/* 3. نافذة "عن تطبيق طريقنا" بتفاصيل غنية وشاملة */}
+      {/* 3. نافذة "عن تطبيق طريقنا" */}
       {activeModal === 'about' && (
-        <div className="fixed inset-0 bg-slate-950/85 backdrop-blur-md z-[700] flex justify-center items-end sm:items-center p-0 sm:p-4" onClick={() => setActiveModal(null)}>
-          <div onClick={e => e.stopPropagation()} className={`${bgCard} w-full sm:max-w-2xl max-h-[90vh] rounded-t-[2rem] sm:rounded-[2rem] shadow-2xl flex flex-col overflow-hidden border dark:border-slate-800 animate-fade-in-up`}>
+        <div className="fixed inset-0 bg-slate-950/85 backdrop-blur-md z-[1100] flex justify-center items-end sm:items-center p-0 sm:p-4" onClick={() => setActiveModal(null)}>
+          <div onClick={e => e.stopPropagation()} className={`${bgCard} w-full sm:max-w-2xl max-h-[88dvh] rounded-t-[2rem] sm:rounded-[2rem] shadow-2xl flex flex-col overflow-hidden border dark:border-slate-800 animate-fade-in-up`}>
             <div className="p-5 bg-gradient-to-r from-indigo-600 via-violet-600 to-indigo-700 text-white flex justify-between items-center">
               <div className="flex items-center gap-3">
                 <div className="p-2.5 bg-white/20 rounded-2xl backdrop-blur-sm">
@@ -724,8 +738,8 @@ const ProfileScreen = ({
 
       {/* 4. نافذة رحلاتي وإعلاناتي */}
       {activeModal === 'my_trips' && (
-        <div className="fixed inset-0 bg-slate-950/85 backdrop-blur-md z-[700] flex justify-center items-end sm:items-center p-0 sm:p-4" onClick={() => setActiveModal(null)}>
-          <div onClick={e => e.stopPropagation()} className={`${bgCard} w-full sm:max-w-2xl max-h-[90vh] rounded-t-[2rem] sm:rounded-[2rem] shadow-2xl flex flex-col overflow-hidden border dark:border-slate-800 animate-fade-in-up`}>
+        <div className="fixed inset-0 bg-slate-950/85 backdrop-blur-md z-[1100] flex justify-center items-end sm:items-center p-0 sm:p-4" onClick={() => setActiveModal(null)}>
+          <div onClick={e => e.stopPropagation()} className={`${bgCard} w-full sm:max-w-2xl max-h-[88dvh] rounded-t-[2rem] sm:rounded-[2rem] shadow-2xl flex flex-col overflow-hidden border dark:border-slate-800 animate-fade-in-up`}>
             <div className="p-4 border-b dark:border-slate-800 flex justify-between items-center">
               <h3 className={`font-black text-base ${textPrimary}`}>رحلاتي وإعلاناتي المنشورة ({myTrips.length})</h3>
               <button onClick={() => setActiveModal(null)} className="p-1.5 rounded-full bg-slate-200 dark:bg-slate-700"><X size={18}/></button>
