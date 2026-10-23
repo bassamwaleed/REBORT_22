@@ -4,7 +4,7 @@ import {
 } from 'firebase/firestore';
 import { 
   X, ShieldCheck, Users, BusFront, Settings, Search, CheckCircle2, 
-  XCircle, Ban, Award, Crown, Eye, Plus, Trash2, Check, Loader2, Lock, MessageSquareOff, Car, Activity, Gift 
+  XCircle, Ban, Award, Crown, Eye, Plus, Trash2, Check, Loader2, Lock, MessageSquareOff, Car, Activity, Gift, Bot, Edit3 
 } from 'lucide-react';
 import { db, USERS_COLLECTION, APP_COLLECTION_NAME, STATIONS_COLLECTION } from '../firebase';
 import { resizeAndConvertToBase64, formatTripDateTime } from '../utils/helpers';
@@ -30,6 +30,7 @@ const AdminPanel = ({ isDarkMode, onClose, triggerToast, appSettings, user, open
   const [activeTab, setActiveTab] = useState('users'); 
   const [usersList, setUsersList] = useState([]);
   const [stationsList, setStationsList] = useState([]);
+  const [besoUpdatesList, setBesoUpdatesList] = useState([]); // قائمة تصحيحات بيسو
   const [loadingUsers, setLoadingUsers] = useState(true);
   const [searchQuery, setSearchQuery] = useState('');
   const [userFilter, setUserFilter] = useState('all'); 
@@ -67,9 +68,17 @@ const AdminPanel = ({ isDarkMode, onClose, triggerToast, appSettings, user, open
       setStationsList(snap.docs.map(d => ({ id: d.id, ...d.data() })));
     });
 
+    // الاستماع لاقتراحات وتصحيحات مواصلات بيسو
+    const unsubBeso = onSnapshot(collection(db, 'beso_knowledge_updates'), (snap) => {
+      const list = snap.docs.map(d => ({ id: d.id, ...d.data() }));
+      list.sort((a, b) => (b.timestamp || 0) - (a.timestamp || 0));
+      setBesoUpdatesList(list);
+    });
+
     return () => {
       unsubUsers();
       unsubStations();
+      unsubBeso();
     };
   }, [selectedUser?.id]);
 
@@ -177,7 +186,6 @@ const AdminPanel = ({ isDarkMode, onClose, triggerToast, appSettings, user, open
     }
   };
 
-  // قبول أو رفض مطالبة البونص من قسم طلبات البونص
   const handleResolveBonusClaim = async (targetUser, approve = true) => {
     const requestedBadge = targetUser.pendingBadgeClaim;
     if (!requestedBadge) return;
@@ -197,6 +205,27 @@ const AdminPanel = ({ isDarkMode, onClose, triggerToast, appSettings, user, open
       });
       await sendAutomatedMessage(targetUser.id, `مرحباً ${targetUser.name?.split(' ')[0]}، تم مراجعة طلب البونص لشارة (${requestedBadge}) ولم يتم اعتماده حالياً. يمكنك التواصل معنا هنا للاستفسار.`);
       triggerToast('تم رفض طلب البونص');
+    }
+  };
+
+  // اعتماد تصحيح أو إضافة مواصلة لبيسو
+  const handleApproveBesoUpdate = async (updateId) => {
+    try {
+      await updateDoc(doc(db, 'beso_knowledge_updates', updateId), { status: 'approved' });
+      triggerToast('تم اعتماد المعلومة بنجاح وأصبحت في ذاكرة بيسو لجميع المستخدمين ✅🤖');
+    } catch (e) {
+      triggerToast('حدث خطأ أثناء اعتماد المعلومة');
+    }
+  };
+
+  // حذف تصحيح مواصلة لبيسو
+  const handleDeleteBesoUpdate = async (updateId) => {
+    if (!window.confirm('هل أنت متأكد من حذف هذا التعديل نهائياً؟')) return;
+    try {
+      await deleteDoc(doc(db, 'beso_knowledge_updates', updateId));
+      triggerToast('تم حذف التعديل بنجاح 🗑️');
+    } catch (e) {
+      triggerToast('حدث خطأ أثناء الحذف');
     }
   };
 
@@ -319,6 +348,7 @@ const AdminPanel = ({ isDarkMode, onClose, triggerToast, appSettings, user, open
 
   const pendingVerifications = usersList.filter(u => u.verificationStatus === 'pending');
   const pendingBonusClaims = usersList.filter(u => u.pendingBadgeClaim && u.customBadge !== u.pendingBadgeClaim);
+  const pendingBesoUpdates = besoUpdatesList.filter(u => u.status === 'pending');
   const pendingStations = stationsList.filter(s => s.status === 'pending' || (s.routes && s.routes.some(r => r.status === 'pending' || r.editRequest)));
 
   const activeRunningTrips = (realTrips || []).filter(t => t.status !== 'completed' && t.status !== 'cancelled');
@@ -371,7 +401,7 @@ const AdminPanel = ({ isDarkMode, onClose, triggerToast, appSettings, user, open
                 لوحة تحكم الإدارة الشاملة
               </h2>
               <p className="text-[11px] text-indigo-200 font-bold">
-                مراقبة الرحلات الحية، الأعضاء، التوثيق، وطلبات البونص
+                مراقبة الرحلات الحية، الأعضاء، التوثيق، طلبات البونص، وتحديثات بيسو
               </p>
             </div>
           </div>
@@ -380,17 +410,17 @@ const AdminPanel = ({ isDarkMode, onClose, triggerToast, appSettings, user, open
           </button>
         </div>
 
-        {/* شريط التبويبات مع إضافة قسم طلبات البونص */}
+        {/* شريط التبويبات مع قسم تحديثات بيسو وطلبات البونص */}
         <div className="flex overflow-x-auto bg-slate-100 dark:bg-slate-900/90 p-1.5 gap-1.5 border-b dark:border-slate-800 shrink-0 [&::-webkit-scrollbar]:hidden">
           <button 
             onClick={() => setActiveTab('users')} 
-            className={`flex-1 min-w-[110px] py-2.5 px-2.5 rounded-xl text-xs font-black flex items-center justify-center gap-1.5 transition-all ${activeTab === 'users' ? 'bg-indigo-600 text-white shadow-md' : textSecondary}`}
+            className={`flex-1 min-w-[105px] py-2.5 px-2 rounded-xl text-xs font-black flex items-center justify-center gap-1.5 transition-all ${activeTab === 'users' ? 'bg-indigo-600 text-white shadow-md' : textSecondary}`}
           >
             <Users size={15}/> الأعضاء ({usersList.length})
           </button>
           <button 
             onClick={() => setActiveTab('trips')} 
-            className={`flex-1 min-w-[120px] py-2.5 px-2.5 rounded-xl text-xs font-black flex items-center justify-center gap-1.5 transition-all ${activeTab === 'trips' ? 'bg-indigo-600 text-white shadow-md' : textSecondary}`}
+            className={`flex-1 min-w-[115px] py-2.5 px-2 rounded-xl text-xs font-black flex items-center justify-center gap-1.5 transition-all ${activeTab === 'trips' ? 'bg-indigo-600 text-white shadow-md' : textSecondary}`}
           >
             <Activity size={15}/> الرحلات الحية
             <span className="bg-emerald-500 text-white text-[10px] px-1.5 py-0.2 rounded-full">
@@ -399,7 +429,7 @@ const AdminPanel = ({ isDarkMode, onClose, triggerToast, appSettings, user, open
           </button>
           <button 
             onClick={() => setActiveTab('bonus_claims')} 
-            className={`flex-1 min-w-[125px] py-2.5 px-2.5 rounded-xl text-xs font-black flex items-center justify-center gap-1.5 transition-all relative ${activeTab === 'bonus_claims' ? 'bg-indigo-600 text-white shadow-md' : textSecondary}`}
+            className={`flex-1 min-w-[120px] py-2.5 px-2 rounded-xl text-xs font-black flex items-center justify-center gap-1.5 transition-all relative ${activeTab === 'bonus_claims' ? 'bg-indigo-600 text-white shadow-md' : textSecondary}`}
           >
             <Gift size={15}/> طلبات البونص
             {pendingBonusClaims.length > 0 && (
@@ -409,8 +439,19 @@ const AdminPanel = ({ isDarkMode, onClose, triggerToast, appSettings, user, open
             )}
           </button>
           <button 
+            onClick={() => setActiveTab('beso_updates')} 
+            className={`flex-1 min-w-[125px] py-2.5 px-2 rounded-xl text-xs font-black flex items-center justify-center gap-1.5 transition-all relative ${activeTab === 'beso_updates' ? 'bg-indigo-600 text-white shadow-md' : textSecondary}`}
+          >
+            <Bot size={15}/> تحديثات بيسو
+            {pendingBesoUpdates.length > 0 && (
+              <span className="bg-amber-500 text-white text-[10px] px-1.5 py-0.2 rounded-full animate-pulse">
+                {pendingBesoUpdates.length}
+              </span>
+            )}
+          </button>
+          <button 
             onClick={() => setActiveTab('verifications')} 
-            className={`flex-1 min-w-[115px] py-2.5 px-2.5 rounded-xl text-xs font-black flex items-center justify-center gap-1.5 transition-all relative ${activeTab === 'verifications' ? 'bg-indigo-600 text-white shadow-md' : textSecondary}`}
+            className={`flex-1 min-w-[110px] py-2.5 px-2 rounded-xl text-xs font-black flex items-center justify-center gap-1.5 transition-all relative ${activeTab === 'verifications' ? 'bg-indigo-600 text-white shadow-md' : textSecondary}`}
           >
             <ShieldCheck size={15}/> التوثيق
             {pendingVerifications.length > 0 && (
@@ -421,7 +462,7 @@ const AdminPanel = ({ isDarkMode, onClose, triggerToast, appSettings, user, open
           </button>
           <button 
             onClick={() => setActiveTab('stations')} 
-            className={`flex-1 min-w-[110px] py-2.5 px-2.5 rounded-xl text-xs font-black flex items-center justify-center gap-1.5 transition-all ${activeTab === 'stations' ? 'bg-indigo-600 text-white shadow-md' : textSecondary}`}
+            className={`flex-1 min-w-[105px] py-2.5 px-2 rounded-xl text-xs font-black flex items-center justify-center gap-1.5 transition-all ${activeTab === 'stations' ? 'bg-indigo-600 text-white shadow-md' : textSecondary}`}
           >
             <BusFront size={15}/> المواقف
             {pendingStations.length > 0 && (
@@ -432,7 +473,7 @@ const AdminPanel = ({ isDarkMode, onClose, triggerToast, appSettings, user, open
           </button>
           <button 
             onClick={() => setActiveTab('settings')} 
-            className={`flex-1 min-w-[100px] py-2.5 px-2.5 rounded-xl text-xs font-black flex items-center justify-center gap-1.5 transition-all ${activeTab === 'settings' ? 'bg-indigo-600 text-white shadow-md' : textSecondary}`}
+            className={`flex-1 min-w-[95px] py-2.5 px-2 rounded-xl text-xs font-black flex items-center justify-center gap-1.5 transition-all ${activeTab === 'settings' ? 'bg-indigo-600 text-white shadow-md' : textSecondary}`}
           >
             <Settings size={15}/> الواجهة
           </button>
@@ -440,7 +481,86 @@ const AdminPanel = ({ isDarkMode, onClose, triggerToast, appSettings, user, open
 
         <div className="flex-1 overflow-y-auto p-4 sm:p-5 [&::-webkit-scrollbar]:hidden">
           
-          {/* تبويب طلبات البونص والشارات الجديد */}
+          {/* تبويب مراجعة واعتماد تصحيحات واقتراحات مواصلات بيسو */}
+          {activeTab === 'beso_updates' && (
+            <div className="space-y-4">
+              <div className="flex items-center justify-between px-1">
+                <div>
+                  <h3 className={`font-black text-sm sm:text-base flex items-center gap-2 ${textPrimary}`}>
+                    <Bot size={18} className="text-indigo-500" /> اقتراحات وتعديلات مواصلات بيسو ({besoUpdatesList.length})
+                  </h3>
+                  <p className={`text-xs mt-0.5 ${textSecondary}`}>
+                    اقتراحات المستخدمين لتصحيح خطوط المواصلات أو إضافة مسارات جديدة.. اعتمدها لتظهر للجميع!
+                  </p>
+                </div>
+              </div>
+
+              {besoUpdatesList.length === 0 ? (
+                <div className="text-center py-16 text-slate-400">
+                  <Bot size={48} className="mx-auto mb-3 opacity-30 text-indigo-500"/>
+                  <p className="font-black text-base">لا توجد اقتراحات أو تصحيحات مواصلات مسجلة 🤖</p>
+                  <p className="text-xs mt-1">عندما يقترح أي مستخدم تعديل مواصلة في شات بيسو سيظهر هنا لمراجعته</p>
+                </div>
+              ) : (
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-3.5">
+                  {besoUpdatesList.map(item => (
+                    <div 
+                      key={item.id} 
+                      className={`p-4 rounded-2xl border flex flex-col justify-between gap-3 shadow-sm ${
+                        item.status === 'approved' 
+                          ? 'border-emerald-500/50 bg-emerald-500/5' 
+                          : 'border-amber-400/70 bg-amber-500/5'
+                      }`}
+                    >
+                      <div className="space-y-2">
+                        <div className="flex items-center justify-between">
+                          <span className="text-xs font-black px-2.5 py-0.5 rounded-md bg-indigo-500/10 text-indigo-500 border border-indigo-500/20">
+                            📍 {item.placeKeywords || 'مكان غير محدد'}
+                          </span>
+                          <span className={`text-[10px] font-black px-2 py-0.5 rounded-full ${
+                            item.status === 'approved' 
+                              ? 'bg-emerald-500 text-white' 
+                              : 'bg-amber-400 text-slate-950 animate-pulse'
+                          }`}>
+                            {item.status === 'approved' ? 'معتمدة في بيسو ✅' : 'قيد المراجعة ⏳'}
+                          </span>
+                        </div>
+
+                        <div className={`p-3 rounded-xl border text-xs font-bold leading-relaxed ${isDarkMode ? 'bg-slate-900 border-slate-800 text-slate-200' : 'bg-white border-slate-200 text-slate-800'}`}>
+                          "{item.correctedInfo}"
+                        </div>
+
+                        <div className={`text-[10px] font-bold flex items-center justify-between ${textSecondary}`}>
+                          <span>بواسطة: {item.submittedByName || 'مستخدم'}</span>
+                          {item.originalQuestion && <span className="truncate max-w-[150px]">السؤال: {item.originalQuestion}</span>}
+                        </div>
+                      </div>
+
+                      <div className="flex gap-2 pt-1 border-t border-slate-200 dark:border-slate-800">
+                        {item.status !== 'approved' && (
+                          <button
+                            onClick={() => handleApproveBesoUpdate(item.id)}
+                            className="flex-1 py-2 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl font-black text-xs flex items-center justify-center gap-1 shadow-sm active:scale-95 transition-transform"
+                          >
+                            <CheckCircle2 size={14}/> اعتماد ونشر في بيسو ✅
+                          </button>
+                        )}
+                        <button
+                          onClick={() => handleDeleteBesoUpdate(item.id)}
+                          className="px-3.5 py-2 bg-rose-500/15 hover:bg-rose-600 text-rose-500 hover:text-white rounded-xl font-black text-xs transition-colors flex items-center gap-1"
+                          title="حذف هذا التعديل"
+                        >
+                          <Trash2 size={13}/> حذف
+                        </button>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+          )}
+
+          {/* تبويب طلبات البونص والشارات */}
           {activeTab === 'bonus_claims' && (
             <div className="space-y-4">
               {pendingBonusClaims.length === 0 ? (
