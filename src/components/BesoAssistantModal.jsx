@@ -277,7 +277,7 @@ const BesoAssistantModal = ({ stations = [], isDarkMode, onClose, onSelectStatio
     <div className="fixed inset-0 bg-slate-950/85 backdrop-blur-md z-[850] flex justify-center items-end sm:items-center p-0 sm:p-4 pointer-events-auto" onClick={onClose}>
       <div 
         onClick={(e) => e.stopPropagation()} 
-        className={`${bgCard} w-full sm:max-w-lg h-[88vh] sm:h-[660px] rounded-t-[2rem] sm:rounded-[2rem] shadow-2xl flex flex-col overflow-hidden border dark:border-slate-700 animate-fade-in-up`}
+        className={`${bgCard} w-full sm:max-w-lg h-[75vh] sm:h-[600px] rounded-t-[2rem] sm:rounded-[2rem] shadow-2xl flex flex-col overflow-hidden border dark:border-slate-700 animate-fade-in-up`}
       >
         {/* هيدر المساعد بيسو */}
         <div className="p-4 bg-gradient-to-r from-indigo-600 via-violet-600 to-indigo-700 text-white flex items-center justify-between shadow-md shrink-0">
