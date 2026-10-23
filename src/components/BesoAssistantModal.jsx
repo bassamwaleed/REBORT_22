@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react';
+import { createPortal } from 'react-dom';
 import { X, Send, Bot, Sparkles, BusFront, Compass, ChevronLeft } from 'lucide-react';
 import { normalizeArabic } from '../App';
 
@@ -115,6 +116,15 @@ const BesoAssistantModal = ({ stations = [], isDarkMode, onClose, onSelectStatio
   useEffect(() => {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
   }, [messages]);
+
+  // منع سكرول الخلفية أثناء فتح شات بيسو على الموبايل
+  useEffect(() => {
+    const originalOverflow = document.body.style.overflow;
+    document.body.style.overflow = 'hidden';
+    return () => {
+      document.body.style.overflow = originalOverflow;
+    };
+  }, []);
 
   const generateBesoResponse = (queryText) => {
     const normQuery = normalizeArabic(queryText);
@@ -261,15 +271,15 @@ const BesoAssistantModal = ({ stations = [], isDarkMode, onClose, onSelectStatio
   const bgCard = isDarkMode ? 'bg-slate-900 border-slate-800' : 'bg-white border-slate-200';
   const bgInput = isDarkMode ? 'bg-slate-800 border-slate-700 text-white placeholder-slate-400' : 'bg-slate-100 border-slate-200 text-slate-900';
 
-  return (
-    /* z-[1100] يضمن ظهور النافذة فوق شريط التنقل السفلي تماماً مع دعم 85dvh للموبايل */
+  const modalContent = (
     <div 
-      className="fixed inset-0 bg-slate-950/85 backdrop-blur-md z-[1100] flex justify-center items-end sm:items-center p-0 sm:p-4 pointer-events-auto" 
+      dir="rtl"
+      className="fixed inset-0 bg-slate-950/90 backdrop-blur-md z-[99999] flex justify-center items-end sm:items-center p-0 sm:p-4 pointer-events-auto" 
       onClick={onClose}
     >
       <div 
         onClick={(e) => e.stopPropagation()} 
-        className={`${bgCard} w-full sm:max-w-lg h-[85dvh] sm:h-[650px] max-h-[88dvh] rounded-t-[2rem] sm:rounded-[2rem] shadow-2xl flex flex-col overflow-hidden border dark:border-slate-700 animate-fade-in-up`}
+        className={`${bgCard} w-full sm:max-w-lg h-[100dvh] sm:h-[650px] sm:max-h-[88dvh] rounded-none sm:rounded-[2rem] shadow-2xl flex flex-col overflow-hidden border-0 sm:border dark:border-slate-700 animate-fade-in-up`}
       >
         {/* هيدر المساعد بيسو */}
         <div className="p-4 bg-gradient-to-r from-indigo-600 via-violet-600 to-indigo-700 text-white flex items-center justify-between shadow-md shrink-0">
@@ -353,7 +363,7 @@ const BesoAssistantModal = ({ stations = [], isDarkMode, onClose, onSelectStatio
         </div>
 
         {/* اقتراحات سريعة */}
-        <div className={`px-3 pt-2 pb-1 border-t shrink-0 flex gap-1.5 overflow-x-auto [&::-webkit-scrollbar]:hidden ${isDarkMode ? 'bg-slate-900 border-slate-800' : 'bg-white border-slate-200'}`}>
+        <div className={`px-3 pt-2.5 pb-1.5 border-t shrink-0 flex gap-1.5 overflow-x-auto [&::-webkit-scrollbar]:hidden ${isDarkMode ? 'bg-slate-900 border-slate-800' : 'bg-white border-slate-200'}`}>
           {quickQuestions.map((q, idx) => (
             <button
               key={idx}
@@ -370,29 +380,33 @@ const BesoAssistantModal = ({ stations = [], isDarkMode, onClose, onSelectStatio
           ))}
         </div>
 
-        {/* حقل كتابة السؤال وزر الإرسال بمساحة أمان واضحة */}
+        {/* حقل كتابة السؤال وزر الإرسال ظاهر بالكامل أعلى الشاشة */}
         <form 
           onSubmit={(e) => { e.preventDefault(); handleSend(); }} 
-          className={`p-3 pb-5 sm:pb-3 shrink-0 flex items-center gap-2 border-t ${isDarkMode ? 'bg-slate-900 border-slate-800' : 'bg-white border-slate-100'}`}
+          className={`p-3 pb-4 sm:pb-3 shrink-0 flex items-center gap-2 border-t ${isDarkMode ? 'bg-slate-900 border-slate-800' : 'bg-white border-slate-100'}`}
+          style={{ paddingBottom: 'max(1rem, env(safe-area-inset-bottom))' }}
         >
           <input
             type="text"
             value={input}
             onChange={(e) => setInput(e.target.value)}
             placeholder="اسأل بيسو: عايز أروح رأس البر من القاهرة..."
-            className={`flex-1 px-4 py-3 rounded-2xl border text-xs sm:text-sm font-bold outline-none focus:ring-2 focus:ring-indigo-500 ${bgInput}`}
+            className={`flex-1 px-4 py-3.5 rounded-2xl border text-xs sm:text-sm font-bold outline-none focus:ring-2 focus:ring-indigo-500 ${bgInput}`}
           />
           <button
             type="submit"
             disabled={!input.trim()}
-            className="w-11 h-11 rounded-2xl bg-indigo-600 hover:bg-indigo-700 disabled:opacity-40 text-white flex items-center justify-center shadow-md transition-transform active:scale-95 shrink-0"
+            className="w-12 h-12 rounded-2xl bg-indigo-600 hover:bg-indigo-700 disabled:opacity-40 text-white flex items-center justify-center shadow-md transition-transform active:scale-95 shrink-0"
           >
-            <Send size={17} className="rtl:rotate-180" />
+            <Send size={18} className="rtl:rotate-180" />
           </button>
         </form>
       </div>
     </div>
   );
+
+  // استخدام createPortal لإخراج النافذة خارج قيود HomeScreen تماماً لتعلو فوق الشريط السفلي والزر العائم
+  return typeof document !== 'undefined' ? createPortal(modalContent, document.body) : modalContent;
 };
 
 export default BesoAssistantModal;
