@@ -66,6 +66,7 @@ export default function App() {
   const [filterType, setFilterType] = useState('offer'); 
   const [isScrolling, setIsScrolling] = useState(false);
 
+  // حالة فتح البروفايل العام لأي مستخدم
   const [publicProfileUserId, setPublicProfileUserId] = useState(null);
 
   useEffect(() => {
@@ -450,7 +451,6 @@ export default function App() {
         status: 'open', 
         createdAt: serverTimestamp(), 
         joinedMembers: [],
-        requests: [], // قائمة الطلبات للرحلة
         price: newTrip.cost 
       };
       
@@ -498,122 +498,7 @@ export default function App() {
     } catch (error) { triggerToast('حدث خطأ.'); } finally { setIsSubmitting(false); }
   };
 
-  // === دوال نظام طلبات الانضمام والتفاوض الجديدة ===
-
-  const onRequestJoin = async (trip, bidPrice) => {
-    if (isGuest || !user) { forceSignUpScreen(); return; }
-    if (checkUserRestriction('chat')) return; 
-
-    try {
-      const tripRef = doc(db, APP_COLLECTION_NAME, trip.id);
-      const tripSnap = await getDoc(tripRef);
-      if (tripSnap.exists()) {
-        const tripData = tripSnap.data();
-        const requests = tripData.requests || [];
-        
-        const existingIndex = requests.findIndex(r => r.userId === user.uid);
-        const newRequest = {
-          userId: user.uid,
-          userName: userData?.name || 'مستخدم',
-          userPhoto: userData?.photoURL || null,
-          suggestedPrice: bidPrice || trip.price || trip.cost || 'غير محدد',
-          status: 'pending',
-          createdAt: Date.now()
-        };
-
-        if (existingIndex >= 0) {
-          requests[existingIndex] = newRequest; 
-        } else {
-          requests.push(newRequest);
-        }
-
-        await updateDoc(tripRef, { requests });
-        triggerToast('تم إرسال طلب الانضمام بنجاح 🚀');
-        
-        await addDoc(collection(db, 'notifications'), {
-          userId: trip.userId,
-          title: 'طلب انضمام جديد 🙋‍♂️',
-          body: `قام ${userData?.name || 'مستخدم'} بطلب الانضمام لرحلتك بسعر ${bidPrice} ج.`,
-          tripId: trip.id,
-          read: false,
-          createdAt: serverTimestamp()
-        });
-      }
-    } catch (err) {
-      triggerToast('حدث خطأ أثناء إرسال الطلب.');
-    }
-  };
-
-  const onAcceptRequest = async (tripId, requesterId) => {
-    try {
-      const tripRef = doc(db, APP_COLLECTION_NAME, tripId);
-      const tripSnap = await getDoc(tripRef);
-      if (tripSnap.exists()) {
-        const tripData = tripSnap.data();
-        const requests = tripData.requests || [];
-        const reqIndex = requests.findIndex(r => r.userId === requesterId);
-        
-        if (reqIndex > -1) {
-          requests[reqIndex].status = 'accepted';
-          
-          const currentSeats = Number(tripData.seats) || 0;
-          let newStatus = tripData.status;
-          let newSeats = currentSeats;
-          
-          if (currentSeats > 0) {
-            newSeats = currentSeats - 1;
-            if (newSeats === 0) newStatus = 'full';
-          }
-
-          await updateDoc(tripRef, { requests, seats: newSeats, status: newStatus });
-          triggerToast('تم قبول الطلب بنجاح ✅');
-          
-          await addDoc(collection(db, 'notifications'), {
-            userId: requesterId,
-            title: 'تم قبول طلبك! ✅',
-            body: `تم قبول طلب انضمامك للرحلة. تواصل مع الكابتن الآن!`,
-            tripId: tripId,
-            read: false,
-            createdAt: serverTimestamp()
-          });
-        }
-      }
-    } catch (err) {
-      triggerToast('حدث خطأ أثناء قبول الطلب.');
-    }
-  };
-
-  const onRejectRequest = async (tripId, requesterId) => {
-    try {
-      const tripRef = doc(db, APP_COLLECTION_NAME, tripId);
-      const tripSnap = await getDoc(tripRef);
-      if (tripSnap.exists()) {
-        const tripData = tripSnap.data();
-        const requests = tripData.requests || [];
-        const reqIndex = requests.findIndex(r => r.userId === requesterId);
-        
-        if (reqIndex > -1) {
-          requests[reqIndex].status = 'rejected';
-          await updateDoc(tripRef, { requests });
-          triggerToast('تم رفض الطلب ❌');
-          
-          await addDoc(collection(db, 'notifications'), {
-            userId: requesterId,
-            title: 'تم رفض طلبك ❌',
-            body: `عذراً، قام الكابتن برفض طلب انضمامك للرحلة.`,
-            tripId: tripId,
-            read: false,
-            createdAt: serverTimestamp()
-          });
-        }
-      }
-    } catch (err) {
-       triggerToast('حدث خطأ أثناء رفض الطلب.');
-    }
-  };
-
-  // ===============================================
-
+  // شات الرحلات الشخصي (بين المستخدمين أو مع الأدمن بصفته الشخصية كمسافر)
   const openChatFromTrip = async (trip) => {
     if (!trip || typeof trip !== 'object' || !trip.userId || !trip.id) {
       triggerToast('عذراً، بيانات هذه الرحلة غير مكتملة أو بها خلل.');
@@ -681,6 +566,7 @@ export default function App() {
     }
   };
 
+  // شات الإدارة الرسمي المنفصل تماماً عن حساب الأدمن الشخصي (يستخدم support_TargetUserId)
   const openAdminChat = async (targetUser) => {
     if (!user || isGuest || !targetUser?.id) return;
     try {
@@ -839,6 +725,7 @@ export default function App() {
     <div dir="rtl" className={`min-h-screen flex flex-col relative transition-colors duration-300 ${bgMain} overflow-x-hidden pb-0`}>
       {toastMsg && ( <div className="fixed top-24 left-1/2 transform -translate-x-1/2 z-[999] bg-slate-900 text-white px-6 py-3 rounded-full shadow-2xl flex items-center gap-3 border border-slate-700"><CheckCircle2 size={18} className="text-emerald-400" /><p className="text-sm font-bold whitespace-nowrap">{toastMsg}</p></div> )}
 
+      {/* نافذة البروفايل العام لأي مستخدم */}
       {publicProfileUserId && (
         <PublicProfileModal
           targetUserId={publicProfileUserId}
@@ -943,6 +830,7 @@ export default function App() {
         </div>
       )}
 
+      {/* الهيدر متوافق مع الموبايل واللابتوب (max-w-6xl) */}
       <header className={`sticky top-0 z-40 border-b ${isDarkMode ? 'bg-slate-950/90 border-slate-800/80' : 'bg-white/90 border-slate-200/70 shadow-sm'} backdrop-blur-xl pointer-events-auto`}>
         <div className="max-w-6xl mx-auto px-3 sm:px-6 py-2.5 flex items-center justify-between gap-2 w-full">
           
@@ -1076,6 +964,7 @@ export default function App() {
         </div>
       )}
 
+      {/* الزر العائم لإضافة رحلة على اليمين */}
       {activeTab === 'home' && !isGuest && (
         <button 
           onClick={() => {
@@ -1281,9 +1170,6 @@ export default function App() {
           setSelectedStation={setSelectedStation} triggerToast={triggerToast} appSettings={appSettings} 
           userArea={userArea} userAreas={userAreas} onOpenAreaModal={openAreaModalWithSync}
           onOpenPublicProfile={(uid) => setPublicProfileUserId(uid)}
-          onRequestJoin={onRequestJoin}
-          onAcceptRequest={onAcceptRequest}
-          onRejectRequest={onRejectRequest}
         />
       )}
 
@@ -1291,6 +1177,7 @@ export default function App() {
         <StationModal station={selectedStation} user={user} isAdmin={isAdmin} isGuest={isGuest} isDarkMode={isDarkMode} onClose={() => setSelectedStation(null)} triggerToast={triggerToast}/>
       )}
 
+      {/* صفحة البروفايل نظيفة ومرتبة بدون أي أزرار مكررة خارجها */}
       {activeTab === 'profile' && (
         <ProfileScreen 
           user={user} 
@@ -1425,6 +1312,7 @@ export default function App() {
                 <>
                   <input type="text" required placeholder="الاسم بالكامل" value={authForm.name} onChange={e => setAuthForm({...authForm, name: e.target.value})} className={`w-full border rounded-xl py-3 px-4 outline-none font-bold text-sm ${bgInput}`} />
                   
+                  {/* اختيار النوع: ذكر أم أنثى */}
                   <div className="space-y-1">
                     <label className="text-[11px] font-black text-slate-400 px-1">النوع:</label>
                     <div className="grid grid-cols-2 gap-2">
@@ -1448,6 +1336,7 @@ export default function App() {
                     </div>
                   </div>
 
+                  {/* اختيار الصفة: سائق، راكب، أم دليفري */}
                   <div className="space-y-1">
                     <label className="text-[11px] font-black text-slate-400 px-1">صفتك في التطبيق:</label>
                     <div className="grid grid-cols-3 gap-1.5">
