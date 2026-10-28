@@ -1,10 +1,27 @@
 import React, { useState, useEffect } from 'react';
 import { doc, deleteDoc, getDoc } from 'firebase/firestore';
-import { Trash2, Share2, User, ShieldCheck, Star, ArrowLeft, Clock, Car, MapPin, Package, CheckCircle2, Phone, MessageCircle, Route, FileText, Sparkles } from 'lucide-react';
+import { 
+  Trash2, Share2, User, ShieldCheck, Star, ArrowLeft, Clock, Car, 
+  MapPin, Package, CheckCircle2, Phone, MessageCircle, Route, FileText, 
+  Sparkles, UserPlus, X, Check, Wallet 
+} from 'lucide-react';
 import { db, APP_COLLECTION_NAME, USERS_COLLECTION } from '../firebase';
 import { formatTripDateTime, getSeatsText } from '../utils/helpers';
 
-const TripCard = ({ trip, user, isAdmin, isDarkMode, openChatFromTrip, triggerToast, matchBadge, onOpenPublicProfile }) => {
+const TripCard = ({ 
+  trip, 
+  user, 
+  isAdmin, 
+  isDarkMode, 
+  openChatFromTrip, 
+  triggerToast, 
+  matchBadge, 
+  onOpenPublicProfile,
+  // الدوال الجديدة المطلوبة من الأب (App.jsx) للتعامل مع الطلبات
+  onRequestJoin, 
+  onAcceptRequest, 
+  onRejectRequest 
+}) => {
   if (!trip) return null; 
 
   const isOwner = user?.uid === trip.userId;
@@ -20,6 +37,13 @@ const TripCard = ({ trip, user, isAdmin, isDarkMode, openChatFromTrip, triggerTo
   const [liveReviewsCount, setLiveReviewsCount] = useState(0);
   const [liveCarModel, setLiveCarModel] = useState(trip?.carModel || '');
   const [liveCarColor, setLiveCarColor] = useState(trip?.carColor || '');
+
+  // حالات جديدة لنظام التفاوض والطلبات
+  const [showJoinForm, setShowJoinForm] = useState(false);
+  const [bidPrice, setBidPrice] = useState(trip?.cost || trip?.price || trip?.fare || '');
+
+  // استخراج طلب المستخدم الحالي (لو كان باعت طلب قبل كدا للرحلة دي)
+  const myRequest = (trip?.requests || []).find(r => r.userId === user?.uid);
 
   useEffect(() => {
     setLiveVerified(Boolean(trip?.verified));
@@ -72,7 +96,6 @@ const TripCard = ({ trip, user, isAdmin, isDarkMode, openChatFromTrip, triggerTo
     return `https://wa.me/${intlPhone}?text=${encodeURIComponent(msg)}`;
   };
 
-  // حساب الوقت المتبقي للرحلة كميزة إضافية ذكية في الكارت
   const getRemainingTimeBadge = () => {
     if (!trip?.date || !trip?.time || isCompleted) return null;
     try {
@@ -125,6 +148,14 @@ const TripCard = ({ trip, user, isAdmin, isDarkMode, openChatFromTrip, triggerTo
     }
   };
 
+  const submitRequest = (e) => {
+    e.stopPropagation();
+    if(onRequestJoin) {
+      onRequestJoin(trip, bidPrice);
+    }
+    setShowJoinForm(false);
+  };
+
   const preferencesLabels = { 
     ac: 'تكييف ❄️', 
     noSmoking: 'منع التدخين 🚭', 
@@ -136,20 +167,19 @@ const TripCard = ({ trip, user, isAdmin, isDarkMode, openChatFromTrip, triggerTo
 
   return (
     <div 
-      onClick={() => !isOwner && !isCompleted && !isFull && openChatFromTrip(trip)}
-      className={`p-3.5 rounded-[1.35rem] border shadow-sm hover:shadow-md transition-all flex flex-col justify-between gap-2.5 relative cursor-pointer ${bgCard} group ${(isCompleted || isFull) ? 'opacity-70 grayscale-[30%]' : ''} ${isFemalesOnly ? 'hover:border-pink-500' : 'hover:border-indigo-500/60'}`} 
+      onClick={() => !isOwner && !isCompleted && !isFull && !showJoinForm && openChatFromTrip(trip)}
+      className={`p-3.5 rounded-[1.35rem] border shadow-sm hover:shadow-md transition-all flex flex-col justify-between gap-2.5 relative ${showJoinForm ? 'cursor-default' : 'cursor-pointer'} ${bgCard} group ${(isCompleted || isFull) ? 'opacity-70 grayscale-[30%]' : ''} ${isFemalesOnly ? 'hover:border-pink-500' : 'hover:border-indigo-500/60'}`} 
     >
-      {/* 1. الجزء العلوي المدمج: بيانات المستخدم يمين + السعر والمقاعد وأزرار الإدارة يسار */}
+      {/* 1. الجزء العلوي المدمج */}
       <div className="flex items-start justify-between gap-2 relative z-10">
         
-        {/* يمين: الصورة + الاسم + التقييم + الشارة */}
+        {/* يمين: الصورة + الاسم + التقييم */}
         <div 
           onClick={(e) => {
             e.stopPropagation();
             if (onOpenPublicProfile && trip?.userId) onOpenPublicProfile(trip.userId);
           }}
           className="flex items-center gap-2.5 min-w-0 cursor-pointer hover:opacity-90 transition-opacity"
-          title="اضغط لعرض البروفايل وآراء العملاء"
         >
           <div className="relative shrink-0">
             {trip?.userPhoto ? (
@@ -186,61 +216,31 @@ const TripCard = ({ trip, user, isAdmin, isDarkMode, openChatFromTrip, triggerTo
               <span className={`text-[10px] font-bold hover:text-indigo-400 whitespace-nowrap ${textSecondary}`}>
                 ({liveReviewsCount} رأي)
               </span>
-              {matchBadge && (
-                <span className={`text-[9px] font-black px-1.5 py-0.2 rounded-md ${
-                  matchBadge.includes('قريباً') 
-                    ? 'bg-rose-500/15 text-rose-500' 
-                    : 'bg-emerald-500/15 text-emerald-500'
-                }`}>
-                  {matchBadge}
-                </span>
-              )}
             </div>
           </div>
         </div>
 
-        {/* يسار: السعر بارز + المقاعد + أزرار سريعة في صف مدمج */}
+        {/* يسار: السعر + أزرار التحكم */}
         <div className="flex flex-col items-end gap-1 shrink-0">
           <div className="flex items-center gap-1">
-            {/* السعر */}
             <span className="font-black text-xs sm:text-sm text-emerald-500 bg-emerald-500/10 border border-emerald-500/25 px-2.5 py-1 rounded-xl leading-none">
               {price !== 'غير محدد' ? `${price} ج` : price}
             </span>
 
-            {/* زر مشاركة الكارت */}
-            <button 
-              onClick={handleShare} 
-              className="p-1.5 rounded-lg bg-slate-100 dark:bg-slate-800 text-slate-400 hover:text-indigo-500 transition-colors"
-              title="مشاركة الرحلة"
-            >
+            <button onClick={handleShare} className="p-1.5 rounded-lg bg-slate-100 dark:bg-slate-800 text-slate-400 hover:text-indigo-500 transition-colors">
               <Share2 size={13}/>
             </button>
 
-            {/* زر الحذف لصاحب الرحلة أو الأدمن */}
             {(isAdmin || isOwner) && (
-              <button 
-                onClick={handleDelete} 
-                className="p-1.5 rounded-lg bg-rose-500/10 text-rose-500 hover:bg-rose-500 hover:text-white transition-colors"
-                title="حذف الرحلة"
-              >
+              <button onClick={handleDelete} className="p-1.5 rounded-lg bg-rose-500/10 text-rose-500 hover:bg-rose-500 hover:text-white transition-colors">
                 <Trash2 size={13}/>
               </button>
             )}
           </div>
-
-          {/* شارة المقاعد أو نوع الطلب أو بنات فقط */}
+          
           <div className="flex items-center gap-1">
-            {isFemalesOnly && (
-              <span className="text-[9px] font-black px-2 py-0.5 rounded-md bg-pink-500 text-white">
-                بنات فقط 🌸
-              </span>
-            )}
             <span className={`text-[9px] font-black px-2 py-0.5 rounded-md border flex items-center gap-1 ${
-              isFull 
-                ? 'bg-rose-500/10 border-rose-500/30 text-rose-500' 
-                : isRequest
-                ? 'bg-amber-500/10 border-amber-500/30 text-amber-500'
-                : 'bg-indigo-500/10 border-indigo-500/25 text-indigo-400'
+              isFull ? 'bg-rose-500/10 border-rose-500/30 text-rose-500' : 'bg-indigo-500/10 border-indigo-500/25 text-indigo-400'
             }`}>
               {trip?.category === 'parcel' ? <Package size={10}/> : <Car size={10}/>}
               <span>{isFull ? 'مكتمل العدد' : getSeatsText(trip?.seats, trip?.category)}</span>
@@ -249,50 +249,32 @@ const TripCard = ({ trip, user, isAdmin, isDarkMode, openChatFromTrip, triggerTo
         </div>
       </div>
 
-      {/* 2. صندوق المسار والتفاصيل المدمج (يستغل منتصف الكارت بذكاء) */}
+      {/* 2. صندوق المسار والتفاصيل */}
       <div className={`p-2.5 rounded-xl border flex flex-col gap-1.5 relative z-10 ${
         isFemalesOnly 
           ? (isDarkMode ? 'bg-pink-900/20 border-pink-800/50' : 'bg-pink-100/50 border-pink-200') 
           : (isDarkMode ? 'bg-slate-800/60 border-slate-700/80' : 'bg-slate-50/90 border-slate-200/70')
       }`}>
-        {/* خط الانطلاق والوصول */}
         <div className="flex items-center justify-between gap-2">
           <div className="flex items-center gap-1.5 flex-wrap min-w-0">
             <span className={`text-xs sm:text-sm font-black ${textPrimary}`}>{trip?.from || 'غير محدد'}</span>
-            <ArrowLeft size={13} className={isFemalesOnly ? 'text-pink-500 shrink-0' : 'text-indigo-500 shrink-0'} />
+            <ArrowLeft size={13} className={isFemalesOnly ? 'text-pink-500' : 'text-indigo-500'} />
             <span className={`text-xs sm:text-sm font-black ${textPrimary}`}>{trip?.to || 'غير محدد'}</span>
           </div>
-
           {timeCountdown && (
-            <span className="text-[9px] font-black px-2 py-0.5 rounded-full bg-amber-500/15 text-amber-400 border border-amber-500/30 shrink-0">
+            <span className="text-[9px] font-black px-2 py-0.5 rounded-full bg-amber-500/15 text-amber-400 border border-amber-500/30">
               {timeCountdown}
             </span>
           )}
         </div>
 
-        {/* التفاصيل الدقيقة للمكان إن وجدت */}
-        {(trip?.fromDetails || trip?.toDetails) && (
-          <div className={`text-[10px] font-bold flex flex-wrap items-center gap-x-3 gap-y-0.5 ${textSecondary}`}>
-            {trip?.fromDetails && <span className="truncate max-w-[180px]">📍 من: {trip.fromDetails}</span>}
-            {trip?.toDetails && <span className="truncate max-w-[180px]">🏁 إلى: {trip.toDetails}</span>}
-          </div>
-        )}
-
-        {/* خط السير والسيارة والتفضيلات في شريط كبسولات مدمج */}
-        {( (Array.isArray(trip?.routeAreas) && trip.routeAreas.length > 0) || liveCarModel || activePreferences.length > 0 ) && (
+        {( (Array.isArray(trip?.routeAreas) && trip.routeAreas.length > 0) || liveCarModel ) && (
           <div className="flex flex-wrap items-center gap-1 pt-1.5 border-t border-dashed border-slate-200 dark:border-slate-700/80">
-            {Array.isArray(trip?.routeAreas) && trip.routeAreas.map((area, idx) => (
-              <span key={idx} className={`text-[9px] font-black px-1.5 py-0.5 rounded-md flex items-center gap-0.5 ${isDarkMode ? 'bg-slate-700/90 text-slate-200' : 'bg-white text-slate-700 border border-slate-200'}`}>
-                <Route size={9} className="text-indigo-400" /> {area}
-              </span>
-            ))}
-
             {liveCarModel && (
-              <span className={`text-[9px] font-black px-2 py-0.5 rounded-md flex items-center gap-1 ${isDarkMode ? 'bg-indigo-950/70 text-indigo-300 border border-indigo-800/50' : 'bg-indigo-50 text-indigo-700 border border-indigo-100'}`}>
-                <Car size={10} /> {liveCarModel} {liveCarColor ? `(${liveCarColor})` : ''}
+              <span className={`text-[9px] font-black px-2 py-0.5 rounded-md flex items-center gap-1 ${isDarkMode ? 'bg-indigo-950/70 text-indigo-300' : 'bg-indigo-50 text-indigo-700'}`}>
+                <Car size={10} /> {liveCarModel}
               </span>
             )}
-
             {activePreferences.map(key => (
               <span key={key} className={`text-[9px] font-bold px-1.5 py-0.5 rounded-md ${isDarkMode ? 'bg-slate-700/50 text-slate-300' : 'bg-slate-200/70 text-slate-700'}`}>
                 {preferencesLabels[key]}
@@ -300,27 +282,56 @@ const TripCard = ({ trip, user, isAdmin, isDarkMode, openChatFromTrip, triggerTo
             ))}
           </div>
         )}
-
-        {/* عرض ملاحظات الرحلة بشكل مختصر ومرتب إن وجدت */}
-        {trip?.notes && (
-          <p className={`text-[10px] font-bold truncate pt-0.5 ${textSecondary}`} title={trip.notes}>
-            💬 ملاحظة: {trip.notes}
-          </p>
-        )}
       </div>
 
-      {/* 3. الفوتر المدمج: الوقت + أزرار التواصل السريع في نفس الجزء السفلي */}
-      <div className="flex flex-col gap-2 pt-0.5 relative z-20 pointer-events-auto">
+      {/* 3. شريط الطلبات (لصاحب الرحلة فقط) */}
+      {isOwner && Array.isArray(trip?.requests) && trip.requests.length > 0 && (
+        <div className={`mt-1 pt-2 border-t border-dashed ${isDarkMode ? 'border-slate-700' : 'border-slate-200'}`}>
+          <div className="flex items-center justify-between mb-2">
+            <h4 className={`text-[10px] font-black flex items-center gap-1 ${textPrimary}`}>
+              <UserPlus size={12} className="text-indigo-500"/> 
+              طلبات الانضمام ({trip.requests.filter(r => r.status === 'pending').length} في الانتظار)
+            </h4>
+          </div>
+          <div className="flex gap-2 overflow-x-auto pb-1 [&::-webkit-scrollbar]:hidden">
+            {trip.requests.map((req, idx) => (
+              <div key={idx} className={`shrink-0 w-[140px] p-2 rounded-xl border flex flex-col gap-1.5 ${isDarkMode ? 'bg-slate-800/80 border-slate-700' : 'bg-white border-slate-200 shadow-sm'}`}>
+                <div className="flex items-center gap-1.5">
+                  <div className="w-6 h-6 rounded-full bg-indigo-100 text-indigo-600 flex items-center justify-center text-[10px] font-black shrink-0 overflow-hidden">
+                    {req.userPhoto ? <img src={req.userPhoto} alt="" className="w-full h-full object-cover"/> : req.userName?.charAt(0)}
+                  </div>
+                  <span className={`text-[9px] font-black truncate ${textPrimary}`}>{req.userName}</span>
+                </div>
+                <div className={`text-[10px] font-bold px-1.5 py-1 rounded-md text-center border ${isDarkMode ? 'bg-slate-900 border-slate-700 text-emerald-400' : 'bg-slate-50 border-slate-100 text-emerald-600'}`}>
+                  عرض: {req.suggestedPrice} ج
+                </div>
+                {req.status === 'pending' ? (
+                  <div className="flex items-center gap-1 mt-0.5">
+                    <button onClick={(e) => { e.stopPropagation(); onAcceptRequest && onAcceptRequest(trip.id, req.userId); }} className="flex-1 bg-emerald-500/10 hover:bg-emerald-500 hover:text-white text-emerald-500 py-1 rounded-lg flex justify-center items-center transition-colors">
+                      <Check size={12}/>
+                    </button>
+                    <button onClick={(e) => { e.stopPropagation(); onRejectRequest && onRejectRequest(trip.id, req.userId); }} className="flex-1 bg-rose-500/10 hover:bg-rose-500 hover:text-white text-rose-500 py-1 rounded-lg flex justify-center items-center transition-colors">
+                      <X size={12}/>
+                    </button>
+                  </div>
+                ) : (
+                  <div className={`text-[9px] font-black text-center py-1 mt-0.5 rounded-lg ${req.status === 'accepted' ? 'text-emerald-500 bg-emerald-500/10' : 'text-rose-500 bg-rose-500/10'}`}>
+                    {req.status === 'accepted' ? 'تم القبول ✅' : 'تم الرفض ❌'}
+                  </div>
+                )}
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+
+      {/* 4. الفوتر المدمج: الوقت + أزرار التواصل ونظام التفاوض */}
+      <div className="flex flex-col gap-2 pt-1 relative z-20 pointer-events-auto">
         <div className="flex items-center justify-between text-[11px] font-bold px-0.5">
           <span className={`flex items-center gap-1 ${textSecondary}`}>
             <Clock size={12} className={isFemalesOnly ? 'text-pink-500' : 'text-indigo-400'} />
             {formatTripDateTime(trip?.date, trip?.time)}
           </span>
-          {liveVerified && (
-            <span className="text-[9px] font-black text-emerald-500 flex items-center gap-0.5">
-              <ShieldCheck size={11} /> كابتن موثق
-            </span>
-          )}
         </div>
 
         {!isOwner ? (
@@ -332,39 +343,64 @@ const TripCard = ({ trip, user, isAdmin, isDarkMode, openChatFromTrip, triggerTo
             <div className="w-full bg-rose-500/10 text-rose-500 py-2 rounded-xl text-[11px] font-black flex items-center justify-center gap-1 border border-rose-500/20">
               الرحلة مكتملة العدد 🔒
             </div>
+          ) : myRequest ? (
+            /* حالة الطلب لو المستخدم أرسل طلب بالفعل */
+            <div className={`w-full py-2 px-3 rounded-xl text-[11px] font-black flex justify-between items-center border ${
+              myRequest.status === 'accepted' ? 'bg-emerald-500/10 text-emerald-600 border-emerald-500/20' : 
+              myRequest.status === 'rejected' ? 'bg-rose-500/10 text-rose-600 border-rose-500/20' : 
+              'bg-amber-500/10 text-amber-600 border-amber-500/20'
+            }`}>
+              <span className="flex items-center gap-1">
+                {myRequest.status === 'accepted' ? <CheckCircle2 size={13}/> : myRequest.status === 'rejected' ? <X size={13}/> : <Clock size={13}/>}
+                حالة الطلب: {myRequest.status === 'accepted' ? 'مقبول' : myRequest.status === 'rejected' ? 'مرفوض' : 'قيد المراجعة'}
+              </span>
+              <span className="text-[10px] font-bold bg-white/50 dark:bg-black/20 px-2 py-0.5 rounded-md">عرضك: {myRequest.suggestedPrice} ج</span>
+            </div>
+          ) : showJoinForm ? (
+             /* فورم المزايدة والتفاوض قبل إرسال الطلب */
+            <div onClick={(e) => e.stopPropagation()} className={`w-full p-2 rounded-xl border flex flex-col gap-2 animate-fade-in-up ${isDarkMode ? 'bg-slate-800 border-indigo-500/50' : 'bg-indigo-50 border-indigo-200'}`}>
+              <div className="flex items-center justify-between px-1">
+                <span className={`text-[10px] font-black flex items-center gap-1 ${textPrimary}`}>
+                  <Wallet size={12} className="text-indigo-500"/> اقترح سعرك للرحلة:
+                </span>
+                <span className={`text-[9px] font-bold ${textSecondary}`}>السعر الأصلي: {price} ج</span>
+              </div>
+              <div className="flex items-center gap-1.5">
+                <input 
+                  type="number" 
+                  value={bidPrice}
+                  onChange={(e) => setBidPrice(e.target.value)}
+                  placeholder="مثال: 90"
+                  className={`flex-1 w-full px-2 py-1.5 text-center text-xs font-black rounded-lg border outline-none focus:border-indigo-500 ${isDarkMode ? 'bg-slate-900 border-slate-600 text-white' : 'bg-white border-slate-300'}`}
+                />
+                <button onClick={submitRequest} disabled={!bidPrice} className="px-3 py-1.5 bg-indigo-600 hover:bg-indigo-700 text-white text-[10px] font-black rounded-lg transition-colors disabled:opacity-50">
+                  إرسال ✅
+                </button>
+                <button onClick={() => setShowJoinForm(false)} className="px-2 py-1.5 bg-slate-200 hover:bg-slate-300 dark:bg-slate-700 dark:hover:bg-slate-600 text-slate-700 dark:text-slate-200 text-[10px] font-black rounded-lg transition-colors">
+                  إلغاء
+                </button>
+              </div>
+            </div>
           ) : (
+            /* الأزرار العادية */
             <div className="flex items-center gap-1.5 w-full">
               {canCall && (
-                <a
-                  href={`tel:${contactPhone}`}
-                  onClick={(e) => e.stopPropagation()}
-                  className={`flex-1 flex justify-center items-center gap-1 py-2 px-2 rounded-xl text-[11px] font-black transition-all ${
-                    isDarkMode ? 'bg-slate-800 text-slate-200 hover:bg-slate-700 border border-slate-700' : 'bg-slate-100 text-slate-800 hover:bg-slate-200'
-                  }`}
-                >
-                  <Phone size={12} /> <span>اتصال</span>
+                <a href={`tel:${contactPhone}`} onClick={(e) => e.stopPropagation()} className={`flex-1 flex justify-center items-center py-2 px-2 rounded-xl text-[11px] font-black transition-all ${isDarkMode ? 'bg-slate-800 text-slate-200 hover:bg-slate-700 border border-slate-700' : 'bg-slate-100 text-slate-800 hover:bg-slate-200'}`}>
+                  <Phone size={12} />
                 </a>
               )}
-
               {canWhatsapp && (
-                <a
-                  href={getWhatsAppUrl(contactPhone)}
-                  target="_blank"
-                  rel="noreferrer"
-                  onClick={(e) => e.stopPropagation()}
-                  className="flex-1 flex justify-center items-center gap-1 py-2 px-2 bg-[#25D366] hover:bg-[#20bd5a] text-white rounded-xl text-[11px] font-black shadow-sm transition-all"
-                >
-                  <MessageCircle size={12} /> <span>واتساب</span>
+                <a href={getWhatsAppUrl(contactPhone)} target="_blank" rel="noreferrer" onClick={(e) => e.stopPropagation()} className="flex-1 flex justify-center items-center py-2 px-2 bg-[#25D366] hover:bg-[#20bd5a] text-white rounded-xl text-[11px] font-black shadow-sm transition-all">
+                  <MessageCircle size={12} />
                 </a>
               )}
-
-              <button 
-                onClick={(e) => { e.stopPropagation(); openChatFromTrip(trip); }}
-                className={`flex-1 text-white py-2 px-2 rounded-xl text-[11px] font-black shadow-sm active:scale-95 transition-all flex justify-center items-center gap-1 ${
-                  isFemalesOnly ? 'bg-pink-600 hover:bg-pink-700' : 'bg-indigo-600 hover:bg-indigo-700'
-                }`}
-              >
-                <span>تواصل 💬</span>
+              {/* زر الشات العادي */}
+              <button onClick={(e) => { e.stopPropagation(); openChatFromTrip(trip); }} className={`flex-1 text-white py-2 px-2 rounded-xl text-[11px] font-black shadow-sm active:scale-95 transition-all flex justify-center items-center gap-1 ${isFemalesOnly ? 'bg-pink-500 hover:bg-pink-600' : 'bg-indigo-400 hover:bg-indigo-500'}`}>
+                شات 💬
+              </button> 
+              {/* زر إرسال طلب جديد */}
+              <button onClick={(e) => { e.stopPropagation(); setShowJoinForm(true); }} className={`flex-[1.5] text-white py-2 px-2 rounded-xl text-[11px] font-black shadow-sm active:scale-95 transition-all flex justify-center items-center gap-1 ${isFemalesOnly ? 'bg-pink-600 hover:bg-pink-700' : 'bg-indigo-600 hover:bg-indigo-700'}`}>
+                طلب انضمام <UserPlus size={13}/>
               </button> 
             </div>
           )
