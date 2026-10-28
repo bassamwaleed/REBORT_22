@@ -14,7 +14,7 @@ import VerifyModal from './components/VerifyModal';
 import AdminPanel from './components/AdminPanel';   
 import StationModal from './components/StationModal'; 
 import PublicProfileModal from './components/PublicProfileModal';
-
+ 
 export const SUPPORTED_AREAS = [
   'حدائق أكتوبر', 'حدائق الأهرام', 'مدينة 6 أكتوبر', 'الشيخ زايد', 
   'فيصل', 'الهرم', 'القرية الذكية', 'الدقي', 'المهندسين', 'وسط البلد', 
