@@ -10,7 +10,28 @@ export const CITY_COORDS = {
   "الفيوم": [29.3084, 30.8428], "بني سويف": [29.0661, 31.0994], "المنيا": [28.0871, 30.7618],
   "أسيوط": [27.1810, 31.1837], "سوهاج": [26.5591, 31.6957], "قنا": [26.1551, 32.7160],
   "الأقصر": [25.6872, 32.6396], "أسوان": [24.0889, 32.8998], "الوادي الجديد": [24.5456, 30.5526]
-}; 
+};
+
+// إحداثيات المناطق الـ 17 المدعومة في التطبيق لمطابقة الـ GPS بدقة
+export const SUPPORTED_AREAS_COORDS = {
+  'حدائق أكتوبر': [29.9092, 31.0086],
+  'حدائق الأهرام': [29.9753, 31.1066],
+  'مدينة 6 أكتوبر': [29.9723, 30.9401],
+  'الشيخ زايد': [30.0444, 30.9762],
+  'فيصل': [30.0016, 31.1687],
+  'الهرم': [29.9922, 31.1539],
+  'القرية الذكية': [30.0712, 31.0169],
+  'الدقي': [30.0385, 31.2127],
+  'المهندسين': [30.0566, 31.2016],
+  'وسط البلد': [30.0478, 31.2385],
+  'المعادي': [29.9602, 31.2569],
+  'حلوان': [29.8414, 31.3342],
+  'مدينة نصر': [30.0561, 31.3301],
+  'مصر الجديدة': [30.0911, 31.3259],
+  'القاهرة الجديدة': [30.0074, 31.4913],
+  'مدينة السادات': [30.3653, 30.5289],
+  'شبين الكوم': [30.5526, 31.0090]
+};
 
 export const EGYPT_CITIES = Object.keys(CITY_COORDS);
 
@@ -24,7 +45,7 @@ export const safeMillis = (timestamp) => {
 export const timeToMinutes = (timeStr) => {
   if (!timeStr || typeof timeStr !== 'string') return 0;
   const parts = timeStr.split(':');
-  if(parts.length !== 2) return 0;
+  if (parts.length !== 2) return 0;
   return (parseInt(parts[0], 10) * 60) + parseInt(parts[1], 10);
 };
 
@@ -36,21 +57,21 @@ export const isTripExpired = (dateStr, timeStr) => {
     if (isNaN(tripDateTime.getTime())) return false;
     const now = new Date();
     const diffHours = (now.getTime() - tripDateTime.getTime()) / (1000 * 60 * 60);
-    return diffHours > 3; 
-  } catch(e) { return false; }
+    return diffHours > 3;
+  } catch (e) { return false; }
 };
 
 export const formatTripDateTime = (dateStr, timeStr) => {
   if (!dateStr || !timeStr || typeof timeStr !== 'string') return "موعد غير محدد";
-  
+
   try {
     const tripDate = new Date(dateStr);
     if (isNaN(tripDate.getTime())) return "موعد غير محدد";
-    
+
     const today = new Date();
-    const tomorrow = new Date(); 
+    const tomorrow = new Date();
     tomorrow.setDate(today.getDate() + 1);
-    
+
     let dayText = "";
     if (tripDate.toDateString() === today.toDateString()) {
       dayText = "اليوم";
@@ -75,16 +96,16 @@ export const formatTripDateTime = (dateStr, timeStr) => {
     const minStr = minutes < 10 ? '0' + minutes : minutes;
 
     return `${dayText}، ${hours}:${minStr} ${ampm}`;
-  } catch(e) { 
-    return "موعد غير محدد"; 
+  } catch (e) {
+    return "موعد غير محدد";
   }
 };
 
 export const getSeatsText = (seats, category) => {
   const count = parseInt(seats) || 0;
   if (category === 'parcel' || category === 'delivery') {
-    if(count === 1) return "طرد واحد";
-    if(count === 2) return "طردان";
+    if (count === 1) return "طرد واحد";
+    if (count === 2) return "طردان";
     return `${count} طرود`;
   }
   if (count === 1) return "مقعد واحد متبقي";
@@ -103,7 +124,7 @@ export const resizeAndConvertToBase64 = (file, maxWidth = 800, maxHeight = 800, 
         img.onload = () => {
           const canvas = document.createElement('canvas');
           let width = img.width; let height = img.height;
-          if (width > height) { if (width > maxWidth) { height = Math.round((height * maxWidth) / width); width = maxWidth; } } 
+          if (width > height) { if (width > maxWidth) { height = Math.round((height * maxWidth) / width); width = maxWidth; } }
           else { if (height > maxHeight) { width = Math.round((width * maxHeight) / height); height = maxHeight; } }
           canvas.width = width; canvas.height = height;
           const ctx = canvas.getContext('2d'); ctx.drawImage(img, 0, 0, width, height);
@@ -116,40 +137,38 @@ export const resizeAndConvertToBase64 = (file, maxWidth = 800, maxHeight = 800, 
   });
 };
 
+// حساب المسافة بالكيلومتر بين نقطتين لإيجاد أقرب منطقة مدعومة للمستخدم
+const getDistanceKm = (lat1, lon1, lat2, lon2) => {
+  const R = 6371;
+  const dLat = ((lat2 - lat1) * Math.PI) / 180;
+  const dLon = ((lon2 - lon1) * Math.PI) / 180;
+  const a =
+    Math.sin(dLat / 2) * Math.sin(dLat / 2) +
+    Math.cos((lat1 * Math.PI) / 180) * Math.cos((lat2 * Math.PI) / 180) *
+    Math.sin(dLon / 2) * Math.sin(dLon / 2);
+  return R * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+};
+
 export const useEgyptianLocation = () => {
   const [isLocating, setIsLocating] = useState(false);
   const [locationError, setLocationError] = useState('');
 
-  const mapApiStateToEgyptCities = (apiStateName) => {
-    if (!apiStateName) return null;
-    const cleanName = apiStateName.replace('محافظة', '').trim();
-    
-    if (cleanName.includes('القاهرة')) return 'القاهرة';
-    if (cleanName.includes('الجيزة')) return 'الجيزة';
-    if (cleanName.includes('الاسكندرية') || cleanName.includes('الإسكندرية')) return 'الإسكندرية';
-    if (cleanName.includes('الشرقية')) return 'الشرقية';
-    if (cleanName.includes('الغربية')) return 'الغربية';
-    if (cleanName.includes('الدقهلية')) return 'الدقهلية';
-    if (cleanName.includes('القليوبية')) return 'القليوبية';
-    if (cleanName.includes('البحيرة')) return 'البحيرة';
-    if (cleanName.includes('المنوفية')) return 'المنوفية';
-    if (cleanName.includes('كفر الشيخ')) return 'كفر الشيخ';
-    if (cleanName.includes('دمياط')) return 'دمياط';
-    if (cleanName.includes('بورسعيد')) return 'بورسعيد';
-    if (cleanName.includes('الإسماعيلية')) return 'الإسماعيلية';
-    if (cleanName.includes('السويس')) return 'السويس';
-    if (cleanName.includes('مطروح')) return 'مطروح';
-    if (cleanName.includes('البحر الأحمر')) return 'البحر الأحمر';
-    if (cleanName.includes('الفيوم')) return 'الفيوم';
-    if (cleanName.includes('بني سويف')) return 'بني سويف';
-    if (cleanName.includes('المنيا')) return 'المنيا';
-    if (cleanName.includes('أسيوط')) return 'أسيوط';
-    if (cleanName.includes('سوهاج')) return 'سوهاج';
-    if (cleanName.includes('قنا')) return 'قنا';
-    if (cleanName.includes('الأقصر')) return 'الأقصر';
-    if (cleanName.includes('أسوان')) return 'أسوان';
-    
-    return EGYPT_CITIES.find(city => cleanName.includes(city) || city.includes(cleanName)) || null;
+  const findNearestSupportedArea = (lat, lon, rawText = '') => {
+    // 1. مطابقة نصية أولية إن وجدت في اسم العنوان
+    for (const areaName of Object.keys(SUPPORTED_AREAS_COORDS)) {
+      if (rawText.includes(areaName)) return areaName;
+    }
+    // 2. مطابقة جغرافية لأقرب منطقة من الإحداثيات
+    let closestArea = null;
+    let minDistance = Infinity;
+    for (const [areaName, [aLat, aLon]] of Object.entries(SUPPORTED_AREAS_COORDS)) {
+      const dist = getDistanceKm(lat, lon, aLat, aLon);
+      if (dist < minDistance) {
+        minDistance = dist;
+        closestArea = areaName;
+      }
+    }
+    return closestArea;
   };
 
   const getMyCity = async (onSuccess) => {
@@ -167,45 +186,48 @@ export const useEgyptianLocation = () => {
         try {
           const response = await fetch(`https://nominatim.openstreetmap.org/reverse?format=json&lat=${latitude}&lon=${longitude}&accept-language=ar`);
           const data = await response.json();
-          
-          if (data && data.address) {
-            const stateName = data.address.state || data.address.region || data.address.city; 
-            const matchedCity = mapApiStateToEgyptCities(stateName);
 
-            let detailedAddress = '';
+          let detailedAddress = '';
+          let fullDisplay = data?.display_name || '';
+
+          if (data && data.address) {
             const parts = [];
             if (data.address.road) parts.push(data.address.road);
             if (data.address.suburb) parts.push(data.address.suburb);
             if (data.address.neighbourhood) parts.push(data.address.neighbourhood);
-            if (data.address.town && !parts.includes(data.address.town)) parts.push(data.address.town);
-            
+            if (data.address.city || data.address.town) parts.push(data.address.city || data.address.town);
+
             if (parts.length > 0) {
               detailedAddress = parts.join('، ');
-            } else if (data.display_name) {
-              const nameArray = data.display_name.split('،');
-              detailedAddress = nameArray.slice(0, 2).join('،').trim(); 
+            } else if (fullDisplay) {
+              detailedAddress = fullDisplay.split('،').slice(0, 2).join('،').trim();
             }
+          }
 
-            if (matchedCity) {
-              onSuccess({ city: matchedCity, details: detailedAddress });
-            } else {
-              setLocationError('لم نتمكن من مطابقة محافظتك بدقة.');
-            }
+          const matchedSupportedArea = findNearestSupportedArea(latitude, longitude, fullDisplay);
+
+          if (matchedSupportedArea) {
+            onSuccess({ city: matchedSupportedArea, details: detailedAddress });
           } else {
-             setLocationError('لم نتمكن من قراءة العنوان.');
+            setLocationError('لم نتمكن من مطابقة منطقتك بدقة.');
           }
         } catch (err) {
-          setLocationError('حدث خطأ في جلب بيانات الخريطة.');
+          const fallbackArea = findNearestSupportedArea(latitude, longitude);
+          if (fallbackArea) {
+            onSuccess({ city: fallbackArea, details: '' });
+          } else {
+            setLocationError('حدث خطأ في جلب بيانات الخريطة.');
+          }
         } finally {
           setIsLocating(false);
         }
       },
       (error) => {
         setIsLocating(false);
-        if (error.code === 1) setLocationError('يرجى إعطاء صلاحية الموقع (Location).');
+        if (error.code === 1) setLocationError('يرجى تفعيل صلاحية الموقع (Location).');
         else setLocationError('تعذر تحديد موقعك الحالي.');
       },
-      { timeout: 10000, enableHighAccuracy: true } 
+      { timeout: 10000, enableHighAccuracy: true }
     );
   };
 
