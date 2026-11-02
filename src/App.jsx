@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { onAuthStateChanged, signInWithEmailAndPassword, createUserWithEmailAndPassword, signInAnonymously, updateProfile, signOut } from 'firebase/auth';
 import { collection, onSnapshot, doc, getDoc, setDoc, addDoc, updateDoc, serverTimestamp, increment, writeBatch, query, where, getDocs, arrayUnion } from 'firebase/firestore';
-import { Loader2, Car, MessageCircle, User, Home, CheckCircle2, Plus, X, Lock, MapPin, Bell, Search, Check, Route, Phone, Clock } from 'lucide-react';
+import { Loader2, Car, MessageCircle, User, Home, CheckCircle2, Plus, X, Lock, MapPin, Bell, Search, Edit2, Check, Route, Phone, Eye, ShieldCheck, Clock, ChevronDown, ChevronUp, Sparkles } from 'lucide-react';
 
 import { auth, db, APP_COLLECTION_NAME, USERS_COLLECTION, STATIONS_COLLECTION, ADMIN_EMAIL } from './firebase';
 import { safeMillis, useEgyptianLocation } from './utils/helpers';
@@ -10,15 +10,15 @@ import HomeScreen from './screens/HomeScreen';
 import ProfileScreen from './screens/ProfileScreen';
 import ChatModal from './components/ChatModal';
 import LiveTrackerBar from './components/LiveTrackerBar';
-import VerifyModal from './components/VerifyModal';
-import AdminPanel from './components/AdminPanel';
-import StationModal from './components/StationModal';
+import VerifyModal from './components/VerifyModal'; 
+import AdminPanel from './components/AdminPanel';   
+import StationModal from './components/StationModal'; 
 import PublicProfileModal from './components/PublicProfileModal';
 
 export const SUPPORTED_AREAS = [
-  'حدائق أكتوبر', 'حدائق الأهرام', 'مدينة 6 أكتوبر', 'الشيخ زايد',
-  'فيصل', 'الهرم', 'القرية الذكية', 'الدقي', 'المهندسين', 'وسط البلد',
-  'المعادي', 'حلوان', 'مدينة نصر', 'مصر الجديدة', 'القاهرة الجديدة',
+  'حدائق أكتوبر', 'حدائق الأهرام', 'مدينة 6 أكتوبر', 'الشيخ زايد', 
+  'فيصل', 'الهرم', 'القرية الذكية', 'الدقي', 'المهندسين', 'وسط البلد', 
+  'المعادي', 'حلوان', 'مدينة نصر', 'مصر الجديدة', 'القاهرة الجديدة', 
   'مدينة السادات', 'شبين الكوم'
 ];
 
@@ -59,14 +59,19 @@ export default function App() {
   const [isGuest, setIsGuest] = useState(false);
   const [isAdmin, setIsAdmin] = useState(false);
   const [loading, setLoading] = useState(true);
-
-  const [activeTab, setActiveTab] = useState('home');
-  const [homeCategory, setHomeCategory] = useState('travel');
-  const [viewMode, setViewMode] = useState('list');
-  const [filterType, setFilterType] = useState('offer');
+  
+  const [activeTab, setActiveTab] = useState('home'); 
+  const [homeCategory, setHomeCategory] = useState('travel'); 
+  const [viewMode, setViewMode] = useState('list'); 
+  const [filterType, setFilterType] = useState('offer'); 
   const [isScrolling, setIsScrolling] = useState(false);
 
+  // حالة فتح البروفايل العام لأي مستخدم
   const [publicProfileUserId, setPublicProfileUserId] = useState(null);
+
+  // حالات طي وفتح الأقسام الاختيارية في فورم إضافة رحلة لتقصير الفورم على الموبايل
+  const [showRouteSelector, setShowRouteSelector] = useState(false);
+  const [showExtraPrefs, setShowExtraPrefs] = useState(false);
 
   useEffect(() => {
     let scrollTimer;
@@ -84,7 +89,7 @@ export default function App() {
       clearTimeout(scrollTimer);
     };
   }, []);
-
+  
   const getInitialAreas = () => {
     try {
       const savedList = localStorage.getItem('khodnimaak_areas_list');
@@ -104,7 +109,7 @@ export default function App() {
   const [toastMsg, setToastMsg] = useState('');
   const [alertMsg, setAlertMsg] = useState('');
   const [isSubmitting, setIsSubmitting] = useState(false);
-
+  
   const [filterFrom, setFilterFrom] = useState(() => localStorage.getItem('khodnimaak_area') || '');
   const [filterTo, setFilterTo] = useState('');
   const [showAreaModal, setShowAreaModal] = useState(false);
@@ -123,31 +128,31 @@ export default function App() {
     }
   }, [isDarkMode]);
 
-  const [realTrips, setRealTrips] = useState([]);
-  const [stations, setStations] = useState([]);
+  const [realTrips, setRealTrips] = useState([]); 
+  const [stations, setStations] = useState([]); 
   const [myInbox, setMyInbox] = useState([]);
   const [appSettings, setAppSettings] = useState({ logo: null, banners: [], bannerText: '' });
-
+  
   const [notifications, setNotifications] = useState([]);
   const [showNotificationsModal, setShowNotificationsModal] = useState(false);
 
   const [selectedStation, setSelectedStation] = useState(null);
   const [activeChat, setActiveChat] = useState(null);
-
+  
   const [showAddModal, setShowAddModal] = useState(false);
   const [showVerifyModal, setShowVerifyModal] = useState(false);
   const [showAdminPanel, setShowAdminPanel] = useState(false);
-
+  
   const [isLoginMode, setIsLoginMode] = useState(true);
   const [authLoading, setAuthLoading] = useState(false);
-  const [authForm, setAuthForm] = useState({
-    name: '', identifier: '', password: '', gender: 'male', accountRole: 'passenger'
+  const [authForm, setAuthForm] = useState({ 
+    name: '', identifier: '', password: '', gender: 'male', accountRole: 'passenger' 
   });
-
-  const [newTrip, setNewTrip] = useState({
-    type: 'offer', category: 'travel', from: '', fromDetails: '', to: '', toDetails: '',
-    routeAreas: [], date: '', time: '', seats: 1, cost: '', notes: '',
-    allowPhoneContact: true, contactMethod: 'both',
+  
+  const [newTrip, setNewTrip] = useState({ 
+    type: 'offer', category: 'travel', from: '', fromDetails: '', to: '', toDetails: '', 
+    routeAreas: [], date: '', time: '', seats: 1, cost: '', notes: '', 
+    allowPhoneContact: true, contactMethod: 'both', 
     preferences: { ac: false, noSmoking: false, luggage: false, families: false, femalesOnly: false }
   });
 
@@ -195,32 +200,39 @@ export default function App() {
         if (unsubUserDoc) { unsubUserDoc(); unsubUserDoc = null; }
         if (currentUser) {
           setUser(currentUser);
-          if (currentUser.isAnonymous) {
-            setIsGuest(true); setUserData(null); setIsAdmin(false);
-            if (localStorage.getItem('khodnimaak_hide_area_modal') !== 'true') setShowAreaModal(true);
+          if (currentUser.isAnonymous) { 
+            setIsGuest(true); 
+            setUserData(null); 
+            setIsAdmin(false); 
             setLoading(false);
-          }
+          } 
           else {
             setIsGuest(false); setIsAdmin(currentUser.email && currentUser.email.toLowerCase() === ADMIN_EMAIL);
             const userRef = doc(db, USERS_COLLECTION, currentUser.uid);
             const userDoc = await getDoc(userRef);
             if (!userDoc.exists()) {
-              const initialData = {
-                name: currentUser.displayName || 'مستخدم',
-                photoURL: null,
-                isVerified: false,
-                verificationStatus: 'none',
-                completedTripsCount: 0,
-                phone: currentUser.email?.split('@')[0] || '',
+              const initialData = { 
+                name: currentUser.displayName || 'مستخدم', 
+                photoURL: null, 
+                isVerified: false, 
+                verificationStatus: 'none', 
+                completedTripsCount: 0, 
+                phone: currentUser.email?.split('@')[0] || '', 
                 gender: 'male',
                 accountRole: 'passenger',
                 reviews: [],
-                createdAt: Date.now()
+                createdAt: Date.now() 
               };
               await setDoc(userRef, initialData, { merge: true });
-              if (localStorage.getItem('khodnimaak_hide_area_modal') !== 'true') setShowAreaModal(true);
+              if (localStorage.getItem('khodnimaak_hide_area_modal') !== 'true' && getInitialAreas().length === 0) {
+                setShowAreaModal(true);
+              }
             } else {
-              if (localStorage.getItem('khodnimaak_hide_area_modal') !== 'true') setShowAreaModal(true);
+              const existingUserData = userDoc.data();
+              const hasSavedAreas = (Array.isArray(existingUserData?.preferredAreas) && existingUserData.preferredAreas.length > 0) || getInitialAreas().length > 0;
+              if (localStorage.getItem('khodnimaak_hide_area_modal') !== 'true' && !hasSavedAreas) {
+                setShowAreaModal(true);
+              }
             }
 
             unsubUserDoc = onSnapshot(userRef, (snap) => {
@@ -251,7 +263,7 @@ export default function App() {
 
   useEffect(() => {
     const unsub = onSnapshot(doc(db, 'system', 'settings'), (docSnap) => {
-      if (docSnap.exists()) { setAppSettings(docSnap.data()); }
+      if(docSnap.exists()) { setAppSettings(docSnap.data()); }
     });
     return () => unsub();
   }, []);
@@ -266,7 +278,7 @@ export default function App() {
         if (data?.type === 'delivery') cat = 'parcel';
         return { id: doc.id, ...data, category: cat };
       });
-      tripsData.sort((a, b) => { try { return safeMillis(b.createdAt) - safeMillis(a.createdAt); } catch (e) { return 0; } });
+      tripsData.sort((a, b) => { try { return safeMillis(b.createdAt) - safeMillis(a.createdAt); } catch(e) { return 0; } });
       setRealTrips(tripsData);
     });
     return () => unsubscribe();
@@ -286,7 +298,7 @@ export default function App() {
     if (!user || isGuest) return;
     const unsubscribe = onSnapshot(collection(db, `inbox_${user.uid}`), (snapshot) => {
       const inboxData = snapshot.docs.map(doc => { const data = doc.data(); return { id: doc.id, chatId: data?.chatId || doc.id, ...data }; });
-      inboxData.sort((a, b) => { try { return safeMillis(b.lastMessageTime || b.createdAt) - safeMillis(a.lastMessageTime || a.createdAt); } catch (e) { return 0; } });
+      inboxData.sort((a, b) => { try { return safeMillis(b.lastMessageTime || b.createdAt) - safeMillis(a.lastMessageTime || a.createdAt); } catch(e) { return 0; } });
       setMyInbox(inboxData);
     });
     return () => unsubscribe();
@@ -309,7 +321,7 @@ export default function App() {
   };
 
   const toggleTempArea = (area) => {
-    setTempSelectedAreas(prev =>
+    setTempSelectedAreas(prev => 
       prev.includes(area) ? prev.filter(a => a !== area) : [...prev, area]
     );
   };
@@ -320,10 +332,10 @@ export default function App() {
     setUserAreas(cleanAreas);
     setUserArea(joinedAreas);
     setFilterFrom(cleanAreas.length === 1 ? cleanAreas[0] : '');
-
+    
     localStorage.setItem('khodnimaak_areas_list', JSON.stringify(cleanAreas));
     localStorage.setItem('khodnimaak_area', joinedAreas);
-
+    
     if (hideAreaModalFuture) {
       localStorage.setItem('khodnimaak_hide_area_modal', 'true');
     }
@@ -331,12 +343,12 @@ export default function App() {
     setShowAreaModal(false);
     triggerToast(cleanAreas.length > 0 ? `تم تحديد منطقتك: ${joinedAreas} 📍` : 'تم عرض جميع المناطق 🌍');
     if (user && !isGuest) {
-      try {
-        await updateDoc(doc(db, USERS_COLLECTION, user.uid), {
+      try { 
+        await updateDoc(doc(db, USERS_COLLECTION, user.uid), { 
           preferredArea: joinedAreas,
           preferredAreas: cleanAreas
-        });
-      } catch (e) {}
+        }); 
+      } catch(e){}
     }
   };
 
@@ -368,58 +380,59 @@ export default function App() {
 
   const handleAuth = async (e) => {
     e.preventDefault(); setAuthLoading(true); setAlertMsg('');
-    let identifier = authForm.identifier?.trim() || '';
+    let identifier = authForm.identifier?.trim() || ''; 
     if (identifier === '1') identifier = ADMIN_EMAIL;
 
     let emailForFirebase = identifier.includes('@') ? identifier : `${identifier}@khodnimaak.com`;
     try {
-      if (isLoginMode) { await signInWithEmailAndPassword(auth, emailForFirebase, authForm.password); }
+      if (isLoginMode) { await signInWithEmailAndPassword(auth, emailForFirebase, authForm.password); } 
       else {
         if (!authForm.name || !identifier) { setAlertMsg("برجاء إدخال البيانات"); setAuthLoading(false); return; }
         const userCred = await createUserWithEmailAndPassword(auth, emailForFirebase, authForm.password);
         await updateProfile(userCred.user, { displayName: authForm.name });
-        await setDoc(doc(db, USERS_COLLECTION, userCred.user.uid), {
-          phone: identifier.includes('@') ? '' : identifier,
-          name: authForm.name,
-          email: emailForFirebase,
+        await setDoc(doc(db, USERS_COLLECTION, userCred.user.uid), { 
+          phone: identifier.includes('@') ? '' : identifier, 
+          name: authForm.name, 
+          email: emailForFirebase, 
           gender: authForm.gender || 'male',
           accountRole: authForm.accountRole || 'passenger',
           reviews: [],
-          isVerified: false,
-          verificationStatus: 'none',
-          completedTripsCount: 0,
-          createdAt: Date.now()
+          isVerified: false, 
+          verificationStatus: 'none', 
+          completedTripsCount: 0, 
+          createdAt: Date.now() 
         });
       }
     } catch (error) { setAlertMsg('تأكد من صحة البيانات أو الباسورد.'); } finally { setAuthLoading(false); }
   };
 
-  const forceSignUpScreen = async () => { try { await signOut(auth); setIsLoginMode(false); setAuthForm({ name: '', identifier: '', password: '', gender: 'male', accountRole: 'passenger' }); setActiveTab('home'); } catch (e) {} };
+  const forceSignUpScreen = async () => { try { await signOut(auth); setIsLoginMode(false); setAuthForm({ name: '', identifier: '', password: '', gender: 'male', accountRole: 'passenger' }); setActiveTab('home'); } catch(e){} };
+  const forceLoginScreen = async () => { try { await signOut(auth); setIsLoginMode(true); setActiveTab('home'); } catch(e){} };
   const handleGuestLogin = async () => { setAuthLoading(true); try { await signInAnonymously(auth); } catch (error) {} finally { setAuthLoading(false); } };
   const toggleTheme = () => { const newTheme = !isDarkMode; setIsDarkMode(newTheme); localStorage.setItem('khodnimaak_theme', newTheme ? 'dark' : 'light'); };
-  const handleLogout = async () => { try { await signOut(auth); setUserData(null); setMyInbox([]); setActiveChat(null); setActiveTab('home'); setNotifications([]); } catch (e) {} };
+  const handleLogout = async () => { try { await signOut(auth); setUserData(null); setMyInbox([]); setActiveChat(null); setActiveTab('home'); setNotifications([]); } catch(e) {} };
 
   const handleEditName = async () => {
     const newName = prompt('أدخل الاسم الجديد:', userData?.name || '');
     if (!newName || !newName.trim()) return;
-
+    
     try {
       await updateDoc(doc(db, USERS_COLLECTION, user.uid), { name: newName.trim() });
       await updateProfile(auth.currentUser, { displayName: newName.trim() });
-
+      
       const tripsQuery = query(collection(db, APP_COLLECTION_NAME), where('userId', '==', user.uid));
       const querySnapshot = await getDocs(tripsQuery);
-
+      
       const batch = writeBatch(db);
       querySnapshot.forEach((tripDoc) => {
         batch.update(tripDoc.ref, { userName: newName.trim() });
       });
-      await batch.commit();
+      await batch.commit(); 
 
       setUserData(prev => ({ ...prev, name: newName.trim() }));
       triggerToast('تم تحديث الاسم في حسابك بنجاح');
-    } catch (e) {
-      triggerToast('تعذر تحديث الاسم');
+    } catch (e) { 
+      triggerToast('تعذر تحديث الاسم'); 
     }
   };
 
@@ -433,26 +446,26 @@ export default function App() {
       const typeToSave = newTrip.category === 'parcel' ? 'delivery' : newTrip.type;
       const allowContact = newTrip.contactMethod !== 'chat';
       const tripData = {
-        ...newTrip,
+        ...newTrip, 
         allowPhoneContact: allowContact,
-        type: typeToSave,
-        userId: user.uid,
-        userName: userData?.name || 'مستخدم',
-        userPhoto: userData?.photoURL || null,
-        userPhone: userData?.phone || '',
+        type: typeToSave, 
+        userId: user.uid, 
+        userName: userData?.name || 'مستخدم', 
+        userPhoto: userData?.photoURL || null, 
+        userPhone: userData?.phone || '', 
         userRole: userData?.accountRole || 'passenger',
         userGender: userData?.gender || 'male',
         carModel: userData?.carModel || null,
         carColor: userData?.carColor || null,
-        verified: userData?.isVerified || false,
+        verified: userData?.isVerified || false, 
         userBadge: userData?.customBadge || null,
-        rating: userData?.rating || 0,
-        status: 'open',
-        createdAt: serverTimestamp(),
+        rating: userData?.rating || 0, 
+        status: 'open', 
+        createdAt: serverTimestamp(), 
         joinedMembers: [],
-        price: newTrip.cost
+        price: newTrip.cost 
       };
-
+      
       const docRef = await addDoc(collection(db, APP_COLLECTION_NAME), tripData);
 
       try {
@@ -463,59 +476,63 @@ export default function App() {
           where('active', '==', true)
         );
         const alertsSnap = await getDocs(alertsQuery);
-
+        
         if (!alertsSnap.empty) {
-          const batch = writeBatch(db);
-          alertsSnap.forEach(alertDoc => {
-            const alertData = alertDoc.data();
-            if (alertData.userId !== user.uid) {
-              const notifRef = doc(collection(db, 'notifications'));
-              batch.set(notifRef, {
-                userId: alertData.userId,
-                title: 'رحلة جديدة متاحة! 🚗',
-                body: `تم إضافة رحلة من ${newTrip.from} إلى ${newTrip.to} تناسب بحثك.`,
-                tripId: docRef.id,
-                read: false,
-                createdAt: serverTimestamp()
-              });
-            }
-          });
-          await batch.commit();
+           const batch = writeBatch(db);
+           alertsSnap.forEach(alertDoc => {
+              const alertData = alertDoc.data();
+              if (alertData.userId !== user.uid) { 
+                 const notifRef = doc(collection(db, 'notifications'));
+                 batch.set(notifRef, {
+                    userId: alertData.userId,
+                    title: 'رحلة جديدة متاحة! 🚗',
+                    body: `تم إضافة رحلة من ${newTrip.from} إلى ${newTrip.to} تناسب بحثك.`,
+                    tripId: docRef.id,
+                    read: false,
+                    createdAt: serverTimestamp()
+                 });
+              }
+           });
+           await batch.commit();
         }
       } catch (err) {
         console.error("خطأ أثناء إرسال التنبيهات:", err);
       }
 
-      setShowAddModal(false); triggerToast('تم النشر بنجاح!');
+      setShowAddModal(false); 
+      setShowRouteSelector(false);
+      setShowExtraPrefs(false);
+      triggerToast('تم النشر بنجاح!');
       setActiveTab('home'); setHomeCategory(newTrip.category);
-      setNewTrip({
-        type: 'offer', category: 'travel', from: '', fromDetails: '', to: '', toDetails: '',
-        routeAreas: [], date: '', time: '', seats: 1, cost: '', notes: '',
-        allowPhoneContact: true, contactMethod: 'both',
-        preferences: { ac: false, noSmoking: false, luggage: false, families: false, femalesOnly: false }
+      setNewTrip({ 
+        type: 'offer', category: 'travel', from: '', fromDetails: '', to: '', toDetails: '', 
+        routeAreas: [], date: '', time: '', seats: 1, cost: '', notes: '', 
+        allowPhoneContact: true, contactMethod: 'both', 
+        preferences: { ac: false, noSmoking: false, luggage: false, families: false, femalesOnly: false } 
       });
     } catch (error) { triggerToast('حدث خطأ.'); } finally { setIsSubmitting(false); }
   };
 
+  // شات الرحلات الشخصي مع دعم فتح التفاوض المباشر إذا ضغط على زر (تفاوض) من الكارت
   const openChatFromTrip = async (trip) => {
     if (!trip || typeof trip !== 'object' || !trip.userId || !trip.id) {
       triggerToast('عذراً، بيانات هذه الرحلة غير مكتملة أو بها خلل.');
-      return;
+      return; 
     }
-
+    
     if (isGuest || !user) { forceSignUpScreen(); return; }
     if (checkUserRestriction('chat')) return;
     if (user.uid === trip.userId) { triggerToast('هذه رحلتك الخاصة!'); return; }
-
+    
     try {
       const user1 = user.uid < trip.userId ? user.uid : trip.userId;
       const user2 = user.uid < trip.userId ? trip.userId : user.uid;
       const chatId = `${user1}_${user2}`;
-
+      
       const safeFrom = trip.from ? String(trip.from) : 'مكان غير محدد';
       const safeTo = trip.to ? String(trip.to) : 'مكان غير محدد';
       const tripRouteName = `${safeFrom} ➔ ${safeTo}`;
-
+      
       const safeTripType = trip.type ? String(trip.type) : 'offer';
       const safeUserName = trip.userName ? String(trip.userName) : 'مستخدم';
       const safeMyName = userData?.name ? String(userData.name) : 'مستخدم';
@@ -523,6 +540,8 @@ export default function App() {
       const safeMyPhoto = userData?.photoURL || null;
       const safeUserVerified = Boolean(trip.verified);
       const safeMyVerified = Boolean(userData?.isVerified);
+      const originalTripPrice = Number(trip.cost || trip.price || 0);
+      const availableTripSeats = Number(trip.seats || 1);
 
       const chatRefMe = doc(db, `inbox_${user.uid}`, chatId);
       const chatSnapMe = await getDoc(chatRefMe);
@@ -531,6 +550,9 @@ export default function App() {
       let existingSenderId = null;
       let existingSenderName = null;
       let existingSentAt = null;
+      let existingProposedPrice = null;
+      let existingRequestedSeats = 1;
+      let existingAgreedPrice = null;
 
       if (chatSnapMe.exists()) {
         const existingData = chatSnapMe.data();
@@ -539,94 +561,102 @@ export default function App() {
           existingSenderId = existingData.requestSenderId || null;
           existingSenderName = existingData.requestSenderName || null;
           existingSentAt = existingData.requestSentAt || null;
+          existingProposedPrice = existingData.proposedPrice || null;
+          existingRequestedSeats = existingData.requestedSeats || 1;
+          existingAgreedPrice = existingData.agreedPrice || null;
         }
       }
 
-      const chatDataMe = {
-        chatId: chatId, tripId: trip.id, tripType: safeTripType, tripOwnerId: trip.userId,
-        tripOwnerName: safeUserName,
-        otherPersonId: trip.userId, otherPersonName: safeUserName, otherPersonPhoto: safeUserPhoto,
+      const chatDataMe = { 
+        chatId: chatId, tripId: trip.id, tripType: safeTripType, tripOwnerId: trip.userId, 
+        otherPersonId: trip.userId, otherPersonName: safeUserName, otherPersonPhoto: safeUserPhoto, 
         otherPersonVerified: safeUserVerified, tripInfo: tripRouteName,
+        tripOriginalPrice: originalTripPrice, tripAvailableSeats: availableTripSeats,
         requestStatus: existingStatus, requestSenderId: existingSenderId,
         requestSenderName: existingSenderName, requestSentAt: existingSentAt,
+        proposedPrice: existingProposedPrice, requestedSeats: existingRequestedSeats, agreedPrice: existingAgreedPrice,
+        openNegotiation: Boolean(trip.openNegotiation),
         isSupportChat: false, actingAsAdmin: false
       };
-
-      const chatDataOther = {
-        chatId: chatId, tripId: trip.id, tripType: safeTripType, tripOwnerId: trip.userId,
-        tripOwnerName: safeUserName,
-        otherPersonId: user.uid, otherPersonName: safeMyName, otherPersonPhoto: safeMyPhoto,
+      
+      const chatDataOther = { 
+        chatId: chatId, tripId: trip.id, tripType: safeTripType, tripOwnerId: trip.userId, 
+        otherPersonId: user.uid, otherPersonName: safeMyName, otherPersonPhoto: safeMyPhoto, 
         otherPersonVerified: safeMyVerified, tripInfo: tripRouteName,
+        tripOriginalPrice: originalTripPrice, tripAvailableSeats: availableTripSeats,
         requestStatus: existingStatus, requestSenderId: existingSenderId,
         requestSenderName: existingSenderName, requestSentAt: existingSentAt,
+        proposedPrice: existingProposedPrice, requestedSeats: existingRequestedSeats, agreedPrice: existingAgreedPrice,
         isSupportChat: false, actingAsAdmin: false
       };
 
-      setActiveChat(chatDataMe);
+      setActiveChat(chatDataMe); 
 
-      await setDoc(chatRefMe, { ...chatDataMe, lastMessageTime: Date.now() }, { merge: true });
+      const { openNegotiation, ...cleanChatDataMe } = chatDataMe;
+      await setDoc(chatRefMe, { ...cleanChatDataMe, lastMessageTime: Date.now() }, { merge: true });
       await setDoc(doc(db, `inbox_${trip.userId}`, chatId), { ...chatDataOther }, { merge: true });
     } catch (err) {
       triggerToast('حدث خطأ في النظام أثناء محاولة فتح الشات.');
-      setActiveChat(null);
+      setActiveChat(null); 
     }
   };
 
+  // شات الإدارة الرسمي المنفصل تماماً عن حساب الأدمن الشخصي
   const openAdminChat = async (targetUser) => {
     if (!user || isGuest || !targetUser?.id) return;
     try {
       const supportChatId = `support_${targetUser.id}`;
 
-      const chatDataAdmin = {
-        chatId: supportChatId,
-        tripId: 'system',
-        tripType: 'support',
-        tripOwnerId: 'system',
+      const chatDataAdmin = { 
+        chatId: supportChatId, 
+        tripId: 'system', 
+        tripType: 'support', 
+        tripOwnerId: 'system', 
         isSupportChat: true,
         actingAsAdmin: true,
-        otherPersonId: targetUser.id,
-        otherPersonName: `${targetUser.name || 'مستخدم'} (دعم فني)`,
-        otherPersonPhoto: targetUser.photoURL || null,
-        otherPersonVerified: targetUser.isVerified || false,
-        tripInfo: 'محادثة الإدارة الرسمية 🛡️',
-        requestStatus: 'none'
+        otherPersonId: targetUser.id, 
+        otherPersonName: `${targetUser.name || 'مستخدم'} (دعم فني)`, 
+        otherPersonPhoto: targetUser.photoURL || null, 
+        otherPersonVerified: targetUser.isVerified || false, 
+        tripInfo: 'محادثة الإدارة الرسمية 🛡️', 
+        requestStatus: 'none' 
       };
 
-      const chatDataTargetUser = {
-        chatId: supportChatId,
-        tripId: 'system',
-        tripType: 'support',
-        tripOwnerId: 'system',
+      const chatDataTargetUser = { 
+        chatId: supportChatId, 
+        tripId: 'system', 
+        tripType: 'support', 
+        tripOwnerId: 'system', 
         isSupportChat: true,
         actingAsAdmin: false,
-        otherPersonId: 'system',
-        otherPersonName: 'الإدارة (الدعم الفني)',
-        otherPersonPhoto: appSettings?.logo || null,
-        otherPersonVerified: true,
-        tripInfo: 'الدعم الفني / الإدارة 🛡️',
-        requestStatus: 'none'
+        otherPersonId: 'system', 
+        otherPersonName: 'الإدارة (الدعم الفني)', 
+        otherPersonPhoto: appSettings?.logo || null, 
+        otherPersonVerified: true, 
+        tripInfo: 'الدعم الفني / الإدارة 🛡️', 
+        requestStatus: 'none' 
       };
 
-      setActiveChat(chatDataAdmin);
+      setActiveChat(chatDataAdmin); 
 
       await setDoc(doc(db, `inbox_${user.uid}`, supportChatId), { ...chatDataAdmin, lastMessageTime: Date.now() }, { merge: true });
       await setDoc(doc(db, `inbox_${targetUser.id}`, supportChatId), { ...chatDataTargetUser }, { merge: true });
-
+      
       setShowAdminPanel(false);
     } catch (err) {
       triggerToast('حدث خطأ في فتح شات الإدارة.');
     }
   };
 
-  // تطوير إدارة طلبات الانضمام المتعددة وتسجيل اسم المرسل ووقت الإرسال الدقيق
-  const handleTripAction = async (chatInfo, actionType) => {
+  // إدارة الطلبات المتعددة وشروط المقاعد والتفاوض على السعر
+  const handleTripAction = async (chatInfo, actionType, actionPayload = null) => {
     if (!chatInfo || typeof chatInfo !== 'object' || !chatInfo.chatId || !user) return;
     if (checkUserRestriction('chat') && chatInfo.tripId !== 'system') return;
     try {
       const chatId = chatInfo.chatId;
       const nowMillis = Date.now();
       const formattedTime = new Date(nowMillis).toLocaleTimeString('ar-EG', { hour: '2-digit', minute: '2-digit' });
-      let newStatus = '';
+      let newStatus = ''; 
       let systemText = '';
 
       const myFullName = userData?.name || 'مستخدم';
@@ -635,14 +665,52 @@ export default function App() {
       const ownerName = chatInfo.tripOwnerId === user.uid ? myName : otherName;
       const requesterName = chatInfo.requestSenderName || (chatInfo.requestSenderId === user.uid ? myFullName : chatInfo.otherPersonName) || 'مستخدم';
 
-      if (actionType === 'request') {
-        newStatus = 'pending';
-        systemText = `🙋‍♂️ طلب انضمام من (${myFullName}) لرحلة (${chatInfo.tripInfo}) الخاصة بـ ${ownerName} • الساعة ${formattedTime}`;
-      }
-      else if (actionType === 'cancel_request') {
-        newStatus = 'none';
-        systemText = `🔙 قام (${myFullName}) بإلغاء الطلب • الساعة ${formattedTime}`;
+      const requestedSeatsCount = Number(actionPayload?.requestedSeats || chatInfo.requestedSeats || 1);
+      const proposedPriceVal = actionPayload?.proposedPrice !== undefined ? Number(actionPayload.proposedPrice) : (chatInfo.proposedPrice ? Number(chatInfo.proposedPrice) : null);
+      const originalPriceVal = Number(chatInfo.tripOriginalPrice || 0);
 
+      // الشرط 1: منع إرسال أكثر من 3 طلبات معلقة (pending) في نفس الوقت لنفس المستخدم
+      if (actionType === 'request') {
+        const myPendingRequests = (myInbox || []).filter(
+          c => c.requestStatus === 'pending' && c.requestSenderId === user.uid && c.chatId !== chatId
+        );
+        if (myPendingRequests.length >= 3) {
+          triggerToast('⚠️ لديك 3 طلبات انضمام معلقة بالفعل! انتظر الرد أو ألغِ أحدها أولاً.');
+          return;
+        }
+      }
+
+      // الشرط 2: التحقق من توافر عدد المقاعد المطلوبة في الرحلة قبل الإرسال أو القبول
+      if ((actionType === 'request' || actionType === 'accept' || actionType === 'accept_original_price') && chatInfo.tripId && chatInfo.tripId !== 'system') {
+        const tripRef = doc(db, APP_COLLECTION_NAME, chatInfo.tripId);
+        const tripSnap = await getDoc(tripRef);
+        if (tripSnap.exists()) {
+          const tData = tripSnap.data();
+          const currentSeats = Number(tData.seats) || 0;
+          if (tData.status === 'full' || currentSeats <= 0) {
+            triggerToast('⚠️ عذراً، اكتمل عدد المقاعد المتاحة في هذه الرحلة!');
+            return;
+          }
+          if (currentSeats < requestedSeatsCount) {
+            triggerToast(`⚠️ عذراً، المتبقي في هذه الرحلة (${currentSeats}) مقعد فقط!`);
+            return;
+          }
+        }
+      }
+
+      if (actionType === 'request') { 
+        newStatus = 'pending'; 
+        const seatsLabel = requestedSeatsCount > 1 ? `(${requestedSeatsCount} مقاعد)` : '(مقعد واحد)';
+        const priceOfferLabel = (proposedPriceVal && proposedPriceVal !== originalPriceVal) 
+          ? ` بسعر مقترح (${proposedPriceVal} ج للمقعد بدلاً من ${originalPriceVal} ج) 🤝` 
+          : (originalPriceVal ? ` بالسعر المعروض (${originalPriceVal} ج)` : '');
+
+        systemText = `🙋‍♂️ طلب انضمام من (${myFullName}) لرحلة (${chatInfo.tripInfo}) الخاصة بـ ${ownerName} • المطلوب: ${seatsLabel}${priceOfferLabel} • الساعة ${formattedTime}`; 
+      } 
+      else if (actionType === 'cancel_request') { 
+        newStatus = 'none'; 
+        systemText = `🔙 قام (${myFullName}) بإلغاء الطلب • الساعة ${formattedTime}`; 
+        
         if (chatInfo.requestStatus === 'accepted' && chatInfo.tripId && chatInfo.tripId !== 'system') {
           try {
             const tripRef = doc(db, APP_COLLECTION_NAME, chatInfo.tripId);
@@ -650,20 +718,29 @@ export default function App() {
             if (tripSnap.exists()) {
               const tData = tripSnap.data();
               const currentSeats = Number(tData.seats) || 0;
+              const seatsToRestore = Number(chatInfo.requestedSeats || 1);
               const updatedMembers = (tData.joinedMembers || []).filter(m => m.uid !== chatInfo.requestSenderId);
-              await updateDoc(tripRef, {
-                seats: currentSeats + 1,
+              await updateDoc(tripRef, { 
+                seats: currentSeats + seatsToRestore, 
                 status: 'open',
                 joinedMembers: updatedMembers
               });
             }
           } catch (err) {}
         }
-      }
-      else if (actionType === 'accept') {
-        newStatus = 'accepted';
-        systemText = `✅ وافق (${myFullName}) على طلب انضمام (${requesterName})! • الساعة ${formattedTime} 🚗`;
+      } 
+      else if (actionType === 'accept' || actionType === 'accept_original_price') { 
+        newStatus = 'accepted'; 
+        const finalPrice = actionType === 'accept_original_price' 
+          ? originalPriceVal 
+          : (proposedPriceVal || originalPriceVal);
 
+        const priceAgreementText = finalPrice 
+          ? ` (السعر المتفق عليه: ${finalPrice} ج للمقعد${requestedSeatsCount > 1 ? ` × ${requestedSeatsCount} مقاعد` : ''})` 
+          : '';
+
+        systemText = `✅ وافق (${myFullName}) على طلب (${requesterName})${priceAgreementText}! • الساعة ${formattedTime} 🚗`; 
+        
         if (chatInfo.tripId && chatInfo.tripId !== 'system') {
           try {
             const tripRef = doc(db, APP_COLLECTION_NAME, chatInfo.tripId);
@@ -671,126 +748,127 @@ export default function App() {
             if (tripSnap.exists()) {
               const tData = tripSnap.data();
               const currentSeats = Number(tData.seats) || 0;
-              const memberObj = {
-                uid: chatInfo.requestSenderId || chatInfo.otherPersonId,
-                name: requesterName,
-                photo: chatInfo.otherPersonPhoto || null,
-                acceptedAt: nowMillis
-              };
-              const newSeats = Math.max(0, currentSeats - 1);
-              const tripUpdate = {
-                seats: newSeats,
-                joinedMembers: arrayUnion(memberObj)
-              };
-              if (newSeats === 0) tripUpdate.status = 'full';
-              await updateDoc(tripRef, tripUpdate);
+              if (currentSeats >= requestedSeatsCount) {
+                const newSeats = currentSeats - requestedSeatsCount;
+                const memberObj = {
+                  uid: chatInfo.requestSenderId || chatInfo.otherPersonId,
+                  name: requesterName,
+                  seats: requestedSeatsCount,
+                  agreedPrice: finalPrice || null,
+                  acceptedAt: nowMillis
+                };
+                const tripUpdate = { 
+                  seats: newSeats,
+                  joinedMembers: arrayUnion(memberObj)
+                };
+                if (newSeats === 0) tripUpdate.status = 'full';
+                await updateDoc(tripRef, tripUpdate);
+              }
             }
           } catch (err) {}
         }
+      } 
+      else if (actionType === 'reject') { 
+        newStatus = 'rejected'; 
+        systemText = `❌ اعتذر (${myFullName}) عن قبول الطلب • الساعة ${formattedTime}`; 
+      } 
+      else if (actionType === 'block') { 
+        newStatus = 'blocked'; 
+        systemText = 'تم حظر التعامل في هذا الشات 🚫'; 
       }
-      else if (actionType === 'reject') {
-        newStatus = 'rejected';
-        systemText = `❌ اعتذر (${myFullName}) عن قبول الطلب • الساعة ${formattedTime}`;
-      }
-      else if (actionType === 'block') {
-        newStatus = 'blocked';
-        systemText = 'تم حظر التعامل في هذا الشات 🚫';
-      }
-      else if (actionType === 'start_moving') {
-        newStatus = 'moving';
-        systemText = `🚙 تنبيه من (${myFullName}): الكابتن في الطريق إليك • الساعة ${formattedTime}`;
-      }
-      else if (actionType === 'arrive') {
-        newStatus = 'arrived';
-        systemText = `📍 تنبيه من (${myFullName}): الكابتن وصل نقطة الالتقاء • الساعة ${formattedTime}`;
-      }
-      else if (actionType === 'start_trip') {
-        newStatus = 'in_progress_trip';
-        systemText = `🛣️ بدأت الرحلة الآن مع (${myFullName}) • الساعة ${formattedTime}.. طريق آمن!`;
-      }
+      else if (actionType === 'start_moving') { 
+        newStatus = 'moving'; 
+        systemText = `🚙 تنبيه من (${myFullName}): الكابتن في الطريق • الساعة ${formattedTime}`; 
+      } 
+      else if (actionType === 'arrive') { 
+        newStatus = 'arrived'; 
+        systemText = `📍 تنبيه من (${myFullName}): الكابتن وصل نقطة الالتقاء • الساعة ${formattedTime}`; 
+      } 
+      else if (actionType === 'start_trip') { 
+        newStatus = 'in_progress_trip'; 
+        systemText = `🛣️ بدأت الرحلة مع (${myFullName}) • الساعة ${formattedTime}.. نتمنى لكم طريقاً آمناً`; 
+      } 
       else if (actionType === 'complete') {
-        newStatus = 'completed';
-        systemText = `✅ تم إنهاء الرحلة بنجاح مع (${myFullName}) • الساعة ${formattedTime}`;
-        if (chatInfo.tripId && chatInfo.tripId !== 'system') {
-          try {
-            await updateDoc(doc(db, APP_COLLECTION_NAME, chatInfo.tripId), { status: 'completed' });
-            if (chatInfo.tripOwnerId && (chatInfo.tripType === 'offer' || chatInfo.tripType === 'delivery')) {
-              await updateDoc(doc(db, USERS_COLLECTION, chatInfo.tripOwnerId), { completedTripsCount: increment(1) });
-            }
-          } catch (err) {}
+        newStatus = 'completed'; 
+        systemText = `✅ تم إنهاء الرحلة بنجاح • الساعة ${formattedTime}`;
+        if (chatInfo.tripId && chatInfo.tripId !== 'system') { 
+           try { 
+             await updateDoc(doc(db, APP_COLLECTION_NAME, chatInfo.tripId), { status: 'completed' }); 
+             if(chatInfo.tripOwnerId && (chatInfo.tripType === 'offer' || chatInfo.tripType === 'delivery')) {
+                await updateDoc(doc(db, USERS_COLLECTION, chatInfo.tripOwnerId), { completedTripsCount: increment(1) });
+             }
+           } catch(err) {} 
         }
       }
 
-      const updateDataMe = {
-        requestStatus: newStatus,
-        lastMessage: systemText,
-        lastSenderId: user.uid,
-        lastMessageTime: nowMillis,
-        statusUpdatedAt: nowMillis
-      };
+      const updateDataMe = { requestStatus: newStatus, lastMessage: systemText, lastSenderId: user.uid, lastMessageTime: nowMillis };
       const updateDataOther = { ...updateDataMe };
 
-      if (actionType === 'request') {
-        updateDataMe.requestSenderId = user.uid;
-        updateDataMe.requestSenderName = myFullName;
-        updateDataMe.requestSentAt = nowMillis;
+      if (actionType === 'request') { 
+         updateDataMe.requestSenderId = user.uid; 
+         updateDataMe.requestSenderName = myFullName;
+         updateDataMe.requestSentAt = nowMillis;
+         updateDataMe.requestedSeats = requestedSeatsCount;
+         updateDataMe.proposedPrice = proposedPriceVal || null;
+         updateDataMe.agreedPrice = null;
 
-        updateDataOther.requestSenderId = user.uid;
-        updateDataOther.requestSenderName = myFullName;
-        updateDataOther.requestSentAt = nowMillis;
+         updateDataOther.requestSenderId = user.uid; 
+         updateDataOther.requestSenderName = myFullName;
+         updateDataOther.requestSentAt = nowMillis;
+         updateDataOther.requestedSeats = requestedSeatsCount;
+         updateDataOther.proposedPrice = proposedPriceVal || null;
+         updateDataOther.agreedPrice = null;
       }
-      if (actionType === 'cancel_request') {
-        updateDataMe.requestSenderId = null;
+      if (actionType === 'cancel_request') { 
+        updateDataMe.requestSenderId = null; 
         updateDataMe.requestSenderName = null;
         updateDataMe.requestSentAt = null;
+        updateDataMe.proposedPrice = null;
+        updateDataMe.agreedPrice = null;
 
-        updateDataOther.requestSenderId = null;
+        updateDataOther.requestSenderId = null; 
         updateDataOther.requestSenderName = null;
         updateDataOther.requestSentAt = null;
+        updateDataOther.proposedPrice = null;
+        updateDataOther.agreedPrice = null;
       }
-      if (actionType === 'accept') {
-        updateDataMe.tripStartTime = serverTimestamp();
-        updateDataMe.requestAcceptedAt = nowMillis;
+      if (actionType === 'accept' || actionType === 'accept_original_price') { 
+        const finalAgreed = actionType === 'accept_original_price' ? originalPriceVal : (proposedPriceVal || originalPriceVal);
+        updateDataMe.tripStartTime = serverTimestamp(); 
+        updateDataMe.agreedPrice = finalAgreed || null;
 
-        updateDataOther.tripStartTime = serverTimestamp();
-        updateDataOther.requestAcceptedAt = nowMillis;
+        updateDataOther.tripStartTime = serverTimestamp(); 
+        updateDataOther.agreedPrice = finalAgreed || null;
       }
-
+      
       if (actionType === 'complete') {
         const cycleId = nowMillis;
         updateDataMe.completedCycleId = cycleId;
         updateDataOther.completedCycleId = cycleId;
       }
-
+      
       await setDoc(doc(db, `inbox_${user.uid}`, chatId), updateDataMe, { merge: true });
-      if (chatInfo.otherPersonId && !chatInfo.isGroup && chatInfo.otherPersonId !== 'system') {
-        await setDoc(doc(db, `inbox_${chatInfo.otherPersonId}`, chatId), updateDataOther, { merge: true });
+      if (chatInfo.otherPersonId && !chatInfo.isGroup && chatInfo.otherPersonId !== 'system') { 
+        await setDoc(doc(db, `inbox_${chatInfo.otherPersonId}`, chatId), updateDataOther, { merge: true }); 
       }
-      await addDoc(collection(db, `chats_${chatId}`), {
-        text: systemText,
-        senderId: 'system',
-        senderName: myFullName,
-        isSystem: true,
-        actionTime: nowMillis,
-        createdAt: serverTimestamp()
-      });
-
-      triggerToast('تم تحديث حالة الطلب بنجاح ✅');
-    } catch (error) {
-      triggerToast('حدث خطأ أثناء التحديث.');
+      await addDoc(collection(db, `chats_${chatId}`), { text: systemText, senderId: 'system', isSystem: true, createdAt: serverTimestamp() });
+      
+      triggerToast('تم تحديث الحالة.');
+    } catch (error) { 
+      triggerToast('حدث خطأ أثناء التحديث.'); 
     }
   };
 
-  // جلب جميع الطلبات النشطة وترتيبها حسب وقت الإرسال أو التحديث لدعم تعدد الطلبات
   const getActiveTrackersList = () => {
     if (!user || isGuest) return [];
+    let list = [];
     const activeNormals = (myInbox || [])
       .filter(c => ['pending', 'accepted', 'moving', 'arrived', 'in_progress_trip'].includes(c?.requestStatus) && !c?.isGroup)
       .sort((a, b) => (b.requestSentAt || b.lastMessageTime || 0) - (a.requestSentAt || a.lastMessageTime || 0));
-    return activeNormals.map(item => ({ type: 'normal', data: item }));
+    activeNormals.forEach(item => list.push({ type: 'normal', data: item }));
+    return list;
   };
   const activeTrackers = getActiveTrackersList();
-  const isTrackerBarVisible = !isGuest && activeTrackers.length > 0 && !activeChat;
 
   const formatShortSentTime = (ts) => {
     if (!ts) return '';
@@ -807,12 +885,15 @@ export default function App() {
   const textPrimary = isDarkMode ? 'text-white' : 'text-slate-900';
   const textSecondary = isDarkMode ? 'text-slate-400' : 'text-slate-500';
 
-  if (loading) return <div className="h-screen w-full flex items-center justify-center bg-slate-950"><Loader2 className="animate-spin text-indigo-500" size={40} /></div>;
+  const selectedPrefsCount = Object.keys(newTrip.preferences || {}).filter(k => newTrip.preferences[k]).length + (newTrip.notes?.trim() ? 1 : 0);
+
+  if (loading) return <div className="h-screen w-full flex items-center justify-center bg-slate-950"><Loader2 className="animate-spin text-indigo-500" size={40}/></div>;
 
   return (
     <div dir="rtl" className={`min-h-screen flex flex-col relative transition-colors duration-300 ${bgMain} overflow-x-hidden pb-0`}>
-      {toastMsg && (<div className="fixed top-24 left-1/2 transform -translate-x-1/2 z-[999] bg-slate-900 text-white px-6 py-3 rounded-full shadow-2xl flex items-center gap-3 border border-slate-700"><CheckCircle2 size={18} className="text-emerald-400" /><p className="text-sm font-bold whitespace-nowrap">{toastMsg}</p></div>)}
+      {toastMsg && ( <div className="fixed top-24 left-1/2 transform -translate-x-1/2 z-[999] bg-slate-900 text-white px-6 py-3 rounded-full shadow-2xl flex items-center gap-3 border border-slate-700"><CheckCircle2 size={18} className="text-emerald-400" /><p className="text-sm font-bold whitespace-nowrap">{toastMsg}</p></div> )}
 
+      {/* نافذة البروفايل العام لأي مستخدم */}
       {publicProfileUserId && (
         <PublicProfileModal
           targetUserId={publicProfileUserId}
@@ -826,32 +907,32 @@ export default function App() {
       {showAreaModal && (
         <div className="fixed inset-0 bg-slate-900/95 backdrop-blur-md z-[9999] flex justify-center items-center p-4 pointer-events-auto">
           <div className={`${bgCard} w-full max-w-md rounded-[2rem] p-6 shadow-2xl flex flex-col border animate-fade-in-up dark:border-slate-700`}>
-
+            
             <div className="flex justify-between items-center mb-3">
-              <h2 className="text-xl font-black text-indigo-600 dark:text-indigo-400 flex items-center gap-2">
+              <h2 className={`text-xl font-black text-indigo-600 dark:text-indigo-400 flex items-center gap-2`}>
                 <MapPin size={24} /> حدد منطقتك الحالية
               </h2>
-              <button onClick={() => setShowAreaModal(false)} className="p-1.5 bg-slate-100 dark:bg-slate-800 rounded-full hover:bg-rose-100 hover:text-rose-500 transition-colors"><X size={18} /></button>
+              <button onClick={() => setShowAreaModal(false)} className="p-1.5 bg-slate-100 dark:bg-slate-800 rounded-full hover:bg-rose-100 hover:text-rose-500 transition-colors"><X size={18}/></button>
             </div>
-
+            
             <p className={`${textSecondary} text-xs font-bold mb-3 leading-relaxed`}>
               يمكنك اختيار <span className="text-indigo-500 font-black">منطقة واحدة أو أكثر</span> لعرض الرحلات المتاحة والمارة بها، ثم اضغط تأكيد:
             </p>
-
+            
             <div className={`flex items-center gap-2 px-3 py-2.5 rounded-xl border mb-3 ${bgInput}`}>
-              <Search size={18} className="text-slate-400 shrink-0" />
-              <input
-                type="text"
-                placeholder="ابحث عن منطقتك..."
-                value={areaSearchQuery}
-                onChange={(e) => setAreaSearchQuery(e.target.value)}
-                className="w-full bg-transparent outline-none text-sm font-bold"
-              />
-              {areaSearchQuery && (
-                <button type="button" onClick={() => setAreaSearchQuery('')} className="text-slate-400 hover:text-rose-500">
-                  <X size={16} />
-                </button>
-              )}
+               <Search size={18} className="text-slate-400 shrink-0" />
+               <input 
+                 type="text" 
+                 placeholder="ابحث عن منطقتك..." 
+                 value={areaSearchQuery}
+                 onChange={(e) => setAreaSearchQuery(e.target.value)}
+                 className="w-full bg-transparent outline-none text-sm font-bold"
+               />
+               {areaSearchQuery && (
+                 <button type="button" onClick={() => setAreaSearchQuery('')} className="text-slate-400 hover:text-rose-500">
+                   <X size={16}/>
+                 </button>
+               )}
             </div>
 
             {tempSelectedAreas.length > 0 && (
@@ -859,9 +940,9 @@ export default function App() {
                 <span className="text-[11px] font-bold text-indigo-600 dark:text-indigo-400">
                   تم تحديد ({tempSelectedAreas.length}): {tempSelectedAreas.slice(0, 2).join('، ')}{tempSelectedAreas.length > 2 ? '...' : ''}
                 </span>
-                <button
-                  type="button"
-                  onClick={() => setTempSelectedAreas([])}
+                <button 
+                  type="button" 
+                  onClick={() => setTempSelectedAreas([])} 
                   className="text-[11px] font-bold text-rose-500 hover:underline"
                 >
                   إلغاء التحديد
@@ -878,8 +959,8 @@ export default function App() {
                     type="button"
                     onClick={() => toggleTempArea(area)}
                     className={`p-3 rounded-xl text-xs font-black border transition-all flex items-center justify-center gap-1.5 active:scale-95 ${
-                      isSelected
-                        ? 'bg-indigo-600 text-white border-indigo-600 shadow-md'
+                      isSelected 
+                        ? 'bg-indigo-600 text-white border-indigo-600 shadow-md' 
                         : 'bg-slate-50 text-slate-700 border-slate-200 hover:bg-indigo-50 hover:border-indigo-300 dark:bg-slate-800 dark:text-slate-300 dark:border-slate-700 dark:hover:bg-indigo-900/50'
                     }`}
                   >
@@ -893,58 +974,63 @@ export default function App() {
             </div>
 
             <div className="mt-4 pt-3 border-t border-slate-200 dark:border-slate-700 space-y-3">
-              <button
-                type="button"
-                onClick={handleConfirmAreas}
-                className="w-full bg-indigo-600 hover:bg-indigo-700 text-white py-3.5 rounded-xl font-black text-sm shadow-lg active:scale-95 transition-all flex items-center justify-center gap-2"
-              >
-                <CheckCircle2 size={18} />
-                <span>{tempSelectedAreas.length > 0 ? `تأكيد الاختيار (${tempSelectedAreas.length})` : 'عرض جميع المناطق 🌍'}</span>
-              </button>
+               <button 
+                 type="button"
+                 onClick={handleConfirmAreas}
+                 className="w-full bg-indigo-600 hover:bg-indigo-700 text-white py-3.5 rounded-xl font-black text-sm shadow-lg active:scale-95 transition-all flex items-center justify-center gap-2"
+               >
+                 <CheckCircle2 size={18}/>
+                 <span>{tempSelectedAreas.length > 0 ? `تأكيد الاختيار (${tempSelectedAreas.length})` : 'عرض جميع المناطق 🌍'}</span>
+               </button>
 
-              <div className="flex items-center justify-center gap-2">
-                <input
-                  type="checkbox"
-                  id="hideModal"
-                  checked={hideAreaModalFuture}
-                  onChange={(e) => setHideAreaModalFuture(e.target.checked)}
-                  className="w-4 h-4 rounded text-indigo-600 focus:ring-indigo-500"
-                />
-                <label htmlFor="hideModal" className={`text-xs font-bold cursor-pointer ${textSecondary}`}>لا تظهر هذه الرسالة مرة أخرى عند فتح التطبيق</label>
-              </div>
+               <div className="flex items-center justify-center gap-2">
+                 <input 
+                   type="checkbox" 
+                   id="hideModal" 
+                   checked={hideAreaModalFuture} 
+                   onChange={(e) => setHideAreaModalFuture(e.target.checked)}
+                   className="w-4 h-4 rounded text-indigo-600 focus:ring-indigo-500"
+                 />
+                 <label htmlFor="hideModal" className={`text-xs font-bold cursor-pointer ${textSecondary}`}>لا تظهر هذه الرسالة مرة أخرى عند فتح التطبيق</label>
+               </div>
             </div>
           </div>
         </div>
       )}
 
+      {/* الهيدر متوافق مع الموبايل واللابتوب (max-w-6xl) */}
       <header className={`sticky top-0 z-40 border-b ${isDarkMode ? 'bg-slate-950/90 border-slate-800/80' : 'bg-white/90 border-slate-200/70 shadow-sm'} backdrop-blur-xl pointer-events-auto`}>
         <div className="max-w-6xl mx-auto px-3 sm:px-6 py-2.5 flex items-center justify-between gap-2 w-full">
-
-          <div
-            className="flex items-center gap-2.5 cursor-pointer shrink-0"
-            onClick={() => setActiveTab('profile')}
+          
+          <div 
+            className="flex items-center gap-2.5 cursor-pointer shrink-0" 
+            onClick={() => isGuest ? forceLoginScreen() : setActiveTab('profile')}
           >
-            {userData?.photoURL ? (
-              <img src={userData.photoURL} className="w-9 h-9 sm:w-10 sm:h-10 rounded-full object-cover border border-indigo-500/30 shrink-0" alt="user" />
-            ) : (
+            {userData?.photoURL ? ( 
+              <img src={userData.photoURL} className="w-9 h-9 sm:w-10 sm:h-10 rounded-full object-cover border border-indigo-500/30 shrink-0" alt="user" /> 
+            ) : ( 
               <div className={`w-9 h-9 sm:w-10 sm:h-10 rounded-full flex items-center justify-center border shrink-0 ${isDarkMode ? 'bg-slate-800 border-slate-700' : 'bg-slate-100 border-slate-200'}`}>
-                <User size={18} className={textSecondary} />
-              </div>
+                <User size={18} className={textSecondary}/>
+              </div> 
             )}
             <div className="flex flex-col text-right leading-tight">
               <span className={`text-[10px] font-bold ${textSecondary}`}>مرحباً،</span>
-              <span className={`text-xs sm:text-sm font-black ${textPrimary} truncate max-w-[70px] sm:max-w-[120px]`}>
-                {isGuest ? 'زائر' : (userData?.name?.split(' ')[0] || 'مستخدم')}
-              </span>
+              {isGuest ? (
+                <span className="text-xs font-black text-indigo-500 hover:underline">سجل دخولك 🚀</span>
+              ) : (
+                <span className={`text-xs sm:text-sm font-black ${textPrimary} truncate max-w-[70px] sm:max-w-[120px]`}>
+                  {userData?.name?.split(' ')[0] || 'مستخدم'}
+                </span>
+              )}
             </div>
           </div>
 
-          <button
+          <button 
             type="button"
             onClick={openAreaModalWithSync}
             className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full text-[11px] sm:text-xs font-bold border transition-all shadow-sm active:scale-95 min-w-0 max-w-[180px] sm:max-w-[320px] ${
-              isDarkMode
-                ? 'bg-slate-900 border-slate-800 text-slate-200 hover:border-indigo-500/50'
+              isDarkMode 
+                ? 'bg-slate-900 border-slate-800 text-slate-200 hover:border-indigo-500/50' 
                 : 'bg-white border-slate-200/80 text-slate-700 hover:border-indigo-300'
             }`}
             title="اضغط لتعديل منطقتك الحالية"
@@ -960,16 +1046,16 @@ export default function App() {
               تغيير
             </span>
           </button>
-
+          
           <div className="flex items-center gap-2 shrink-0">
             {!isGuest && (
-              <button
+              <button 
                 type="button"
                 className={`relative p-2 rounded-full border transition-colors shrink-0 ${
-                  isDarkMode
-                    ? 'bg-slate-900 border-slate-800 hover:bg-slate-800 text-slate-300'
+                  isDarkMode 
+                    ? 'bg-slate-900 border-slate-800 hover:bg-slate-800 text-slate-300' 
                     : 'bg-slate-100 border-slate-200/70 hover:bg-slate-200 text-slate-600'
-                }`}
+                }`} 
                 onClick={() => setShowNotificationsModal(true)}
               >
                 <Bell size={18} />
@@ -979,17 +1065,17 @@ export default function App() {
               </button>
             )}
 
-            <div
-              className="flex items-center gap-1.5 cursor-pointer shrink-0"
+            <div 
+              className="flex items-center gap-1.5 cursor-pointer shrink-0" 
               onClick={() => { setActiveTab('home'); setViewMode('list'); }}
             >
               <span className="font-black text-sm sm:text-lg text-indigo-600 dark:text-indigo-400 tracking-tight">طريقنا</span>
-              {appSettings?.logo ? (
-                <img src={appSettings.logo} className="w-8 h-8 sm:w-9 sm:h-9 object-contain rounded-xl bg-white p-0.5 border border-slate-200/60 dark:border-slate-800 shadow-sm shrink-0" alt="Logo" />
-              ) : (
+              {appSettings?.logo ? ( 
+                <img src={appSettings.logo} className="w-8 h-8 sm:w-9 sm:h-9 object-contain rounded-xl bg-white p-0.5 border border-slate-200/60 dark:border-slate-800 shadow-sm shrink-0" alt="Logo"/> 
+              ) : ( 
                 <div className="bg-indigo-600 text-white p-1.5 rounded-xl shadow-sm shrink-0">
-                  <Car size={18} />
-                </div>
+                  <Car size={18}/>
+                </div> 
               )}
             </div>
           </div>
@@ -1001,33 +1087,33 @@ export default function App() {
         <div className="fixed inset-0 bg-slate-900/80 backdrop-blur-sm z-[999] flex justify-center items-start p-4 pointer-events-auto" onClick={() => setShowNotificationsModal(false)}>
           <div className={`${bgCard} w-full max-w-md mt-20 rounded-[2rem] shadow-2xl flex flex-col max-h-[60vh] border dark:border-slate-700 animate-fade-in-up`} onClick={e => e.stopPropagation()}>
             <div className="p-4 border-b flex justify-between items-center bg-slate-50 dark:bg-slate-800 dark:border-slate-700 shrink-0 rounded-t-[2rem]">
-              <h2 className="text-lg font-black flex items-center gap-2"><Bell className="text-indigo-500" /> التنبيهات الذكية</h2>
-              <button onClick={() => setShowNotificationsModal(false)} className="p-2 bg-slate-200 dark:bg-slate-700 rounded-full hover:bg-rose-100 hover:text-rose-500 transition-colors"><X size={20} /></button>
+              <h2 className="text-lg font-black flex items-center gap-2"><Bell className="text-indigo-500"/> التنبيهات الذكية</h2>
+              <button onClick={() => setShowNotificationsModal(false)} className="p-2 bg-slate-200 dark:bg-slate-700 rounded-full hover:bg-rose-100 hover:text-rose-500 transition-colors"><X size={20}/></button>
             </div>
             <div className="flex-1 overflow-y-auto p-4 [&::-webkit-scrollbar]:hidden [-ms-overflow-style:none] [scrollbar-width:none]">
               {notifications.length === 0 ? (
                 <div className="text-center py-10 text-slate-500">
-                  <Bell size={40} className="mx-auto mb-3 opacity-30" />
-                  <p className="font-bold">لا توجد إشعارات جديدة</p>
-                  <p className="text-xs mt-2 opacity-70">فعل التنبيهات من البحث وهيوصلك إشعار هنا</p>
+                   <Bell size={40} className="mx-auto mb-3 opacity-30"/>
+                   <p className="font-bold">لا توجد إشعارات جديدة</p>
+                   <p className="text-xs mt-2 opacity-70">فعل التنبيهات من البحث وهيوصلك إشعار هنا</p>
                 </div>
               ) : (
                 notifications.map(notif => (
                   <div key={notif.id} onClick={async () => {
-                    if (!notif.read) {
-                      try { await updateDoc(doc(db, 'notifications', notif.id), { read: true }); } catch (e) {}
-                    }
-                    setShowNotificationsModal(false);
-                    setActiveTab('home');
+                     if (!notif.read) {
+                       try { await updateDoc(doc(db, 'notifications', notif.id), {read: true}); } catch(e){}
+                     }
+                     setShowNotificationsModal(false);
+                     setActiveTab('home');
                   }} className={`p-4 rounded-xl mb-3 cursor-pointer border transition-colors ${!notif.read ? 'bg-indigo-50/50 border-indigo-200 dark:bg-indigo-900/20 dark:border-indigo-800' : 'bg-slate-50 border-slate-200 dark:bg-slate-800 dark:border-slate-700'}`}>
                     <div className="flex items-start gap-3">
-                      <div className={`p-2 rounded-full shrink-0 ${!notif.read ? 'bg-indigo-100 text-indigo-600 dark:bg-indigo-800 dark:text-indigo-300' : 'bg-slate-200 text-slate-500 dark:bg-slate-700'}`}>
-                        <Car size={18} />
-                      </div>
-                      <div>
-                        <h4 className={`font-bold text-sm ${!notif.read ? 'text-indigo-700 dark:text-indigo-400' : textPrimary}`}>{notif.title}</h4>
-                        <p className={`text-xs mt-1 ${textSecondary} leading-relaxed`}>{notif.body}</p>
-                      </div>
+                       <div className={`p-2 rounded-full shrink-0 ${!notif.read ? 'bg-indigo-100 text-indigo-600 dark:bg-indigo-800 dark:text-indigo-300' : 'bg-slate-200 text-slate-500 dark:bg-slate-700'}`}>
+                          <Car size={18}/>
+                       </div>
+                       <div>
+                          <h4 className={`font-bold text-sm ${!notif.read ? 'text-indigo-700 dark:text-indigo-400' : textPrimary}`}>{notif.title}</h4>
+                          <p className={`text-xs mt-1 ${textSecondary} leading-relaxed`}>{notif.body}</p>
+                       </div>
                     </div>
                   </div>
                 ))
@@ -1039,7 +1125,7 @@ export default function App() {
 
       {userData && (userData.isBanned || (userData.fullBanUntil && userData.fullBanUntil > Date.now()) || (userData.tripBanUntil && userData.tripBanUntil > Date.now()) || (userData.chatBanUntil && userData.chatBanUntil > Date.now())) && (
         <div className="bg-rose-600 text-white px-4 py-2 text-center text-xs font-black flex items-center justify-center gap-2 shadow-md z-30">
-          <Lock size={14} className="shrink-0" />
+          <Lock size={14} className="shrink-0"/>
           <span>
             {userData.isBanned || (userData.fullBanUntil && userData.fullBanUntil > Date.now())
               ? `حسابك موقوف حالياً عن اتخاذ الإجراءات (${getRemainingBanText(userData.fullBanUntil) || 'تواصل مع الإدارة'})`
@@ -1050,175 +1136,182 @@ export default function App() {
         </div>
       )}
 
+      {/* الزر العائم لإضافة رحلة على اليمين */}
       {activeTab === 'home' && !isGuest && (
-        <button
+        <button 
           onClick={() => {
             if (checkUserRestriction('trip')) return;
             setShowAddModal(true);
-          }}
-          className={`fixed ${isTrackerBarVisible ? 'bottom-[175px]' : 'bottom-[86px]'} right-3.5 sm:right-8 bg-indigo-600 text-white w-13 h-13 sm:w-14 sm:h-14 p-3 rounded-full shadow-lg flex items-center justify-center z-50 hover:bg-indigo-700 transition-all duration-300 ${
+          }} 
+          className={`fixed bottom-[90px] right-4 sm:right-8 bg-indigo-600 text-white w-14 h-14 rounded-full shadow-lg flex items-center justify-center z-50 hover:bg-indigo-700 transition-all duration-300 ${
             isScrolling ? 'translate-y-28 opacity-0 pointer-events-none scale-75' : 'translate-y-0 opacity-100 scale-100'
           }`}
           title="إضافة رحلة جديدة"
         >
-          <Plus size={26} />
+          <Plus size={28} />
         </button>
       )}
 
+      {/* نافذة إضافة رحلة بتصميم مدمج قابل للطي (Accordion) لسهولة الاستخدام على الموبايل */}
       {showAddModal && !isGuest && (
         <div className="fixed inset-0 bg-slate-900/90 backdrop-blur-sm z-[200] flex justify-center items-end sm:items-center p-0 sm:p-4 pointer-events-auto">
-          <div className={`${bgCard} w-full sm:max-w-md h-[92vh] sm:h-[85vh] rounded-t-[2rem] sm:rounded-[2rem] shadow-2xl flex flex-col overflow-hidden animate-fade-in-up border dark:border-slate-700`}>
-            <div className="p-4 border-b flex justify-between items-center bg-slate-50 dark:bg-slate-800 dark:border-slate-700 shrink-0">
-              <h2 className="text-lg font-black flex items-center gap-2"><Car className="text-indigo-500" /> إضافة إعلان</h2>
-              <button onClick={() => setShowAddModal(false)} className="p-2 bg-slate-200 dark:bg-slate-700 rounded-full"><X size={20} /></button>
+          <div className={`${bgCard} w-full sm:max-w-md max-h-[90vh] sm:max-h-[85vh] rounded-t-[2rem] sm:rounded-[2rem] shadow-2xl flex flex-col overflow-hidden animate-fade-in-up border dark:border-slate-700`}>
+            <div className="p-3.5 sm:p-4 border-b flex justify-between items-center bg-slate-50 dark:bg-slate-800 dark:border-slate-700 shrink-0">
+              <h2 className="text-base sm:text-lg font-black flex items-center gap-2"><Car className="text-indigo-500"/> إضافة إعلان</h2>
+              <button onClick={() => setShowAddModal(false)} className="p-1.5 bg-slate-200 dark:bg-slate-700 rounded-full"><X size={18}/></button>
             </div>
-
-            <div className="flex-1 overflow-y-auto p-5 [&::-webkit-scrollbar]:hidden [-ms-overflow-style:none] [scrollbar-width:none]">
-              <div className="flex bg-slate-100 dark:bg-slate-800 p-1 rounded-2xl mb-6">
-                <button type="button" onClick={() => setNewTrip({ ...newTrip, category: 'travel' })} className={`flex-1 py-2.5 rounded-xl text-xs font-bold transition-all ${newTrip.category === 'travel' ? 'bg-white text-indigo-600 shadow-sm dark:bg-slate-700 dark:text-white' : 'text-slate-500'}`}>سفر</button>
-                <button type="button" onClick={() => setNewTrip({ ...newTrip, category: 'parcel' })} className={`flex-1 py-2.5 rounded-xl text-xs font-bold transition-all ${newTrip.category === 'parcel' ? 'bg-white text-indigo-600 shadow-sm dark:bg-slate-700 dark:text-white' : 'text-slate-500'}`}>أمانات</button>
-              </div>
-              <form id="addTripForm" onSubmit={handleAddTrip} className="space-y-4">
-                <div className="flex gap-3 mb-2">
-                  <label className={`flex-1 flex items-center gap-2 p-3 rounded-xl border cursor-pointer ${newTrip.type === 'offer' ? 'bg-indigo-50 border-indigo-500 text-indigo-700 dark:bg-indigo-900/30 dark:text-indigo-300' : 'bg-transparent border-slate-200 dark:border-slate-700'}`}>
-                    <input type="radio" name="tripType" value="offer" checked={newTrip.type === 'offer'} onChange={() => setNewTrip({ ...newTrip, type: 'offer' })} className="hidden" />
-                    <Car size={18} /> <span className="text-[11px] font-bold">{newTrip.category === 'parcel' ? 'مسافر ومستعد لنقل طرد' : 'سائق (عربية متاحة)'}</span>
-                  </label>
-                  <label className={`flex-1 flex items-center gap-2 p-3 rounded-xl border cursor-pointer ${newTrip.type === 'request' ? 'bg-indigo-50 border-indigo-500 text-indigo-700 dark:bg-indigo-900/30 dark:text-indigo-300' : 'bg-transparent border-slate-200 dark:border-slate-700'}`}>
-                    <input type="radio" name="tripType" value="request" checked={newTrip.type === 'request'} onChange={() => setNewTrip({ ...newTrip, type: 'request' })} className="hidden" />
-                    <User size={18} /> <span className="text-[11px] font-bold">{newTrip.category === 'parcel' ? 'أرغب في إرسال أمانة/طرد' : 'راكب (مطلوب)'}</span>
-                  </label>
+            
+            <div className="flex-1 overflow-y-auto p-4 space-y-3.5 [&::-webkit-scrollbar]:hidden [-ms-overflow-style:none] [scrollbar-width:none]">
+              {/* التبديل بين سفر وأمانات + سائق وراكب */}
+              <div className="grid grid-cols-2 gap-2">
+                <div className="flex bg-slate-100 dark:bg-slate-800 p-1 rounded-xl">
+                  <button type="button" onClick={() => setNewTrip({...newTrip, category: 'travel'})} className={`flex-1 py-2 rounded-lg text-xs font-black transition-all ${newTrip.category === 'travel' ? 'bg-white text-indigo-600 shadow-sm dark:bg-slate-700 dark:text-white' : 'text-slate-500'}`}>🚗 سفر</button>
+                  <button type="button" onClick={() => setNewTrip({...newTrip, category: 'parcel'})} className={`flex-1 py-2 rounded-lg text-xs font-black transition-all ${newTrip.category === 'parcel' ? 'bg-white text-indigo-600 shadow-sm dark:bg-slate-700 dark:text-white' : 'text-slate-500'}`}>📦 أمانات</button>
                 </div>
 
-                <div className="space-y-2">
+                <div className="flex bg-slate-100 dark:bg-slate-800 p-1 rounded-xl">
+                  <button type="button" onClick={() => setNewTrip({...newTrip, type: 'offer'})} className={`flex-1 py-2 rounded-lg text-[11px] font-black transition-all ${newTrip.type === 'offer' ? 'bg-indigo-600 text-white shadow-sm' : 'text-slate-500'}`}>
+                    {newTrip.category === 'parcel' ? 'مسافر ناقل' : 'سائق'}
+                  </button>
+                  <button type="button" onClick={() => setNewTrip({...newTrip, type: 'request'})} className={`flex-1 py-2 rounded-lg text-[11px] font-black transition-all ${newTrip.type === 'request' ? 'bg-indigo-600 text-white shadow-sm' : 'text-slate-500'}`}>
+                    {newTrip.category === 'parcel' ? 'مرسل طرد' : 'راكب'}
+                  </button>
+                </div>
+              </div>
+
+              <form id="addTripForm" onSubmit={handleAddTrip} className="space-y-3">
+                {/* نقطة الانطلاق */}
+                <div className="space-y-1.5">
                   <div className="flex justify-between items-center px-1">
-                    <label className="text-[10px] font-bold text-slate-500">نقطة الانطلاق</label>
-                    <button type="button" onClick={() => getMyCity((locationData) => setNewTrip({ ...newTrip, from: locationData.city, fromDetails: locationData.details }))} disabled={isLocating} className="text-[10px] font-bold text-indigo-600 dark:text-indigo-400 flex items-center gap-1 hover:underline bg-indigo-50 dark:bg-indigo-900/30 px-2 py-0.5 rounded-lg">
-                      {isLocating ? <Loader2 size={12} className="animate-spin" /> : <MapPin size={12} />} تحديد تلقائي
+                    <label className="text-[11px] font-black text-slate-500">📍 نقطة الانطلاق</label>
+                    <button type="button" onClick={() => getMyCity((locationData) => setNewTrip({...newTrip, from: locationData.city, fromDetails: locationData.details}))} disabled={isLocating} className="text-[10px] font-bold text-indigo-600 dark:text-indigo-400 flex items-center gap-1 hover:underline bg-indigo-50 dark:bg-indigo-900/30 px-2 py-0.5 rounded-lg">
+                      {isLocating ? <Loader2 size={11} className="animate-spin"/> : <MapPin size={11}/>} تحديد تلقائي
                     </button>
                   </div>
                   {locationError && <p className="text-[10px] text-rose-500 px-1">{locationError}</p>}
-
-                  <select required value={newTrip.from} onChange={e => setNewTrip({ ...newTrip, from: e.target.value })} className={`w-full p-3.5 rounded-xl border font-bold text-sm outline-none ${bgInput}`}>
-                    <option value="" disabled>المنطقة / المحافظة *</option>
-                    {SUPPORTED_AREAS.map(c => <option key={c} value={c}>{c}</option>)}
-                  </select>
-                  <input type="text" placeholder="مكان التحرك بالتفصيل (مثل: أمام مول العرب)" value={newTrip.fromDetails} onChange={e => setNewTrip({ ...newTrip, fromDetails: e.target.value })} className={`w-full p-3.5 rounded-xl border font-medium text-xs outline-none ${bgInput}`} />
-                </div>
-
-                <div className="space-y-2 pt-1">
-                  <div className="flex items-center justify-between px-1">
-                    <label className="text-[11px] font-black text-indigo-600 dark:text-indigo-400 flex items-center gap-1">
-                      <Route size={13} /> خط السير (حدد المناطق التي ستمر عليها في طريقك)
-                    </label>
-                    {newTrip.routeAreas?.length > 0 && (
-                      <button type="button" onClick={() => setNewTrip(prev => ({ ...prev, routeAreas: [] }))} className="text-[10px] font-bold text-rose-500 hover:underline">
-                        مسح الكل
-                      </button>
-                    )}
-                  </div>
-                  <div className="flex flex-wrap gap-1.5 p-3 rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50/70 dark:bg-slate-800/40 max-h-36 overflow-y-auto [&::-webkit-scrollbar]:hidden">
-                    {SUPPORTED_AREAS.filter(a => a !== newTrip.from && a !== newTrip.to).map(area => {
-                      const isSelected = (newTrip.routeAreas || []).includes(area);
-                      return (
-                        <button
-                          key={area}
-                          type="button"
-                          onClick={() => {
-                            setNewTrip(prev => {
-                              const current = prev.routeAreas || [];
-                              return {
-                                ...prev,
-                                routeAreas: current.includes(area) ? current.filter(item => item !== area) : [...current, area]
-                              };
-                            });
-                          }}
-                          className={`px-2.5 py-1.5 text-[10px] font-bold rounded-lg border transition-all flex items-center gap-1 ${
-                            isSelected
-                              ? 'bg-indigo-600 text-white border-indigo-600 shadow-sm'
-                              : 'bg-white dark:bg-slate-800 text-slate-600 dark:text-slate-300 border-slate-200 dark:border-slate-700 hover:border-indigo-400'
-                          }`}
-                        >
-                          {isSelected && <Check size={11} />}
-                          <span>{area}</span>
-                        </button>
-                      );
-                    })}
+                  
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                    <select required value={newTrip.from} onChange={e => setNewTrip({...newTrip, from: e.target.value})} className={`w-full p-3 rounded-xl border font-bold text-xs outline-none ${bgInput}`}>
+                      <option value="" disabled>المنطقة / المحافظة *</option>
+                      {SUPPORTED_AREAS.map(c => <option key={c} value={c}>{c}</option>)}
+                    </select>
+                    <input type="text" placeholder="تفصيل التحرك (اختياري: أمام مول العرب)" value={newTrip.fromDetails} onChange={e => setNewTrip({...newTrip, fromDetails: e.target.value})} className={`w-full p-3 rounded-xl border font-medium text-xs outline-none ${bgInput}`}/>
                   </div>
                 </div>
 
-                <div className="space-y-2 pt-1">
-                  <label className="text-[10px] font-bold text-slate-500 px-1">نقطة الوصول</label>
-                  <select required value={newTrip.to} onChange={e => setNewTrip({ ...newTrip, to: e.target.value })} className={`w-full p-3.5 rounded-xl border font-bold text-sm outline-none ${bgInput}`}>
-                    <option value="" disabled>الوجهة / المحافظة *</option>
-                    {SUPPORTED_AREAS.map(c => <option key={c} value={c}>{c}</option>)}
-                  </select>
-                  <input type="text" placeholder="مكان الوصول بالتفصيل" value={newTrip.toDetails} onChange={e => setNewTrip({ ...newTrip, toDetails: e.target.value })} className={`w-full p-3.5 rounded-xl border font-medium text-xs outline-none ${bgInput}`} />
-                </div>
-
-                <div className="grid grid-cols-2 gap-3 pt-2">
-                  <input type="date" required value={newTrip.date} onChange={e => setNewTrip({ ...newTrip, date: e.target.value })} className={`p-4 rounded-xl border font-bold text-sm outline-none ${bgInput}`} />
-                  <input type="time" required value={newTrip.time} onChange={e => setNewTrip({ ...newTrip, time: e.target.value })} className={`p-4 rounded-xl border font-bold text-sm outline-none ${bgInput}`} />
-                  <div className="space-y-1">
-                    <label className="text-[10px] text-slate-500 px-1">عدد المقاعد</label>
-                    <input type="number" min="1" required placeholder="العدد" value={newTrip.seats} onChange={e => setNewTrip({ ...newTrip, seats: e.target.value })} className={`w-full p-4 rounded-xl border font-bold text-sm outline-none ${bgInput}`} />
-                  </div>
-                  <div className="space-y-1">
-                    <label className="text-[10px] text-slate-500 px-1">التكلفة (جنيه)</label>
-                    <input type="number" required placeholder="التكلفة (ج)" value={newTrip.cost} onChange={e => setNewTrip({ ...newTrip, cost: e.target.value })} className={`w-full p-4 rounded-xl border font-bold text-sm outline-none ${bgInput}`} />
+                {/* نقطة الوصول */}
+                <div className="space-y-1.5">
+                  <label className="text-[11px] font-black text-slate-500 px-1">🏁 نقطة الوصول</label>
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                    <select required value={newTrip.to} onChange={e => setNewTrip({...newTrip, to: e.target.value})} className={`w-full p-3 rounded-xl border font-bold text-xs outline-none ${bgInput}`}>
+                      <option value="" disabled>الوجهة / المحافظة *</option>
+                      {SUPPORTED_AREAS.map(c => <option key={c} value={c}>{c}</option>)}
+                    </select>
+                    <input type="text" placeholder="تفصيل الوصول (اختياري)" value={newTrip.toDetails} onChange={e => setNewTrip({...newTrip, toDetails: e.target.value})} className={`w-full p-3 rounded-xl border font-medium text-xs outline-none ${bgInput}`}/>
                   </div>
                 </div>
 
-                <div
-                  onClick={() => setNewTrip({ ...newTrip, preferences: { ...newTrip.preferences, femalesOnly: !newTrip.preferences.femalesOnly } })}
-                  className={`p-3.5 rounded-2xl border-2 cursor-pointer transition-all flex items-center justify-between ${
-                    newTrip.preferences.femalesOnly
-                      ? 'bg-pink-50 border-pink-400 text-pink-800 dark:bg-pink-950/40 dark:border-pink-700 dark:text-pink-200 shadow-sm'
-                      : 'bg-slate-50/60 border-slate-200 dark:bg-slate-800/40 dark:border-slate-700'
-                  }`}
-                >
-                  <div className="flex items-center gap-2.5">
-                    <span className="text-xl">👩</span>
-                    <div>
-                      <h4 className="text-xs font-black">رحلة سيدات (بنات فقط) 🌸</h4>
-                      <p className="text-[10px] opacity-80 font-bold mt-0.5">سيظهر كارت الرحلة باللون الوردي ومكتوب عليه "بنات فقط"</p>
+                {/* قسم قابل للطي 1: خط السير والمناطق الوسطية */}
+                <div className="rounded-xl border border-slate-200 dark:border-slate-700 overflow-hidden">
+                  <button
+                    type="button"
+                    onClick={() => setShowRouteSelector(!showRouteSelector)}
+                    className={`w-full p-2.5 flex items-center justify-between text-xs font-black transition-colors ${
+                      isDarkMode ? 'bg-slate-800/70 text-indigo-400 hover:bg-slate-800' : 'bg-indigo-50/60 text-indigo-700 hover:bg-indigo-50'
+                    }`}
+                  >
+                    <span className="flex items-center gap-1.5">
+                      <Route size={14} />
+                      <span>خط السير: المناطق التي ستمر عليها (اختياري)</span>
+                      {newTrip.routeAreas?.length > 0 && (
+                        <span className="bg-indigo-600 text-white text-[10px] px-2 py-0.2 rounded-full">
+                          {newTrip.routeAreas.length} منطقة
+                        </span>
+                      )}
+                    </span>
+                    {showRouteSelector ? <ChevronUp size={16} /> : <ChevronDown size={16} />}
+                  </button>
+
+                  {showRouteSelector && (
+                    <div className="p-2.5 bg-slate-50/70 dark:bg-slate-900/50 border-t border-slate-200 dark:border-slate-700 space-y-2 animate-fade-in-up">
+                      {newTrip.routeAreas?.length > 0 && (
+                        <div className="flex justify-end">
+                          <button type="button" onClick={() => setNewTrip(prev => ({ ...prev, routeAreas: [] }))} className="text-[10px] font-bold text-rose-500 hover:underline">
+                            مسح الكل
+                          </button>
+                        </div>
+                      )}
+                      <div className="flex flex-wrap gap-1.5 max-h-32 overflow-y-auto [&::-webkit-scrollbar]:hidden">
+                        {SUPPORTED_AREAS.filter(a => a !== newTrip.from && a !== newTrip.to).map(area => {
+                          const isSelected = (newTrip.routeAreas || []).includes(area);
+                          return (
+                            <button
+                              key={area}
+                              type="button"
+                              onClick={() => {
+                                setNewTrip(prev => {
+                                  const current = prev.routeAreas || [];
+                                  return {
+                                    ...prev,
+                                    routeAreas: current.includes(area) ? current.filter(item => item !== area) : [...current, area]
+                                  };
+                                });
+                              }}
+                              className={`px-2.5 py-1.5 text-[10px] font-bold rounded-lg border transition-all flex items-center gap-1 ${
+                                isSelected 
+                                  ? 'bg-indigo-600 text-white border-indigo-600 shadow-sm' 
+                                  : 'bg-white dark:bg-slate-800 text-slate-600 dark:text-slate-300 border-slate-200 dark:border-slate-700 hover:border-indigo-400'
+                              }`}
+                            >
+                              {isSelected && <Check size={11} />}
+                              <span>{area}</span>
+                            </button>
+                          );
+                        })}
+                      </div>
                     </div>
+                  )}
+                </div>
+
+                {/* التاريخ والوقت والمقاعد والتكلفة */}
+                <div className="grid grid-cols-2 gap-2.5">
+                  <div className="space-y-1">
+                    <label className="text-[10px] font-bold text-slate-500 px-1">تاريخ الرحلة *</label>
+                    <input type="date" required value={newTrip.date} onChange={e => setNewTrip({...newTrip, date: e.target.value})} className={`w-full p-2.5 rounded-xl border font-bold text-xs outline-none ${bgInput}`}/>
                   </div>
-                  <div className={`w-5 h-5 rounded-md flex items-center justify-center border ${newTrip.preferences.femalesOnly ? 'bg-pink-500 border-pink-500 text-white' : 'border-slate-300 dark:border-slate-600'}`}>
-                    {newTrip.preferences.femalesOnly && <Check size={14} />}
+                  <div className="space-y-1">
+                    <label className="text-[10px] font-bold text-slate-500 px-1">وقت التحرك *</label>
+                    <input type="time" required value={newTrip.time} onChange={e => setNewTrip({...newTrip, time: e.target.value})} className={`w-full p-2.5 rounded-xl border font-bold text-xs outline-none ${bgInput}`}/>
+                  </div>
+                  <div className="space-y-1">
+                    <label className="text-[10px] font-bold text-slate-500 px-1">{newTrip.category === 'parcel' ? 'عدد الطرود' : 'عدد المقاعد'}</label>
+                    <input type="number" min="1" required placeholder="العدد" value={newTrip.seats} onChange={e => setNewTrip({...newTrip, seats: e.target.value})} className={`w-full p-2.5 rounded-xl border font-bold text-xs outline-none ${bgInput}`}/>
+                  </div>
+                  <div className="space-y-1">
+                    <label className="text-[10px] font-bold text-slate-500 px-1">التكلفة للمقعد (جنيه) *</label>
+                    <input type="number" required placeholder="التكلفة (ج)" value={newTrip.cost} onChange={e => setNewTrip({...newTrip, cost: e.target.value})} className={`w-full p-2.5 rounded-xl border font-bold text-xs outline-none ${bgInput}`}/>
                   </div>
                 </div>
 
-                <div className="flex gap-2 flex-wrap pt-1">
-                  {Object.keys(newTrip.preferences).filter(k => k !== 'femalesOnly').map(key => {
-                    const labels = { ac: 'تكييف ❄️', noSmoking: 'ممنوع التدخين 🚭', luggage: 'شنط سفر 🧳', families: 'عائلات 👨‍👩‍👧‍👦' };
-                    return (
-                      <label key={key} className={`flex items-center gap-2 p-2.5 rounded-xl border cursor-pointer text-xs font-bold transition-colors ${newTrip.preferences[key] ? 'bg-indigo-50 border-indigo-500 text-indigo-700 dark:bg-indigo-900/40 dark:text-indigo-300' : 'bg-transparent border-slate-200 dark:border-slate-700 text-slate-500'}`}>
-                        <input type="checkbox" className="hidden" checked={newTrip.preferences[key]} onChange={(e) => setNewTrip({ ...newTrip, preferences: { ...newTrip.preferences, [key]: e.target.checked } })} />
-                        {labels[key]}
-                      </label>
-                    );
-                  })}
-                </div>
-
-                <div className="space-y-2 pt-2 border-t border-slate-200 dark:border-slate-700">
-                  <label className="text-xs font-black text-slate-700 dark:text-slate-200 flex items-center gap-1.5 px-1">
-                    <Phone size={14} className="text-indigo-500" /> طريقة التواصل المفضلة على الكارت
+                {/* طريقة التواصل المفضلة */}
+                <div className="space-y-1.5 pt-1">
+                  <label className="text-[11px] font-black text-slate-700 dark:text-slate-200 flex items-center gap-1 px-1">
+                    <Phone size={13} className="text-indigo-500"/> طريقة التواصل على الكارت
                   </label>
-                  <div className="grid grid-cols-2 gap-2">
+                  <div className="grid grid-cols-2 gap-1.5">
                     {[
                       { id: 'both', label: 'فون + واتساب 📞💬' },
                       { id: 'whatsapp', label: 'واتساب فقط 💬' },
-                      { id: 'phone', label: 'مكالمات فون فقط 📞' },
+                      { id: 'phone', label: 'مكالمات فقط 📞' },
                       { id: 'chat', label: 'شات التطبيق فقط 🔒' }
                     ].map(opt => (
                       <button
                         key={opt.id}
                         type="button"
                         onClick={() => setNewTrip({ ...newTrip, contactMethod: opt.id, allowPhoneContact: opt.id !== 'chat' })}
-                        className={`p-2.5 rounded-xl border text-[11px] font-black transition-all ${
-                          newTrip.contactMethod === opt.id
-                            ? 'bg-emerald-600 text-white border-emerald-600 shadow-sm'
+                        className={`p-2 rounded-xl border text-[10px] font-black transition-all ${
+                          newTrip.contactMethod === opt.id 
+                            ? 'bg-emerald-600 text-white border-emerald-600 shadow-sm' 
                             : 'bg-slate-50 dark:bg-slate-800 text-slate-600 dark:text-slate-300 border-slate-200 dark:border-slate-700'
                         }`}
                       >
@@ -1226,56 +1319,112 @@ export default function App() {
                       </button>
                     ))}
                   </div>
-                  {newTrip.contactMethod !== 'chat' && (
-                    <p className="text-[10px] font-bold text-slate-500 dark:text-slate-400 px-1">
-                      {userData?.phone
-                        ? `سيتم استخدام رقمك المسجل في حسابك: (${userData.phone})`
-                        : '⚠️ تنبيه: لم تقم بإضافة رقم هاتفك في (حسابي) بعد! أضفه ليظهر للمستخدمين.'}
+                  {newTrip.contactMethod !== 'chat' && !userData?.phone && (
+                    <p className="text-[10px] font-bold text-amber-500 px-1">
+                      ⚠️ لم تقم بإضافة رقم هاتفك في (حسابي) بعد! أضفه ليظهر للمستخدمين.
                     </p>
                   )}
                 </div>
 
-                <textarea rows="3" placeholder="ملاحظات إضافية..." value={newTrip.notes} onChange={e => setNewTrip({ ...newTrip, notes: e.target.value })} className={`w-full p-4 rounded-2xl border font-bold text-sm outline-none resize-none ${bgInput}`}></textarea>
+                {/* قسم قابل للطي 2: التفضيلات الإضافية (بنات فقط، تكييف، وملاحظات) */}
+                <div className="rounded-xl border border-slate-200 dark:border-slate-700 overflow-hidden">
+                  <button
+                    type="button"
+                    onClick={() => setShowExtraPrefs(!showExtraPrefs)}
+                    className={`w-full p-2.5 flex items-center justify-between text-xs font-black transition-colors ${
+                      isDarkMode ? 'bg-slate-800/70 text-slate-200 hover:bg-slate-800' : 'bg-slate-100/80 text-slate-700 hover:bg-slate-100'
+                    }`}
+                  >
+                    <span className="flex items-center gap-1.5">
+                      <Sparkles size={14} className="text-amber-500" />
+                      <span>تفضيلات الرحلة وملاحظات إضافية (بنات فقط 🌸 / تكييف)</span>
+                      {selectedPrefsCount > 0 && (
+                        <span className="bg-amber-500 text-slate-950 text-[10px] px-2 py-0.2 rounded-full">
+                          {selectedPrefsCount} مفعل
+                        </span>
+                      )}
+                    </span>
+                    {showExtraPrefs ? <ChevronUp size={16} /> : <ChevronDown size={16} />}
+                  </button>
+
+                  {showExtraPrefs && (
+                    <div className="p-3 bg-slate-50/70 dark:bg-slate-900/50 border-t border-slate-200 dark:border-slate-700 space-y-3 animate-fade-in-up">
+                      <div 
+                        onClick={() => setNewTrip({...newTrip, preferences: {...newTrip.preferences, femalesOnly: !newTrip.preferences.femalesOnly}})}
+                        className={`p-3 rounded-xl border-2 cursor-pointer transition-all flex items-center justify-between ${
+                          newTrip.preferences.femalesOnly 
+                            ? 'bg-pink-50 border-pink-400 text-pink-800 dark:bg-pink-950/40 dark:border-pink-700 dark:text-pink-200 shadow-sm' 
+                            : 'bg-white border-slate-200 dark:bg-slate-800 dark:border-slate-700'
+                        }`}
+                      >
+                        <div className="flex items-center gap-2">
+                          <span className="text-lg">👩</span>
+                          <div>
+                            <h4 className="text-xs font-black">رحلة سيدات (بنات فقط) 🌸</h4>
+                            <p className="text-[9px] opacity-80 font-bold">يظهر الكارت باللون الوردي ومكتوب عليه "بنات فقط"</p>
+                          </div>
+                        </div>
+                        <div className={`w-5 h-5 rounded-md flex items-center justify-center border ${newTrip.preferences.femalesOnly ? 'bg-pink-500 border-pink-500 text-white' : 'border-slate-300 dark:border-slate-600'}`}>
+                          {newTrip.preferences.femalesOnly && <Check size={13} />}
+                        </div>
+                      </div>
+
+                      <div className="flex gap-1.5 flex-wrap">
+                        {Object.keys(newTrip.preferences).filter(k => k !== 'femalesOnly').map(key => {
+                          const labels = { ac: 'تكييف ❄️', noSmoking: 'ممنوع التدخين 🚭', luggage: 'شنط سفر 🧳', families: 'عائلات 👨‍👩‍👧‍👦' };
+                          return (
+                            <label key={key} className={`flex items-center gap-1.5 px-2.5 py-2 rounded-xl border cursor-pointer text-[11px] font-bold transition-colors ${newTrip.preferences[key] ? 'bg-indigo-600 text-white border-indigo-600' : 'bg-white dark:bg-slate-800 border-slate-200 dark:border-slate-700 text-slate-500'}`}>
+                              <input type="checkbox" className="hidden" checked={newTrip.preferences[key]} onChange={(e) => setNewTrip({...newTrip, preferences: {...newTrip.preferences, [key]: e.target.checked}})} />
+                              {labels[key]}
+                            </label>
+                          );
+                        })}
+                      </div>
+
+                      <textarea rows="2" placeholder="ملاحظات إضافية عن الرحلة أو حجم الشنط..." value={newTrip.notes} onChange={e => setNewTrip({...newTrip, notes: e.target.value})} className={`w-full p-3 rounded-xl border font-bold text-xs outline-none resize-none ${bgInput}`}></textarea>
+                    </div>
+                  )}
+                </div>
+
               </form>
             </div>
-            <div className="p-4 border-t bg-slate-50 dark:bg-slate-800 dark:border-slate-700 shrink-0">
-              <button type="submit" form="addTripForm" disabled={isSubmitting} className="w-full bg-indigo-600 text-white py-4 rounded-2xl font-black shadow-lg hover:bg-indigo-700 active:scale-95 flex justify-center items-center gap-2">
-                {isSubmitting ? <Loader2 className="animate-spin" size={20} /> : 'نشر'}
-              </button>
+            <div className="p-3.5 border-t bg-slate-50 dark:bg-slate-800 dark:border-slate-700 shrink-0">
+               <button type="submit" form="addTripForm" disabled={isSubmitting} className="w-full bg-indigo-600 text-white py-3.5 rounded-xl font-black text-sm shadow-lg hover:bg-indigo-700 active:scale-95 flex justify-center items-center gap-2">
+                 {isSubmitting ? <Loader2 className="animate-spin" size={20}/> : 'نشر الإعلان الآن 🚀'}
+               </button>
             </div>
           </div>
         </div>
       )}
 
       {activeTab === 'home' && (
-        <HomeScreen
+        <HomeScreen 
           user={user} isAdmin={isAdmin} isDarkMode={isDarkMode} realTrips={realTrips} stations={stations} isGuest={isGuest}
           homeCategory={homeCategory} setHomeCategory={setHomeCategory} viewMode={viewMode} setViewMode={setViewMode} filterType={filterType} setFilterType={setFilterType}
           filterFrom={filterFrom} setFilterFrom={setFilterFrom} filterTo={filterTo} setFilterTo={setFilterTo} openChatFromTrip={openChatFromTrip}
-          setSelectedStation={setSelectedStation} triggerToast={triggerToast} appSettings={appSettings}
+          setSelectedStation={setSelectedStation} triggerToast={triggerToast} appSettings={appSettings} 
           userArea={userArea} userAreas={userAreas} onOpenAreaModal={openAreaModalWithSync}
           onOpenPublicProfile={(uid) => setPublicProfileUserId(uid)}
-          hasActiveTracker={isTrackerBarVisible}
         />
       )}
 
       {selectedStation && (
-        <StationModal station={selectedStation} user={user} isAdmin={isAdmin} isGuest={isGuest} isDarkMode={isDarkMode} onClose={() => setSelectedStation(null)} triggerToast={triggerToast} />
+        <StationModal station={selectedStation} user={user} isAdmin={isAdmin} isGuest={isGuest} isDarkMode={isDarkMode} onClose={() => setSelectedStation(null)} triggerToast={triggerToast}/>
       )}
 
       {activeTab === 'profile' && (
-        <ProfileScreen
-          user={user}
-          userData={userData}
-          setUserData={setUserData}
-          isGuest={isGuest}
-          isAdmin={isAdmin}
-          isDarkMode={isDarkMode}
-          toggleTheme={toggleTheme}
-          handleLogout={handleLogout}
-          handleEditName={handleEditName}
-          setShowVerifyModal={setShowVerifyModal}
-          setShowAdminPanel={setShowAdminPanel}
+        <ProfileScreen 
+          user={user} 
+          userData={userData} 
+          setUserData={setUserData} 
+          isGuest={isGuest} 
+          isAdmin={isAdmin} 
+          isDarkMode={isDarkMode} 
+          toggleTheme={toggleTheme} 
+          handleLogout={handleLogout} 
+          handleEditName={handleEditName} 
+          setShowVerifyModal={setShowVerifyModal} 
+          setShowAdminPanel={setShowAdminPanel} 
           forceSignUpScreen={forceSignUpScreen}
           realTrips={realTrips}
           openChatFromTrip={openChatFromTrip}
@@ -1284,42 +1433,41 @@ export default function App() {
         />
       )}
 
-      {activeChat && !isGuest && (
-        <ChatModal
-          baseChatData={activeChat}
-          user={user}
-          userData={userData}
-          isDarkMode={isDarkMode}
-          onClose={() => setActiveChat(null)}
-          triggerToast={triggerToast}
+      {activeChat && !isGuest && ( 
+        <ChatModal 
+          baseChatData={activeChat} 
+          user={user} 
+          userData={userData} 
+          isDarkMode={isDarkMode} 
+          onClose={() => setActiveChat(null)} 
+          triggerToast={triggerToast} 
           handleTripAction={handleTripAction}
           onOpenPublicProfile={(uid) => setPublicProfileUserId(uid)}
-        />
+        /> 
       )}
-
-      {showVerifyModal && (<VerifyModal user={user} isDarkMode={isDarkMode} onClose={() => setShowVerifyModal(false)} triggerToast={triggerToast} setUserData={setUserData} />)}
-      {showAdminPanel && isAdmin && (
-        <AdminPanel
-          isDarkMode={isDarkMode}
-          onClose={() => setShowAdminPanel(false)}
-          triggerToast={triggerToast}
-          appSettings={appSettings}
-          user={user}
+      
+      {showVerifyModal && ( <VerifyModal user={user} isDarkMode={isDarkMode} onClose={() => setShowVerifyModal(false)} triggerToast={triggerToast} setUserData={setUserData} /> )}
+      {showAdminPanel && isAdmin && ( 
+        <AdminPanel 
+          isDarkMode={isDarkMode} 
+          onClose={() => setShowAdminPanel(false)} 
+          triggerToast={triggerToast} 
+          appSettings={appSettings} 
+          user={user} 
           openAdminChat={openAdminChat}
           realTrips={realTrips}
           onOpenPublicProfile={(uid) => setPublicProfileUserId(uid)}
-        />
+        /> 
       )}
 
-      {/* صفحة رسائلي مع إظهار حالة الطلب واسم المرسل ووقت الإرسال */}
       {activeTab === 'inbox' && (
         <div className="pb-[100px] flex-1 w-full max-w-4xl mx-auto px-4 py-6 mt-4 relative z-10 animate-fade-in-up">
           <div className={`rounded-[2rem] shadow-sm border min-h-[500px] flex flex-col ${bgCard}`}>
             {!isGuest ? (
               <div className="flex-1 overflow-y-auto p-4 sm:p-6">
-                <h2 className="font-black text-xl mb-4 p-2 text-slate-800 dark:text-white">رسائلي وطلبات الرحلات</h2>
+                <h2 className="font-black text-xl mb-4 p-2 text-slate-800 dark:text-white">رسائلي</h2>
                 {myInbox.length === 0 ? (
-                  <div className="text-center text-slate-500 mt-24"><MessageCircle size={48} className="mx-auto mb-4 opacity-50" /><h3 className="font-bold text-lg">لا توجد رسائل</h3></div>
+                  <div className="text-center text-slate-500 mt-24"><MessageCircle size={48} className="mx-auto mb-4 opacity-50"/><h3 className="font-bold text-lg">لا توجد رسائل</h3></div>
                 ) : (
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
                     {myInbox.map(chat => {
@@ -1331,42 +1479,40 @@ export default function App() {
                         <div key={chat.chatId} onClick={() => setActiveChat(chat)} className={`p-4 rounded-2xl shadow-sm cursor-pointer border hover:border-indigo-500 transition-colors ${isSupport ? (isDarkMode ? 'bg-indigo-950/30 border-indigo-700/60' : 'bg-indigo-50/70 border-indigo-200') : (isDarkMode ? 'bg-slate-800' : 'bg-slate-50')}`}>
                           <div className="flex items-center justify-between gap-3">
                             <div className="flex items-center gap-3.5 overflow-hidden">
-                              {chat.otherPersonPhoto ? (
-                                <img src={chat.otherPersonPhoto} className="w-12 h-12 rounded-full object-cover shrink-0" alt="avatar" />
-                              ) : (
-                                <div className={`w-12 h-12 rounded-full flex items-center justify-center font-bold text-xl shrink-0 ${isSupport ? 'bg-indigo-600 text-white' : 'bg-indigo-50 text-indigo-500'}`}>
-                                  {isSupport ? '🛡️' : (chat?.otherPersonName || 'م').charAt(0)}
-                                </div>
-                              )}
-                              <div className="flex-1 overflow-hidden">
-                                <div className="flex items-center gap-1.5 flex-wrap">
-                                  <h4 className={`font-black text-sm truncate ${textPrimary}`}>{chat?.otherPersonName}</h4>
-                                  {isSupport && <span className="text-[9px] font-black bg-indigo-600 text-white px-2 py-0.5 rounded-full">رسمي</span>}
-                                  {reqStatus === 'pending' && (
-                                    <span className="text-[9px] font-black bg-amber-500 text-white px-2 py-0.5 rounded-full">
-                                      {chat.requestSenderId === user.uid ? 'طلب مرسل ⏳' : `طلب من ${chat.requestSenderName?.split(' ')[0] || chat.otherPersonName?.split(' ')[0]} 🔔`}
-                                    </span>
-                                  )}
-                                  {['accepted', 'moving', 'arrived', 'in_progress_trip'].includes(reqStatus) && (
-                                    <span className="text-[9px] font-black bg-emerald-500 text-white px-2 py-0.5 rounded-full">
-                                      رحلة جارية 🚗
-                                    </span>
-                                  )}
-                                </div>
-
-                                {chat?.tripInfo && !isSupport && (
-                                  <div className="flex items-center gap-2 mt-0.5 text-[10px] font-bold text-indigo-500 dark:text-indigo-400">
-                                    <span className="truncate">{chat.tripInfo}</span>
-                                    {sentTimeText && (
-                                      <span className="flex items-center gap-0.5 text-slate-400 shrink-0">
-                                        <Clock size={10} /> {sentTimeText}
-                                      </span>
-                                    )}
-                                  </div>
-                                )}
-
-                                <p className={`text-xs mt-1 truncate ${textSecondary}`}>{chat?.lastMessage || '...'}</p>
-                              </div>
+                               {chat.otherPersonPhoto ? ( 
+                                 <img src={chat.otherPersonPhoto} className="w-12 h-12 rounded-full object-cover shrink-0" alt="avatar" /> 
+                               ) : ( 
+                                 <div className={`w-12 h-12 rounded-full flex items-center justify-center font-bold text-xl shrink-0 ${isSupport ? 'bg-indigo-600 text-white' : 'bg-indigo-50 text-indigo-500'}`}>
+                                   {isSupport ? '🛡️' : (chat?.otherPersonName || 'م').charAt(0)}
+                                 </div> 
+                               )}
+                               <div className="flex-1 overflow-hidden">
+                                 <div className="flex items-center gap-1.5 flex-wrap">
+                                   <h4 className={`font-black text-sm truncate ${textPrimary}`}>{chat?.otherPersonName}</h4>
+                                   {isSupport && <span className="text-[9px] font-black bg-indigo-600 text-white px-2 py-0.5 rounded-full">رسمي</span>}
+                                   {reqStatus === 'pending' && (
+                                     <span className="text-[9px] font-black bg-amber-500 text-white px-2 py-0.5 rounded-full">
+                                       {chat.requestSenderId === user.uid ? 'طلب مرسل ⏳' : `طلب من ${chat.requestSenderName?.split(' ')[0] || chat.otherPersonName?.split(' ')[0]} 🔔`}
+                                     </span>
+                                   )}
+                                   {['accepted', 'moving', 'arrived', 'in_progress_trip'].includes(reqStatus) && (
+                                     <span className="text-[9px] font-black bg-emerald-500 text-white px-2 py-0.5 rounded-full">
+                                       رحلة جارية 🚗
+                                     </span>
+                                   )}
+                                 </div>
+                                 {chat?.tripInfo && !isSupport && (
+                                   <div className="flex items-center gap-2 mt-0.5 text-[10px] font-bold text-indigo-500 dark:text-indigo-400">
+                                     <span className="truncate">{chat.tripInfo}</span>
+                                     {sentTimeText && (
+                                       <span className="flex items-center gap-0.5 text-slate-400 shrink-0">
+                                         <Clock size={10} /> {sentTimeText}
+                                       </span>
+                                     )}
+                                   </div>
+                                 )}
+                                 <p className={`text-xs mt-1 truncate ${textSecondary}`}>{chat?.lastMessage || '...'}</p>
+                               </div>
                             </div>
 
                             {!isSupport && chat.otherPersonId && chat.otherPersonId !== 'system' && (
@@ -1388,13 +1534,13 @@ export default function App() {
                   </div>
                 )}
               </div>
-            ) : (<div className="flex-1 flex flex-col items-center justify-center"><Lock size={48} className="text-slate-300 mb-4" /><button onClick={forceSignUpScreen} className="bg-indigo-600 text-white px-6 py-3 rounded-xl font-bold">تسجيل الدخول للمتابعة</button></div>)}
+            ) : (<div className="flex-1 flex flex-col items-center justify-center"><Lock size={48} className="text-slate-300 mb-4"/><button onClick={forceSignUpScreen} className="bg-indigo-600 text-white px-6 py-3 rounded-xl font-bold">تسجيل الدخول للمتابعة</button></div>)}
           </div>
         </div>
       )}
 
-      {isTrackerBarVisible && (
-        <LiveTrackerBar activeTrackers={activeTrackers} isDarkMode={isDarkMode} user={user} setActiveChat={setActiveChat} setActiveTab={setActiveTab} setViewMode={setViewMode} handleTripAction={(chatInfo, actionType) => handleTripAction(chatInfo, actionType)} />
+      {!isGuest && activeTrackers.length > 0 && (!activeChat || activeChat.chatId !== (activeTrackers[0]?.type === 'normal' ? activeTrackers[0].data.chatId : activeTrackers[0]?.data.id)) && (
+        <LiveTrackerBar activeTrackers={activeTrackers} isDarkMode={isDarkMode} user={user} setActiveChat={setActiveChat} setActiveTab={setActiveTab} setViewMode={setViewMode} handleTripAction={(chatInfo, actionType, payload) => handleTripAction(chatInfo, actionType, payload)}/>
       )}
 
       <nav className={`fixed bottom-0 w-full z-[100] border-t ${isDarkMode ? 'bg-slate-950/95 border-slate-800' : 'bg-white/95 border-slate-100'} backdrop-blur-lg pointer-events-auto transition-all duration-300 ${
@@ -1412,6 +1558,15 @@ export default function App() {
       {!user && (
         <div dir="rtl" className={`fixed inset-0 flex items-center justify-center p-4 z-[1000] overflow-y-auto ${bgMain}`}>
           <div className={`${bgCard} p-6 sm:p-8 rounded-[2rem] shadow-xl max-w-sm w-full border relative my-auto`}>
+            <button
+              type="button"
+              onClick={handleGuestLogin}
+              className="absolute top-4 left-4 p-2 rounded-full bg-slate-100 dark:bg-slate-800 text-slate-400 hover:text-indigo-500 transition-colors"
+              title="تصفح كزائر"
+            >
+              <X size={18} />
+            </button>
+
             <div className="mb-6 text-center">
               <div className="bg-indigo-600 text-white w-14 h-14 rounded-[1.25rem] flex items-center justify-center mx-auto mb-3 transform -rotate-3 shadow-lg"><Car size={28} /></div>
               <h1 className="text-2xl font-black mb-1 text-indigo-600 dark:text-indigo-400">طريقنا</h1>
@@ -1421,8 +1576,8 @@ export default function App() {
             <form onSubmit={handleAuth} className="space-y-3.5">
               {!isLoginMode && (
                 <>
-                  <input type="text" required placeholder="الاسم بالكامل" value={authForm.name} onChange={e => setAuthForm({ ...authForm, name: e.target.value })} className={`w-full border rounded-xl py-3 px-4 outline-none font-bold text-sm ${bgInput}`} />
-
+                  <input type="text" required placeholder="الاسم بالكامل" value={authForm.name} onChange={e => setAuthForm({...authForm, name: e.target.value})} className={`w-full border rounded-xl py-3 px-4 outline-none font-bold text-sm ${bgInput}`} />
+                  
                   <div className="space-y-1">
                     <label className="text-[11px] font-black text-slate-400 px-1">النوع:</label>
                     <div className="grid grid-cols-2 gap-2">
@@ -1435,8 +1590,8 @@ export default function App() {
                           type="button"
                           onClick={() => setAuthForm({ ...authForm, gender: g.id })}
                           className={`py-2.5 rounded-xl text-xs font-black border transition-all ${
-                            authForm.gender === g.id
-                              ? 'bg-indigo-600 text-white border-indigo-600 shadow-sm'
+                            authForm.gender === g.id 
+                              ? 'bg-indigo-600 text-white border-indigo-600 shadow-sm' 
                               : `${bgInput}`
                           }`}
                         >
@@ -1459,8 +1614,8 @@ export default function App() {
                           type="button"
                           onClick={() => setAuthForm({ ...authForm, accountRole: r.id })}
                           className={`py-2.5 px-1 rounded-xl text-[11px] font-black border transition-all ${
-                            authForm.accountRole === r.id
-                              ? 'bg-emerald-600 text-white border-emerald-600 shadow-sm'
+                            authForm.accountRole === r.id 
+                              ? 'bg-emerald-600 text-white border-emerald-600 shadow-sm' 
                               : `${bgInput}`
                           }`}
                         >
@@ -1471,14 +1626,14 @@ export default function App() {
                   </div>
                 </>
               )}
-              <input type="text" required placeholder="رقم الموبايل أو الإيميل" value={authForm.identifier || ''} onChange={e => setAuthForm({ ...authForm, identifier: e.target.value })} className={`w-full border rounded-xl py-3 px-4 outline-none font-bold text-sm text-left ${bgInput}`} dir="ltr" />
-              <input type="password" required placeholder="كلمة المرور" value={authForm.password} onChange={e => setAuthForm({ ...authForm, password: e.target.value })} className={`w-full border rounded-xl py-3 px-4 outline-none font-bold text-sm text-left ${bgInput}`} dir="ltr" />
-              <button type="submit" disabled={authLoading} className="w-full bg-indigo-600 text-white py-3.5 rounded-xl font-black text-sm hover:bg-indigo-700 active:scale-95 flex justify-center mt-2 shadow-md">{authLoading ? <Loader2 className="animate-spin m-auto" /> : (isLoginMode ? 'تسجيل الدخول' : 'إنشاء الحساب والبدء')}</button>
+              <input type="text" required placeholder="رقم الموبايل أو الإيميل" value={authForm.identifier || ''} onChange={e => setAuthForm({...authForm, identifier: e.target.value})} className={`w-full border rounded-xl py-3 px-4 outline-none font-bold text-sm text-left ${bgInput}`} dir="ltr" />
+              <input type="password" required placeholder="كلمة المرور" value={authForm.password} onChange={e => setAuthForm({...authForm, password: e.target.value})} className={`w-full border rounded-xl py-3 px-4 outline-none font-bold text-sm text-left ${bgInput}`} dir="ltr" />
+              <button type="submit" disabled={authLoading} className="w-full bg-indigo-600 text-white py-3.5 rounded-xl font-black text-sm hover:bg-indigo-700 active:scale-95 flex justify-center mt-2 shadow-md">{authLoading ? <Loader2 className="animate-spin m-auto"/> : (isLoginMode ? 'تسجيل الدخول' : 'إنشاء الحساب والبدء')}</button>
             </form>
             <div className="mt-5 text-center space-y-3">
               <button onClick={() => setIsLoginMode(!isLoginMode)} className="font-bold text-xs text-indigo-600 hover:underline">{isLoginMode ? 'ليس لديك حساب؟ أنشئ حساباً جديداً' : 'لديك حساب بالفعل؟ سجل دخولك'}</button>
               <div className={`flex items-center justify-center gap-2 text-xs ${textSecondary}`}><div className="h-px w-8 bg-slate-200 dark:bg-slate-700"></div> أو <div className="h-px w-8 bg-slate-200 dark:bg-slate-700"></div></div>
-              <button onClick={handleGuestLogin} className={`w-full py-2.5 rounded-xl text-xs font-bold border transition-all ${isDarkMode ? 'border-slate-700 text-slate-300 hover:bg-slate-800' : 'border-slate-200 text-slate-600 hover:bg-slate-50'}`}>تصفح التطبيق كزائر</button>
+              <button onClick={handleGuestLogin} className={`w-full py-2.5 rounded-xl text-xs font-bold border transition-all ${isDarkMode ? 'border-slate-700 text-slate-300 hover:bg-slate-800' : 'border-slate-200 text-slate-600 hover:bg-slate-50'}`}>تصفح التطبيق كزائر 👀</button>
             </div>
           </div>
         </div>
