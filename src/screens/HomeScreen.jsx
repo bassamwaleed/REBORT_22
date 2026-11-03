@@ -2,7 +2,8 @@ import React, { useState, useEffect, useMemo } from 'react';
 import { 
   Bell, BusFront, MapPinned, List, X, ChevronRight, ChevronLeft, Route, Plus, 
   Loader2, ChevronLeft as ChevronLeftIcon, Search, MapPin, Sparkles, Compass, 
-  Car, CheckCircle2, Package, Shuffle, Bot, Layers, ArrowLeftRight
+  Car, CheckCircle2, Package, Shuffle, Bot, Layers, ArrowLeftRight, ShieldCheck, 
+  Flame, Snowflake, Check
 } from 'lucide-react';
 import TripCard from '../components/TripCard';
 import BesoAssistantModal from '../components/BesoAssistantModal';
@@ -182,6 +183,7 @@ const HomeScreen = ({
   }, [currentTripsToDisplay, exactMatchedTrips, activeUserAreas.join(','), filterTo, shuffleSeed, hasAreaOrSearchFilter, showCompletedTrips]);
 
   useEffect(() => { setAreaSlideIndex(0); }, [homeCategory, filterType, filterFrom, filterTo, showCompletedTrips, quickFilter]);
+  
   useEffect(() => {
     if (!hasAreaOrSearchFilter || showAllAreaTrips || isAreaCarouselPaused || exactMatchedTrips.length <= 1) return;
     const timer = setInterval(() => { setAreaSlideIndex(prev => (prev + 1) % exactMatchedTrips.length); }, 4500);
@@ -319,7 +321,15 @@ const HomeScreen = ({
     return counts;
   }, [availableTripsList]);
 
-  const filteredPickerAreas = SUPPORTED_AREAS.filter(a => !locationPickerSearch.trim() || normalizeArabic(a).includes(normalizeArabic(locationPickerSearch)));
+  // دمج المحافظات مع المناطق في بحث الموبايل لعدم حرمان المستخدم من أي اختيار
+  const allPickerLocations = useMemo(() => {
+    const combined = [...SUPPORTED_AREAS, ...EGYPT_CITIES];
+    return combined.filter((item, pos) => combined.indexOf(item) === pos);
+  }, []);
+
+  const filteredPickerAreas = allPickerLocations.filter(a => 
+    !locationPickerSearch.trim() || normalizeArabic(a).includes(normalizeArabic(locationPickerSearch))
+  );
 
   const bgInput = isDarkMode ? 'bg-slate-800 border-slate-700 text-white placeholder-slate-400 focus:border-indigo-500' : 'bg-white border-slate-200 text-slate-900 focus:border-indigo-500';
   const textPrimary = isDarkMode ? 'text-white' : 'text-slate-900';
@@ -354,40 +364,40 @@ const HomeScreen = ({
         <span className="text-[11px] font-black tracking-tight">اسأل بيسو 🤖</span>
       </button>
 
-      {/* نافذة اختيار المنطقة السريعة */}
+      {/* نافذة اختيار المنطقة السريعة (مُحسنة ومحمية من الأعطال) */}
       {locationPickerType && (
-        <div className="fixed inset-0 bg-slate-950/80 backdrop-blur-sm z-[950] flex justify-center items-end sm:items-center p-0 sm:p-4" onClick={() => setLocationPickerType(null)}>
-          <div onClick={e => e.stopPropagation()} className={`${bgCard} w-full sm:max-w-md rounded-t-[2rem] sm:rounded-[2rem] p-4 shadow-2xl border dark:border-slate-700 animate-fade-in-up`}>
-            <div className="flex items-center justify-between mb-3">
+        <div className="fixed inset-0 bg-slate-950/80 backdrop-blur-sm z-[950] flex justify-center items-end sm:items-center p-0 sm:p-4" onClick={() => { setLocationPickerType(null); setLocationPickerSearch(''); }}>
+          <div onClick={e => e.stopPropagation()} className={`${bgCard} w-full sm:max-w-md rounded-t-[2rem] sm:rounded-[2rem] p-4 shadow-2xl border dark:border-slate-700 animate-fade-in-up flex flex-col max-h-[85vh]`}>
+            <div className="flex items-center justify-between mb-3 shrink-0">
               <h3 className={`font-black text-sm flex items-center gap-1.5 ${textPrimary}`}>
                 <MapPin size={16} className="text-indigo-500" />
                 {locationPickerType === 'from' ? 'اختر نقطة الانطلاق (من)' : 'اختر الوجهة (إلى)'}
               </h3>
-              <button onClick={() => setLocationPickerType(null)} className="p-1.5 rounded-full bg-slate-100 dark:bg-slate-800"><X size={16} /></button>
+              <button onClick={() => { setLocationPickerType(null); setLocationPickerSearch(''); }} className="p-1.5 rounded-full bg-slate-100 dark:bg-slate-800"><X size={16} /></button>
             </div>
 
-            <div className={`flex items-center gap-2 px-3 py-2 rounded-xl border mb-2.5 ${bgInput}`}>
+            <div className={`flex items-center gap-2 px-3 py-2 rounded-xl border mb-2.5 shrink-0 ${bgInput}`}>
               <Search size={14} className="text-slate-400 shrink-0" />
               <input
-                type="text" autoFocus placeholder="ابحث عن المنطقة..."
+                type="text" autoFocus placeholder="ابحث عن المنطقة أو المحافظة..."
                 value={locationPickerSearch} onChange={e => setLocationPickerSearch(e.target.value)}
                 className="w-full bg-transparent outline-none text-xs font-bold"
               />
               {locationPickerSearch && <button onClick={() => setLocationPickerSearch('')}><X size={14} className="text-slate-400" /></button>}
             </div>
 
-            <div className="grid grid-cols-2 gap-2 max-h-[42vh] overflow-y-auto p-0.5 [&::-webkit-scrollbar]:hidden">
+            <div className="grid grid-cols-2 gap-2 overflow-y-auto p-0.5 [&::-webkit-scrollbar]:hidden flex-1">
               <button
                 type="button"
                 onClick={() => {
                   if (locationPickerType === 'from') setFilterFrom(''); else setFilterTo('');
                   setLocationPickerType(null); setLocationPickerSearch('');
                 }}
-                className={`col-span-2 p-2 rounded-xl text-xs font-black border transition-all flex items-center justify-center gap-1.5 ${
-                  (locationPickerType === 'from' ? !filterFrom : !filterTo) ? 'bg-indigo-600 text-white border-indigo-600' : 'bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300 border-slate-200 dark:border-slate-700'
+                className={`col-span-2 p-2.5 rounded-xl text-xs font-black border transition-all flex items-center justify-center gap-1.5 ${
+                  (locationPickerType === 'from' ? !filterFrom : !filterTo) ? 'bg-indigo-600 text-white border-indigo-600 shadow-sm' : 'bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300 border-slate-200 dark:border-slate-700'
                 }`}
               >
-                {locationPickerType === 'from' ? (activeUserAreas.length > 0 ? `منطقتي الحالية (${activeUserAreas.join('، ')})` : 'كل مناطق الانطلاق 🌍') : 'كل الوجهات المتاحة 🌍'}
+                {locationPickerType === 'from' ? 'الكل (إلغاء نقطة الانطلاق)' : 'الكل (إلغاء الوجهة)'}
               </button>
 
               {filteredPickerAreas.map(area => {
@@ -470,7 +480,7 @@ const HomeScreen = ({
           }`}
         >
           {availableParcelCount > 0 && (
-            <span className={`absolute top-1 left-1 px-1.5 py-0.2 rounded-full text-[8px] font-black ${viewMode === 'list' && homeCategory === 'parcel' ? 'bg-white text-indigo-600' : 'bg-rose-500 text-white'}`}>
+            <span className={`absolute top-1.5 left-1.5 px-1.5 py-0.2 rounded-full text-[8px] font-black ${viewMode === 'list' && homeCategory === 'parcel' ? 'bg-white text-indigo-600' : 'bg-rose-500 text-white'}`}>
               {availableParcelCount}
             </span>
           )}
@@ -640,7 +650,7 @@ const HomeScreen = ({
                  {visibleStations.length === 0 ? (
                    <div className={`text-center py-10 px-4 rounded-2xl border-2 border-dashed col-span-1 md:col-span-2 lg:col-span-3 ${isDarkMode ? 'border-slate-800 bg-slate-900/50' : 'border-slate-200 bg-slate-50'}`}>
                      <BusFront size={30} className="mx-auto text-slate-300 mb-2"/>
-                     <h3 className="font-bold text-xs text-slate-500 mb-2">لا توجد مواقف مطابقة لبحثك</h3>
+                     <h3 className="font-bold text-xs text-slate-500 mb-2">لا توجد مواقف مسجلة تطابق هذا البحث</h3>
                      {!isGuest && (
                        <button onClick={() => setShowAddStation(true)} className="px-3 py-1.5 bg-emerald-600 text-white rounded-xl text-[11px] font-black inline-flex items-center gap-1 shadow-sm">
                          <Plus size={13}/> أضف هذا الموقف
