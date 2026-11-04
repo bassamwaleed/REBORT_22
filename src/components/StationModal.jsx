@@ -1,14 +1,16 @@
 import React, { useState } from 'react';
 import { doc, getDoc, updateDoc, deleteDoc } from 'firebase/firestore';
-import { X, MapPinned, Route, Plus, Loader2, BusFront, Edit3, Check, AlertCircle, Trash2, Flame, UserCheck, Search, LinkIcon, Settings } from 'lucide-react';
+import { X, MapPinned, Route, Plus, Loader2, BusFront, Edit3, Check, AlertCircle, Trash2, Flame, UserCheck, Search, Settings, Compass } from 'lucide-react';
 import { db, STATIONS_COLLECTION } from '../firebase';
 import { EGYPT_CITIES } from '../utils/helpers';
 import { SUPPORTED_AREAS } from '../App';
+import { NODE_TYPES } from './AdminPanel';
 
 const StationModal = ({ station, user, isAdmin, isGuest, isDarkMode, onClose, triggerToast }) => {
   const [isAddingRoute, setIsAddingRoute] = useState(station.startInAddMode || false);
   const [newRouteDest, setNewRouteDest] = useState('');
   const [newRouteDetails, setNewRouteDetails] = useState(''); 
+  const [newRouteBoardingHint, setNewRouteBoardingHint] = useState(''); // مكان الركوب الدقيق (من فوق الكوبري / تحت المحور)
   const [newRouteFare, setNewRouteFare] = useState('');
   const [isSubmitting, setIsSubmitting] = useState(false);
 
@@ -16,18 +18,21 @@ const StationModal = ({ station, user, isAdmin, isGuest, isDarkMode, onClose, tr
   const [editFareValue, setEditFareValue] = useState('');
   const [routeSearchQuery, setRouteSearchQuery] = useState('');
   
-  // حالات تعديل بيانات الموقف بالكامل (للأدمن)
   const [isEditingStation, setIsEditingStation] = useState(false);
   const [editStationName, setEditStationName] = useState(station.name || '');
+  const [editStationType, setEditStationType] = useState(station.nodeType || 'station');
   const [editStationGov, setEditStationGov] = useState(station.governorate || '');
   const [editStationLoc, setEditStationLoc] = useState(station.location || '');
   const [editStationUrl, setEditStationUrl] = useState(station.mapUrl || '');
+  const [editTransferHint, setEditTransferHint] = useState(station.transferHint || ''); // إرشاد التحويلة للنقطة التبادلية
   const [isSavingStationInfo, setIsSavingStationInfo] = useState(false);
 
   const bgCard = isDarkMode ? 'bg-slate-900 border-slate-800' : 'bg-white border-slate-200';
   const textPrimary = isDarkMode ? 'text-white' : 'text-slate-900';
   const textSecondary = isDarkMode ? 'text-slate-400' : 'text-slate-500';
   const bgInput = isDarkMode ? 'bg-slate-800 border-slate-700 text-white focus:border-indigo-500' : 'bg-white border-slate-200 text-slate-900 focus:border-indigo-500';
+
+  const currentTypeObj = NODE_TYPES.find(t => t.id === (station.nodeType || 'station')) || NODE_TYPES[0];
 
   const handleUpdateCrowdStatus = async (type, status, routeIndex = null) => {
     if (isGuest || !user) return triggerToast('يجب تسجيل الدخول للإبلاغ عن الحالة');
@@ -41,7 +46,7 @@ const StationModal = ({ station, user, isAdmin, isGuest, isDarkMode, onClose, tr
 
       if (type === 'station') {
         await updateDoc(stationRef, { crowdStatus: status, crowdUpdatedAt: now });
-        triggerToast('تم تحديث حالة الموقف بنجاح');
+        triggerToast('تم تحديث الحالة بنجاح');
       } else if (type === 'route' && routeIndex !== null) {
         let currentRoutes = currentData.routes || [];
         currentRoutes[routeIndex].crowdStatus = status;
@@ -63,10 +68,10 @@ const StationModal = ({ station, user, isAdmin, isGuest, isDarkMode, onClose, tr
   };
 
   const handleDeleteStation = async () => {
-    if(!window.confirm('هل أنت متأكد من حذف هذا الموقف بالكامل؟ لا يمكن التراجع.')) return;
+    if(!window.confirm('هل أنت متأكد من حذف هذه النقطة بالكامل؟')) return;
     try {
       await deleteDoc(doc(db, STATIONS_COLLECTION, station.id));
-      triggerToast('تم حذف الموقف بنجاح');
+      triggerToast('تم الحذف بنجاح');
       onClose();
     } catch(e) { triggerToast('حدث خطأ أثناء الحذف'); }
   };
@@ -83,26 +88,28 @@ const StationModal = ({ station, user, isAdmin, isGuest, isDarkMode, onClose, tr
     } catch(e) { triggerToast('حدث خطأ أثناء الحذف'); }
   };
 
-  // دالة حفظ تعديلات الموقف الشاملة للأدمن
   const handleSaveStationEdit = async () => {
     if (!isAdmin) return;
-    if (!editStationName.trim() || !editStationLoc.trim()) return triggerToast('أدخل اسم الموقف والمنطقة');
+    if (!editStationName.trim() || !editStationLoc.trim()) return triggerToast('أدخل الاسم والمنطقة');
     setIsSavingStationInfo(true);
     try {
       const stationRef = doc(db, STATIONS_COLLECTION, station.id);
       await updateDoc(stationRef, { 
         name: editStationName.trim(),
+        nodeType: editStationType,
         governorate: editStationGov || null,
         location: editStationLoc.trim(),
-        mapUrl: editStationUrl.trim() || null
+        mapUrl: editStationUrl.trim() || null,
+        transferHint: editTransferHint.trim() || null
       });
-      triggerToast('تم تحديث بيانات الموقف بنجاح ✅');
+      triggerToast('تم تحديث بيانات النقطة وإرشاد بيسو بنجاح ✅');
       setIsEditingStation(false);
-      // تحديث محلي سريع ليعكس التعديل
       station.name = editStationName.trim();
+      station.nodeType = editStationType;
       station.governorate = editStationGov || null;
       station.location = editStationLoc.trim();
       station.mapUrl = editStationUrl.trim() || null;
+      station.transferHint = editTransferHint.trim() || null;
     } catch (e) {
       triggerToast('حدث خطأ أثناء التحديث');
     } finally {
@@ -119,17 +126,18 @@ const StationModal = ({ station, user, isAdmin, isGuest, isDarkMode, onClose, tr
     try {
       const stationRef = doc(db, STATIONS_COLLECTION, station.id);
       const stationSnap = await getDoc(stationRef);
-      if (!stationSnap.exists()) throw new Error("الموقف غير موجود");
+      if (!stationSnap.exists()) throw new Error("غير موجود");
       
       const currentRoutes = stationSnap.data().routes || [];
       const existingRouteIndex = currentRoutes.findIndex(r => r.destination === newRouteDest && r.destinationDetails === newRouteDetails.trim());
 
       if (existingRouteIndex >= 0) {
-        triggerToast('هذا الخط موجود بالفعل في هذا الموقف!');
+        triggerToast('هذا الخط موجود بالفعل هنا!');
       } else {
         currentRoutes.push({
           destination: newRouteDest,
           destinationDetails: newRouteDetails.trim() || null, 
+          boardingHint: newRouteBoardingHint.trim() || null,
           fare: newRouteFare,
           status: isAdmin ? 'approved' : 'pending',
           addedBy: [user.uid],
@@ -137,10 +145,11 @@ const StationModal = ({ station, user, isAdmin, isGuest, isDarkMode, onClose, tr
           crowdUpdatedAt: null
         });
         await updateDoc(stationRef, { routes: currentRoutes });
-        triggerToast(isAdmin ? 'تم إضافة الخط بنجاح ✅' : 'تم إرسال اقتراح إضافة الخط للمراجعة ⏳');
+        triggerToast(isAdmin ? 'تم إضافة الخط وتغذية بيسو بنجاح ✅' : 'تم إرسال اقتراح إضافة الخط للمراجعة ⏳');
         setIsAddingRoute(false);
         setNewRouteDest('');
         setNewRouteDetails('');
+        setNewRouteBoardingHint('');
         setNewRouteFare('');
       }
     } catch (error) {
@@ -175,20 +184,22 @@ const StationModal = ({ station, user, isAdmin, isGuest, isDarkMode, onClose, tr
     <div className="fixed inset-0 bg-slate-900/95 backdrop-blur-sm z-[400] flex justify-center items-end sm:items-center p-0 sm:p-4 pointer-events-auto">
       <div className={`${bgCard} w-full sm:max-w-md h-[90vh] sm:h-[650px] rounded-t-[2rem] sm:rounded-[2rem] shadow-2xl flex flex-col overflow-hidden animate-fade-in-up border dark:border-slate-700`}>
         
-        {/* هيدر الموقف */}
         <div className="p-4 border-b flex flex-col bg-indigo-50/70 dark:bg-slate-800 dark:border-slate-700 shrink-0 relative">
           <div className="flex justify-between items-start w-full">
             <div className="flex items-center gap-3">
               <div className="p-2.5 bg-indigo-600 text-white rounded-xl shadow-sm"><BusFront size={20}/></div>
               <div>
-                <div className="flex items-center gap-1.5">
-                  <h2 className={`text-base font-black ${textPrimary}`}>{station.name}</h2>
+                <div className="flex items-center gap-1.5 flex-wrap">
+                  <span className={`text-[9px] font-black px-2 py-0.5 rounded-md border ${currentTypeObj.badgeClass}`}>
+                    {currentTypeObj.label}
+                  </span>
                   {isAdmin && (
-                    <button onClick={() => setIsEditingStation(!isEditingStation)} className="text-slate-400 hover:text-indigo-500 bg-white dark:bg-slate-700 rounded-full p-1 shadow-sm">
+                    <button onClick={() => setIsEditingStation(!isEditingStation)} className="text-slate-400 hover:text-indigo-500 bg-white dark:bg-slate-700 rounded-full p-1 shadow-sm" title="تعديل بيانات وتصنيف النقطة">
                       <Settings size={12}/>
                     </button>
                   )}
                 </div>
+                <h2 className={`text-base font-black mt-0.5 ${textPrimary}`}>{station.name}</h2>
                 <div className="flex items-center gap-2 mt-0.5 flex-wrap">
                   <span className={`text-[11px] font-bold ${textSecondary}`}>
                     {station.governorate && station.governorate !== station.location ? `${station.governorate} - ${station.location}` : station.location}
@@ -210,10 +221,17 @@ const StationModal = ({ station, user, isAdmin, isGuest, isDarkMode, onClose, tr
             </div>
           </div>
 
-          {/* شريط زحام الموقف */}
-          <div className="mt-3 flex items-center justify-between bg-white dark:bg-slate-900 p-2 rounded-xl shadow-sm border dark:border-slate-700">
+          {/* عرض إرشاد التحويلة/التبديل للراكب إن وجد */}
+          {station.transferHint && (
+            <div className="mt-2.5 p-2 rounded-xl bg-purple-500/10 border border-purple-500/25 text-[11px] font-bold text-purple-700 dark:text-purple-300 flex items-start gap-1.5">
+              <Compass size={14} className="shrink-0 mt-0.5 text-purple-500" />
+              <span><strong>إرشاد التبديل والركوب:</strong> {station.transferHint}</span>
+            </div>
+          )}
+
+          <div className="mt-2.5 flex items-center justify-between bg-white dark:bg-slate-900 p-2 rounded-xl shadow-sm border dark:border-slate-700">
              <span className="text-[11px] font-bold text-slate-500 flex items-center gap-1.5">
-               <span>حالة الموقف الآن:</span>
+               <span>حالة الزحام الآن:</span>
                <span className="text-[9px] font-normal opacity-75">({getTimeAgo(station.crowdUpdatedAt)})</span>
              </span>
              <div className="flex gap-1.5">
@@ -225,24 +243,30 @@ const StationModal = ({ station, user, isAdmin, isGuest, isDarkMode, onClose, tr
 
         <div className="flex-1 overflow-y-auto p-4 [&::-webkit-scrollbar]:hidden [-ms-overflow-style:none] [scrollbar-width:none]">
           
-          {/* فورم تعديل بيانات الموقف للأدمن */}
           {isAdmin && isEditingStation && (
             <div className="mb-4 p-3.5 rounded-2xl border border-amber-300 dark:border-amber-700 bg-amber-50/50 dark:bg-amber-900/10 space-y-2.5 animate-fade-in-up">
-              <span className="text-[11px] font-black text-amber-600 flex items-center gap-1.5 mb-1"><Settings size={14}/> تعديل بيانات الموقف (أدمن)</span>
+              <span className="text-[11px] font-black text-amber-600 flex items-center gap-1.5 mb-1"><Settings size={14}/> تعديل بيانات النقطة وإرشاد التبديل (أدمن)</span>
               
-              <input type="text" placeholder="اسم الموقف" value={editStationName} onChange={(e) => setEditStationName(e.target.value)} className={`w-full p-2.5 rounded-xl border text-xs font-bold outline-none ${bgInput}`} />
-              
-              <select value={editStationGov} onChange={e => {
-                const val = e.target.value;
-                setEditStationGov(val);
-                if (!editStationLoc || EGYPT_CITIES.includes(editStationLoc)) setEditStationLoc(val);
-              }} className={`w-full p-2.5 rounded-xl border text-xs font-bold outline-none ${bgInput}`}>
-                <option value="">تعديل المحافظة الأساسية...</option>
-                {EGYPT_CITIES.map(c => <option key={c} value={c}>{c}</option>)}
-              </select>
+              <div className="grid grid-cols-2 gap-1.5">
+                {NODE_TYPES.map(nt => (
+                  <button
+                    key={nt.id}
+                    type="button"
+                    onClick={() => setEditStationType(nt.id)}
+                    className={`p-2 rounded-xl text-[10px] font-black border text-right flex items-center justify-between ${
+                      editStationType === nt.id ? 'bg-indigo-600 text-white border-indigo-600' : `${bgInput}`
+                    }`}
+                  >
+                    <span className="truncate">{nt.short}</span>
+                    {editStationType === nt.id && <Check size={11} />}
+                  </button>
+                ))}
+              </div>
 
+              <input type="text" placeholder="اسم الموقف أو النقطة التبادلية" value={editStationName} onChange={(e) => setEditStationName(e.target.value)} className={`w-full p-2.5 rounded-xl border text-xs font-bold outline-none ${bgInput}`} />
+              
               <select value={editStationLoc} onChange={e => setEditStationLoc(e.target.value)} className={`w-full p-2.5 rounded-xl border text-xs font-bold outline-none ${bgInput}`}>
-                <option value="">تعديل المنطقة...</option>
+                <option value="">تعديل المنطقة / المحافظة...</option>
                 <optgroup label="📍 المدن والمناطق الحيوية">
                   {SUPPORTED_AREAS.map(a => <option key={a} value={a}>{a}</option>)}
                 </optgroup>
@@ -250,6 +274,14 @@ const StationModal = ({ station, user, isAdmin, isGuest, isDarkMode, onClose, tr
                   {EGYPT_CITIES.map(c => <option key={c} value={c}>{c}</option>)}
                 </optgroup>
               </select>
+
+              <textarea
+                rows={2}
+                value={editTransferHint}
+                onChange={(e) => setEditTransferHint(e.target.value)}
+                placeholder="إرشاد التحويلة لبيسو والركاب (مثال: انزل تحت كوبري محور 26 يوليو في الصحراوي واطلع سلم المحور اركب من فوق)"
+                className={`w-full p-2.5 rounded-xl border text-xs font-bold outline-none resize-none ${bgInput}`}
+              />
 
               <input type="url" value={editStationUrl} onChange={(e) => setEditStationUrl(e.target.value)} className={`w-full p-2.5 rounded-xl border text-xs outline-none ${bgInput}`} dir="ltr" placeholder="تعديل رابط الخريطة..." />
               
@@ -264,11 +296,11 @@ const StationModal = ({ station, user, isAdmin, isGuest, isDarkMode, onClose, tr
 
           <div className="flex justify-between items-center mb-3">
             <h3 className={`font-black text-sm sm:text-base ${textPrimary}`}>
-              خطوط السير والتعريفة ({station.routes?.length || 0})
+              الخطوط والمواصلات المارة ({station.routes?.length || 0})
             </h3>
             {!isAddingRoute && (
               <button onClick={() => setIsAddingRoute(true)} className="text-[11px] font-black bg-indigo-600 text-white px-3 py-1.5 rounded-xl flex items-center gap-1 hover:bg-indigo-700 transition-colors shadow-sm">
-                <Plus size={13}/> أضف خط سير
+                <Plus size={13}/> أضف خط / تحويلة
               </button>
             )}
           </div>
@@ -278,7 +310,7 @@ const StationModal = ({ station, user, isAdmin, isGuest, isDarkMode, onClose, tr
               <Search size={15} className="text-slate-400 shrink-0" />
               <input 
                 type="text" 
-                placeholder="ابحث داخل خطوط الموقف (مثال: رمسيس، شبين، أكتوبر...)" 
+                placeholder="ابحث داخل الخطوط (مثال: الحصري، رمسيس، أكتوبر...)" 
                 value={routeSearchQuery}
                 onChange={(e) => setRouteSearchQuery(e.target.value)}
                 className="w-full bg-transparent outline-none text-xs font-bold"
@@ -287,37 +319,54 @@ const StationModal = ({ station, user, isAdmin, isGuest, isDarkMode, onClose, tr
             </div>
           )}
 
-          {/* فورم إضافة خط سير */}
           {isAddingRoute && (
-            <form onSubmit={handleAddRoute} className="mb-4 p-3.5 bg-indigo-50/50 dark:bg-slate-800/80 rounded-2xl border border-indigo-200 dark:border-slate-700 animate-fade-in-up space-y-3">
+            <form onSubmit={handleAddRoute} className="mb-4 p-3.5 bg-indigo-50/50 dark:bg-slate-800/80 rounded-2xl border border-indigo-200 dark:border-slate-700 animate-fade-in-up space-y-2.5">
               <div className="flex items-center justify-between">
                 <span className="text-xs font-black text-indigo-600 dark:text-indigo-400 flex items-center gap-1">
-                  <Route size={14}/> إضافة خط من {station.name}
+                  <Route size={14}/> إضافة خط يمر بـ {station.name}
                 </span>
                 <button type="button" onClick={() => setIsAddingRoute(false)} className="text-slate-400 hover:text-rose-500"><X size={16}/></button>
               </div>
 
               <div className="space-y-2">
-                <div>
-                  <select required value={newRouteDest} onChange={e => setNewRouteDest(e.target.value)} className={`w-full p-2.5 rounded-xl border text-xs font-bold outline-none ${bgInput}`}>
-                    <option value="" disabled>اختر المحافظة أو المنطقة المتجه إليها...</option>
-                    <optgroup label="🏛️ محافظات مصر (27 محافظة)">
-                      {EGYPT_CITIES.map(c => <option key={`gov_${c}`} value={c}>محافظة {c}</option>)}
-                    </optgroup>
-                    <optgroup label="📍 المدن والمناطق الحيوية">
-                      {SUPPORTED_AREAS.map(a => <option key={`area_${a}`} value={a}>{a}</option>)}
-                    </optgroup>
-                  </select>
-                </div>
-                <div>
-                  <input type="text" placeholder="تفاصيل الخط (مثال: رمسيس / الحصري) - اختياري" value={newRouteDetails} onChange={e => setNewRouteDetails(e.target.value)} className={`w-full p-2.5 rounded-xl border text-xs font-bold outline-none ${bgInput}`}/>
-                </div>
-                <div>
-                  <input type="number" required placeholder="الأجرة للفرد (جنيه) *" value={newRouteFare} onChange={e => setNewRouteFare(e.target.value)} className={`w-full p-2.5 rounded-xl border text-xs font-bold outline-none ${bgInput}`}/>
-                </div>
+                <select required value={newRouteDest} onChange={e => setNewRouteDest(e.target.value)} className={`w-full p-2.5 rounded-xl border text-xs font-bold outline-none ${bgInput}`}>
+                  <option value="" disabled>1. اختر المنطقة أو المحافظة المتجه إليها *</option>
+                  <optgroup label="📍 المدن والمناطق الحيوية">
+                    {SUPPORTED_AREAS.map(a => <option key={`area_${a}`} value={a}>{a}</option>)}
+                  </optgroup>
+                  <optgroup label="🏛️ محافظات مصر (27 محافظة)">
+                    {EGYPT_CITIES.map(c => <option key={`gov_${c}`} value={c}>محافظة {c}</option>)}
+                  </optgroup>
+                </select>
+
+                <input 
+                  type="text" 
+                  placeholder="2. اسم الخط أو النقطة التبادلية (مثال: الحصري / محور 26 يوليو)" 
+                  value={newRouteDetails} 
+                  onChange={e => setNewRouteDetails(e.target.value)} 
+                  className={`w-full p-2.5 rounded-xl border text-xs font-bold outline-none ${bgInput}`}
+                />
+
+                <input 
+                  type="text" 
+                  placeholder="3. يركب منين بالظبط؟ (مثال: من فوق المحور / اتجاه ميدان لبنان)" 
+                  value={newRouteBoardingHint} 
+                  onChange={e => setNewRouteBoardingHint(e.target.value)} 
+                  className={`w-full p-2.5 rounded-xl border text-xs font-bold outline-none ${bgInput}`}
+                />
+
+                <input 
+                  type="number" 
+                  required 
+                  placeholder="4. الأجرة للفرد (جنيه) *" 
+                  value={newRouteFare} 
+                  onChange={e => setNewRouteFare(e.target.value)} 
+                  className={`w-full p-2.5 rounded-xl border text-xs font-bold outline-none ${bgInput}`}
+                />
+
                 <div className="flex gap-2 pt-1">
                   <button type="submit" disabled={isSubmitting} className="flex-1 bg-indigo-600 hover:bg-indigo-700 text-white py-2.5 rounded-xl text-[11px] font-black flex justify-center items-center gap-2 shadow-sm">
-                    {isSubmitting ? <Loader2 size={14} className="animate-spin"/> : (isAdmin ? 'حفظ الخط فوراً ✅' : 'إرسال للاعتماد 🚀')}
+                    {isSubmitting ? <Loader2 size={14} className="animate-spin"/> : (isAdmin ? 'حفظ وتغذية بيسو ✅' : 'إرسال للاعتماد 🚀')}
                   </button>
                   <button type="button" onClick={() => setIsAddingRoute(false)} className="px-4 bg-slate-200 dark:bg-slate-700 text-slate-700 dark:text-slate-300 rounded-xl text-[11px] font-bold">إلغاء</button>
                 </div>
@@ -325,12 +374,11 @@ const StationModal = ({ station, user, isAdmin, isGuest, isDarkMode, onClose, tr
             </form>
           )}
 
-          {/* قائمة الخطوط */}
           <div className="space-y-2.5 pb-6">
             {(!station.routes || station.routes.length === 0) ? (
               <div className="text-center py-10 opacity-60 border-2 border-dashed rounded-2xl border-slate-200 dark:border-slate-800">
                 <Route size={30} className="mx-auto mb-2 text-slate-400"/>
-                <p className="font-bold text-xs">لا توجد خطوط مسجلة في هذا الموقف بعد.</p>
+                <p className="font-bold text-xs">لا توجد خطوط مسجلة في هذه النقطة بعد.</p>
                 <button onClick={() => setIsAddingRoute(true)} className="mt-2 text-xs font-black text-indigo-500 hover:underline">
                   + أضف أول خط سير الآن
                 </button>
@@ -364,6 +412,12 @@ const StationModal = ({ station, user, isAdmin, isGuest, isDarkMode, onClose, tr
                             </span>
                           )}
                         </div>
+
+                        {route.boardingHint && (
+                          <p className="text-[10px] font-bold text-indigo-500 dark:text-indigo-400 mt-0.5">
+                            📍 يركب من: {route.boardingHint}
+                          </p>
+                        )}
                         
                         <div className="flex items-center gap-2 mt-1">
                           <div className="flex gap-1">
