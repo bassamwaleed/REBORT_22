@@ -9,7 +9,7 @@ import {
 import { db, USERS_COLLECTION, APP_COLLECTION_NAME, STATIONS_COLLECTION } from '../firebase';
 import { resizeAndConvertToBase64, getPlaceCoords, EGYPT_CITIES } from '../utils/helpers';
 import { SUPPORTED_AREAS } from '../App';
-
+ 
 export const ADMIN_BADGE_OPTIONS = [
   { id: '', label: 'بدون شارة إضافية', color: 'bg-slate-100 text-slate-600' },
   { id: 'كابتن مبادر 🌱', label: 'كابتن مبادر 🌱', color: 'bg-emerald-100 text-emerald-700 border-emerald-300' },
