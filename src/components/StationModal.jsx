@@ -446,7 +446,7 @@ const StationModal = ({ station, user, isAdmin, isGuest, isDarkMode, onClose, tr
                           <span className="font-black text-emerald-600 dark:text-emerald-400 text-xs sm:text-sm bg-emerald-500/10 px-2.5 py-1 rounded-xl border border-emerald-500/20">
                             {route.fare} ج
                           </span>
-                          {!isGuest && (
+                           {!isGuest && (
                             <button onClick={() => {setEditingIndex(originalIndex); setEditFareValue(route.fare);}} className="text-slate-400 hover:text-indigo-500 p-1 bg-slate-100 dark:bg-slate-800 rounded-lg transition-colors" title="تعديل الأجرة"><Edit3 size={12}/></button>
                           )}
                           {isAdmin && (
