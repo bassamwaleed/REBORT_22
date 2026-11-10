@@ -59,13 +59,13 @@ const PublicProfileModal = ({ targetUserId, isDarkMode, onClose, realTrips = [],
     <div className="fixed inset-0 bg-slate-950/85 backdrop-blur-md z-[900] flex justify-center items-end sm:items-center p-0 sm:p-4 pointer-events-auto" onClick={onClose}>
       <div 
         onClick={(e) => e.stopPropagation()} 
-        className={`${bgCard} w-full sm:max-w-lg max-h-[90vh] rounded-t-[2rem] sm:rounded-[2rem] shadow-2xl flex flex-col overflow-hidden border dark:border-slate-800 animate-fade-in-up`}
+        className={`${bgCard} w-full sm:max-w-lg max-h-[90vh] rounded-t-[2rem] sm:rounded-3xl shadow-2xl flex flex-col overflow-hidden border dark:border-slate-800 animate-fade-in-up`}
       >
         {/* الهيدر */}
-        <div className="relative bg-gradient-to-r from-indigo-600 via-indigo-700 to-violet-700 p-5 text-white shrink-0">
-          <button 
+        <div className="relative bg-indigo-600 p-5 text-white shrink-0">
+          <button aria-label="إغلاق" 
             onClick={onClose} 
-            className="absolute top-4 left-4 p-2 bg-white/15 hover:bg-rose-500 rounded-full transition-colors"
+            className="absolute top-4 left-4 p-2.5 bg-white/15 hover:bg-rose-500 rounded-full transition-colors"
           >
             <X size={18} />
           </button>
@@ -90,12 +90,12 @@ const PublicProfileModal = ({ targetUserId, isDarkMode, onClose, realTrips = [],
                 <div className="flex items-center gap-1.5 flex-wrap">
                   <h2 className="font-black text-lg truncate">{profileData.name || 'مستخدم طريقنا'}</h2>
                   {profileData.isVerified && (
-                    <span className="inline-flex items-center gap-1 text-[10px] font-black bg-emerald-500 text-white px-2.5 py-0.5 rounded-full shadow-sm">
+                    <span className="inline-flex items-center gap-1 text-xs font-black bg-emerald-500 text-white px-2.5 py-0.5 rounded-full shadow-sm">
                       <ShieldCheck size={12} /> عضو موثق وأمان
                     </span>
                   )}
                   {profileData.customBadge && (
-                    <span className="text-[10px] font-black bg-amber-400 text-slate-950 px-2 py-0.5 rounded-full shadow-sm">
+                    <span className="text-xs font-black bg-amber-400 text-slate-950 px-2 py-0.5 rounded-full shadow-sm">
                       {profileData.customBadge}
                     </span>
                   )}
@@ -103,11 +103,11 @@ const PublicProfileModal = ({ targetUserId, isDarkMode, onClose, realTrips = [],
 
                 {/* النوع والصفة */}
                 <div className="flex flex-wrap items-center gap-1.5 mt-2">
-                  <span className="text-[10px] font-black bg-white/20 backdrop-blur-sm px-2.5 py-0.5 rounded-lg">
+                  <span className="text-xs font-black bg-white/20 backdrop-blur-sm px-2.5 py-0.5 rounded-lg">
                     {ROLE_LABELS[profileData.accountRole]?.label || 'عضو في طريقنا 🤝'}
                   </span>
                   {profileData.gender && GENDER_LABELS[profileData.gender] && (
-                    <span className="text-[10px] font-black bg-white/15 px-2.5 py-0.5 rounded-lg">
+                    <span className="text-xs font-black bg-white/15 px-2.5 py-0.5 rounded-lg">
                       {GENDER_LABELS[profileData.gender]}
                     </span>
                   )}
@@ -135,7 +135,7 @@ const PublicProfileModal = ({ targetUserId, isDarkMode, onClose, realTrips = [],
                   <h4 className="font-black text-xs sm:text-sm text-emerald-600 dark:text-emerald-400 flex items-center gap-1">
                     شخص موثوق وآمن للتعامل ✅
                   </h4>
-                  <p className="text-[11px] font-bold leading-relaxed mt-0.5 opacity-90">
+                  <p className="text-xs font-bold leading-relaxed mt-0.5 opacity-90">
                     تم التحقق من الهوية الشخصية والمستندات الرسمية لهذا العضو ومراجعتها من قِبل إدارة "طريقنا" لضمان أعلى درجات الأمان في رحلتك.
                   </p>
                 </div>
@@ -149,7 +149,7 @@ const PublicProfileModal = ({ targetUserId, isDarkMode, onClose, realTrips = [],
                   <Star size={16} className="fill-amber-400 text-amber-400" />
                   <span>{Number(profileData.rating || 0).toFixed(1)}</span>
                 </div>
-                <p className={`text-[10px] font-bold mt-0.5 ${textSecondary}`}>
+                <p className={`text-xs font-bold mt-0.5 ${textSecondary}`}>
                   التقييم ({profileData.ratingsCount || reviewsList.length || 0})
                 </p>
               </div>
@@ -159,7 +159,7 @@ const PublicProfileModal = ({ targetUserId, isDarkMode, onClose, realTrips = [],
                   <CheckCircle2 size={16} />
                   <span>{profileData.completedTripsCount || 0}</span>
                 </div>
-                <p className={`text-[10px] font-bold mt-0.5 ${textSecondary}`}>رحلة مكتملة</p>
+                <p className={`text-xs font-bold mt-0.5 ${textSecondary}`}>رحلة مكتملة</p>
               </div>
 
               <div className={`p-3 rounded-2xl border text-center ${isDarkMode ? 'bg-slate-800/60 border-slate-700' : 'bg-slate-50 border-slate-200'}`}>
@@ -167,7 +167,7 @@ const PublicProfileModal = ({ targetUserId, isDarkMode, onClose, realTrips = [],
                   <MessageSquareQuote size={16} />
                   <span>{reviewsList.length}</span>
                 </div>
-                <p className={`text-[10px] font-bold mt-0.5 ${textSecondary}`}>آراء العملاء</p>
+                <p className={`text-xs font-bold mt-0.5 ${textSecondary}`}>آراء العملاء</p>
               </div>
             </div>
 
@@ -216,7 +216,7 @@ const PublicProfileModal = ({ targetUserId, isDarkMode, onClose, realTrips = [],
                           <div>
                             <span className="text-xs font-black block leading-none">{rev.reviewerName || 'عضو في طريقنا'}</span>
                             {rev.tripRoute && (
-                              <span className={`text-[10px] font-bold ${textSecondary}`}>رحلة: {rev.tripRoute}</span>
+                              <span className={`text-xs font-bold ${textSecondary}`}>رحلة: {rev.tripRoute}</span>
                             )}
                           </div>
                         </div>
@@ -233,7 +233,7 @@ const PublicProfileModal = ({ targetUserId, isDarkMode, onClose, realTrips = [],
                           "{rev.comment}"
                         </p>
                       ) : (
-                        <p className={`text-[11px] italic ${textSecondary}`}>قام بتقييم التجربة بالنجوم ⭐</p>
+                        <p className={`text-xs italic ${textSecondary}`}>قام بتقييم التجربة بالنجوم ⭐</p>
                       )}
                     </div>
                   ))}
@@ -259,7 +259,7 @@ const PublicProfileModal = ({ targetUserId, isDarkMode, onClose, realTrips = [],
                     >
                       <div>
                         <p className="text-xs font-black">{t.from} ⬅️ {t.to}</p>
-                        <p className={`text-[10px] font-bold mt-0.5 ${textSecondary}`}>{formatTripDateTime(t.date, t.time)}</p>
+                        <p className={`text-xs font-bold mt-0.5 ${textSecondary}`}>{formatTripDateTime(t.date, t.time)}</p>
                       </div>
                       <span className="text-xs font-black text-emerald-500 bg-emerald-500/10 px-2.5 py-1 rounded-lg">
                         {t.cost || t.price} ج

@@ -890,7 +890,12 @@ export default function App() {
   if (loading) return <div className="h-screen w-full flex items-center justify-center bg-slate-950"><Loader2 className="animate-spin text-indigo-500" size={40}/></div>;
 
   return (
-    <div dir="rtl" className={`min-h-screen flex flex-col relative transition-colors duration-300 ${bgMain} overflow-x-hidden pb-0`}>
+    <div dir="rtl" style={{ fontFamily: "'Tajawal', system-ui, -apple-system, 'Segoe UI', sans-serif" }} className={`app-root min-h-screen flex flex-col relative transition-colors duration-300 ${bgMain} overflow-x-hidden pb-0`}>
+      <style>{`
+        @import url('https://fonts.googleapis.com/css2?family=Tajawal:wght@400;500;700;800;900&display=swap');
+        .app-root :focus-visible { outline: 2px solid #6366f1; outline-offset: 2px; }
+        @media (prefers-reduced-motion: reduce) { .app-root * { animation-duration: 0.01ms !important; transition-duration: 0.01ms !important; } }
+      `}</style>
       {toastMsg && ( <div className="fixed top-24 left-1/2 transform -translate-x-1/2 z-[999] bg-slate-900 text-white px-6 py-3 rounded-full shadow-2xl flex items-center gap-3 border border-slate-700"><CheckCircle2 size={18} className="text-emerald-400" /><p className="text-sm font-bold whitespace-nowrap">{toastMsg}</p></div> )}
 
       {/* نافذة البروفايل العام لأي مستخدم */}
@@ -906,13 +911,13 @@ export default function App() {
 
       {showAreaModal && (
         <div className="fixed inset-0 bg-slate-900/95 backdrop-blur-md z-[9999] flex justify-center items-center p-4 pointer-events-auto">
-          <div className={`${bgCard} w-full max-w-md rounded-[2rem] p-6 shadow-2xl flex flex-col border animate-fade-in-up dark:border-slate-700`}>
+          <div className={`${bgCard} w-full max-w-md rounded-3xl p-6 shadow-2xl flex flex-col border animate-fade-in-up dark:border-slate-700`}>
             
             <div className="flex justify-between items-center mb-3">
               <h2 className={`text-xl font-black text-indigo-600 dark:text-indigo-400 flex items-center gap-2`}>
                 <MapPin size={24} /> حدد منطقتك الحالية
               </h2>
-              <button onClick={() => setShowAreaModal(false)} className="p-1.5 bg-slate-100 dark:bg-slate-800 rounded-full hover:bg-rose-100 hover:text-rose-500 transition-colors"><X size={18}/></button>
+              <button aria-label="إغلاق" onClick={() => setShowAreaModal(false)} className="p-2.5 bg-slate-100 dark:bg-slate-800 rounded-full hover:bg-rose-100 hover:text-rose-500 transition-colors"><X size={18}/></button>
             </div>
             
             <p className={`${textSecondary} text-xs font-bold mb-3 leading-relaxed`}>
@@ -937,13 +942,13 @@ export default function App() {
 
             {tempSelectedAreas.length > 0 && (
               <div className="flex items-center justify-between px-2 mb-2">
-                <span className="text-[11px] font-bold text-indigo-600 dark:text-indigo-400">
+                <span className="text-xs font-bold text-indigo-600 dark:text-indigo-400">
                   تم تحديد ({tempSelectedAreas.length}): {tempSelectedAreas.slice(0, 2).join('، ')}{tempSelectedAreas.length > 2 ? '...' : ''}
                 </span>
                 <button 
                   type="button" 
                   onClick={() => setTempSelectedAreas([])} 
-                  className="text-[11px] font-bold text-rose-500 hover:underline"
+                  className="text-xs font-bold text-rose-500 hover:underline"
                 >
                   إلغاء التحديد
                 </button>
@@ -998,97 +1003,97 @@ export default function App() {
         </div>
       )}
 
-      {/* الهيدر متوافق مع الموبايل واللابتوب (max-w-6xl) */}
-      <header className={`sticky top-0 z-40 border-b ${isDarkMode ? 'bg-slate-950/90 border-slate-800/80' : 'bg-white/90 border-slate-200/70 shadow-sm'} backdrop-blur-xl pointer-events-auto`}>
-        <div className="max-w-6xl mx-auto px-3 sm:px-6 py-2.5 flex items-center justify-between gap-2 w-full">
-          
-          <div 
-            className="flex items-center gap-2.5 cursor-pointer shrink-0" 
-            onClick={() => isGuest ? forceLoginScreen() : setActiveTab('profile')}
-          >
-            {userData?.photoURL ? ( 
-              <img src={userData.photoURL} className="w-9 h-9 sm:w-10 sm:h-10 rounded-full object-cover border border-indigo-500/30 shrink-0" alt="user" /> 
-            ) : ( 
-              <div className={`w-9 h-9 sm:w-10 sm:h-10 rounded-full flex items-center justify-center border shrink-0 ${isDarkMode ? 'bg-slate-800 border-slate-700' : 'bg-slate-100 border-slate-200'}`}>
-                <User size={18} className={textSecondary}/>
-              </div> 
-            )}
-            <div className="flex flex-col text-right leading-tight">
-              <span className={`text-[10px] font-bold ${textSecondary}`}>مرحباً،</span>
-              {isGuest ? (
-                <span className="text-xs font-black text-indigo-500 hover:underline">سجل دخولك 🚀</span>
-              ) : (
-                <span className={`text-xs sm:text-sm font-black ${textPrimary} truncate max-w-[70px] sm:max-w-[120px]`}>
-                  {userData?.name?.split(' ')[0] || 'مستخدم'}
-                </span>
-              )}
-            </div>
-          </div>
+      {/* الهيدر: صف واحد — الهوية (يمين) | المنطقة (وسط) | الإشعارات والحساب (يسار) */}
+      <header className={`sticky top-0 z-40 border-b ${isDarkMode ? 'bg-slate-950/90 border-slate-800/80' : 'bg-white/90 border-slate-200/70'} backdrop-blur-xl pointer-events-auto`}>
+        <div className="max-w-6xl mx-auto px-3 sm:px-6 h-16 flex items-center gap-2 sm:gap-3 w-full">
 
-          <button 
+          <button
+            type="button"
+            aria-label="الصفحة الرئيسية"
+            onClick={() => { setActiveTab('home'); setViewMode('list'); }}
+            className="flex items-center gap-2 shrink-0"
+          >
+            {appSettings?.logo ? (
+              <img src={appSettings.logo} className="w-10 h-10 object-contain rounded-xl bg-white p-0.5 border border-slate-200/60 dark:border-slate-800 shrink-0" alt="" />
+            ) : (
+              <span className="bg-indigo-600 text-white w-10 h-10 rounded-xl flex items-center justify-center shadow-sm shrink-0">
+                <Car size={20} />
+              </span>
+            )}
+            <span className="hidden sm:inline font-black text-lg text-indigo-600 dark:text-indigo-400 tracking-tight">طريقنا</span>
+          </button>
+
+          <button
             type="button"
             onClick={openAreaModalWithSync}
-            className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full text-[11px] sm:text-xs font-bold border transition-all shadow-sm active:scale-95 min-w-0 max-w-[180px] sm:max-w-[320px] ${
-              isDarkMode 
-                ? 'bg-slate-900 border-slate-800 text-slate-200 hover:border-indigo-500/50' 
-                : 'bg-white border-slate-200/80 text-slate-700 hover:border-indigo-300'
+            aria-label="تعديل منطقتك الحالية"
+            className={`flex-1 min-w-0 h-11 px-3 rounded-xl border flex items-center gap-2 text-right transition-colors active:scale-[0.99] ${
+              isDarkMode
+                ? 'bg-slate-900 border-slate-800 hover:border-indigo-500/60'
+                : 'bg-slate-50 border-slate-200 hover:border-indigo-300'
             }`}
-            title="اضغط لتعديل منطقتك الحالية"
           >
-            <span className="w-4 h-4 rounded-full bg-indigo-500/10 text-indigo-600 dark:text-indigo-400 flex items-center justify-center shrink-0">
-              <MapPin size={11} />
-            </span>
-            <span className="text-slate-400 font-medium text-[10px] sm:text-xs shrink-0 hidden xs:inline">منطقتك:</span>
-            <span className="text-indigo-600 dark:text-indigo-400 font-black truncate">
-              {userAreas.length > 0 ? userAreas.join('، ') : 'جميع المناطق'}
-            </span>
-            <span className="text-[9px] sm:text-[10px] bg-slate-100 dark:bg-slate-800 text-slate-500 dark:text-slate-400 px-1.5 py-0.5 rounded-md shrink-0">
-              تغيير
+            <MapPin size={17} className="text-indigo-500 shrink-0" />
+            <span className="flex-1 min-w-0 leading-tight">
+              <span className={`block text-xs font-medium ${textSecondary}`}>منطقتك</span>
+              <span className={`block text-sm font-black truncate ${textPrimary}`}>
+                {userAreas.length > 0 ? userAreas.join('، ') : 'جميع المناطق'}
+              </span>
             </span>
           </button>
-          
-          <div className="flex items-center gap-2 shrink-0">
-            {!isGuest && (
-              <button 
-                type="button"
-                className={`relative p-2 rounded-full border transition-colors shrink-0 ${
-                  isDarkMode 
-                    ? 'bg-slate-900 border-slate-800 hover:bg-slate-800 text-slate-300' 
-                    : 'bg-slate-100 border-slate-200/70 hover:bg-slate-200 text-slate-600'
-                }`} 
-                onClick={() => setShowNotificationsModal(true)}
-              >
-                <Bell size={18} />
-                {notifications.filter(n => !n.read).length > 0 && (
-                  <span className="absolute top-0.5 right-0.5 w-2.5 h-2.5 bg-rose-500 rounded-full border-2 border-white dark:border-slate-900"></span>
-                )}
-              </button>
-            )}
 
-            <div 
-              className="flex items-center gap-1.5 cursor-pointer shrink-0" 
-              onClick={() => { setActiveTab('home'); setViewMode('list'); }}
+          {!isGuest && (
+            <button
+              type="button"
+              aria-label="الإشعارات"
+              onClick={() => setShowNotificationsModal(true)}
+              className={`relative w-11 h-11 rounded-xl border flex items-center justify-center shrink-0 transition-colors ${
+                isDarkMode
+                  ? 'bg-slate-900 border-slate-800 hover:bg-slate-800 text-slate-300'
+                  : 'bg-slate-50 border-slate-200 hover:bg-slate-100 text-slate-600'
+              }`}
             >
-              <span className="font-black text-sm sm:text-lg text-indigo-600 dark:text-indigo-400 tracking-tight">طريقنا</span>
-              {appSettings?.logo ? ( 
-                <img src={appSettings.logo} className="w-8 h-8 sm:w-9 sm:h-9 object-contain rounded-xl bg-white p-0.5 border border-slate-200/60 dark:border-slate-800 shadow-sm shrink-0" alt="Logo"/> 
-              ) : ( 
-                <div className="bg-indigo-600 text-white p-1.5 rounded-xl shadow-sm shrink-0">
-                  <Car size={18}/>
-                </div> 
+              <Bell size={20} />
+              {(() => {
+                const unreadCount = notifications.filter(n => !n.read).length;
+                return unreadCount > 0 ? (
+                  <span className="absolute -top-1 -right-1 min-w-[20px] h-5 px-1 rounded-full bg-rose-500 text-white text-xs font-black flex items-center justify-center ring-2 ring-white dark:ring-slate-950">
+                    {unreadCount > 9 ? '9+' : unreadCount}
+                  </span>
+                ) : null;
+              })()}
+            </button>
+          )}
+
+          {isGuest ? (
+            <button
+              type="button"
+              onClick={forceLoginScreen}
+              className="h-11 px-4 rounded-xl bg-indigo-600 hover:bg-indigo-700 text-white text-sm font-black shrink-0 active:scale-95 transition-transform"
+            >
+              دخول
+            </button>
+          ) : (
+            <button type="button" aria-label="حسابي" onClick={() => setActiveTab('profile')} className="shrink-0">
+              {userData?.photoURL ? (
+                <img src={userData.photoURL} className="w-11 h-11 rounded-full object-cover border-2 border-indigo-500/30" alt="" />
+              ) : (
+                <span className={`w-11 h-11 rounded-full flex items-center justify-center border ${isDarkMode ? 'bg-slate-800 border-slate-700' : 'bg-slate-100 border-slate-200'}`}>
+                  <User size={20} className={textSecondary} />
+                </span>
               )}
-            </div>
-          </div>
+            </button>
+          )}
 
         </div>
       </header>
 
       {showNotificationsModal && (
         <div className="fixed inset-0 bg-slate-900/80 backdrop-blur-sm z-[999] flex justify-center items-start p-4 pointer-events-auto" onClick={() => setShowNotificationsModal(false)}>
-          <div className={`${bgCard} w-full max-w-md mt-20 rounded-[2rem] shadow-2xl flex flex-col max-h-[60vh] border dark:border-slate-700 animate-fade-in-up`} onClick={e => e.stopPropagation()}>
+          <div className={`${bgCard} w-full max-w-md mt-20 rounded-3xl shadow-2xl flex flex-col max-h-[60vh] border dark:border-slate-700 animate-fade-in-up`} onClick={e => e.stopPropagation()}>
             <div className="p-4 border-b flex justify-between items-center bg-slate-50 dark:bg-slate-800 dark:border-slate-700 shrink-0 rounded-t-[2rem]">
               <h2 className="text-lg font-black flex items-center gap-2"><Bell className="text-indigo-500"/> التنبيهات الذكية</h2>
-              <button onClick={() => setShowNotificationsModal(false)} className="p-2 bg-slate-200 dark:bg-slate-700 rounded-full hover:bg-rose-100 hover:text-rose-500 transition-colors"><X size={20}/></button>
+              <button aria-label="إغلاق" onClick={() => setShowNotificationsModal(false)} className="p-2.5 bg-slate-200 dark:bg-slate-700 rounded-full hover:bg-rose-100 hover:text-rose-500 transition-colors"><X size={20}/></button>
             </div>
             <div className="flex-1 overflow-y-auto p-4 [&::-webkit-scrollbar]:hidden [-ms-overflow-style:none] [scrollbar-width:none]">
               {notifications.length === 0 ? (
@@ -1155,10 +1160,10 @@ export default function App() {
       {/* نافذة إضافة رحلة بتصميم مدمج قابل للطي (Accordion) لسهولة الاستخدام على الموبايل */}
       {showAddModal && !isGuest && (
         <div className="fixed inset-0 bg-slate-900/90 backdrop-blur-sm z-[200] flex justify-center items-end sm:items-center p-0 sm:p-4 pointer-events-auto">
-          <div className={`${bgCard} w-full sm:max-w-md max-h-[90vh] sm:max-h-[85vh] rounded-t-[2rem] sm:rounded-[2rem] shadow-2xl flex flex-col overflow-hidden animate-fade-in-up border dark:border-slate-700`}>
+          <div className={`${bgCard} w-full sm:max-w-md max-h-[90vh] sm:max-h-[85vh] rounded-t-[2rem] sm:rounded-3xl shadow-2xl flex flex-col overflow-hidden animate-fade-in-up border dark:border-slate-700`}>
             <div className="p-3.5 sm:p-4 border-b flex justify-between items-center bg-slate-50 dark:bg-slate-800 dark:border-slate-700 shrink-0">
               <h2 className="text-base sm:text-lg font-black flex items-center gap-2"><Car className="text-indigo-500"/> إضافة إعلان</h2>
-              <button onClick={() => setShowAddModal(false)} className="p-1.5 bg-slate-200 dark:bg-slate-700 rounded-full"><X size={18}/></button>
+              <button aria-label="إغلاق" onClick={() => setShowAddModal(false)} className="p-2.5 bg-slate-200 dark:bg-slate-700 rounded-full"><X size={18}/></button>
             </div>
             
             <div className="flex-1 overflow-y-auto p-4 space-y-3.5 [&::-webkit-scrollbar]:hidden [-ms-overflow-style:none] [scrollbar-width:none]">
@@ -1170,10 +1175,10 @@ export default function App() {
                 </div>
 
                 <div className="flex bg-slate-100 dark:bg-slate-800 p-1 rounded-xl">
-                  <button type="button" onClick={() => setNewTrip({...newTrip, type: 'offer'})} className={`flex-1 py-2 rounded-lg text-[11px] font-black transition-all ${newTrip.type === 'offer' ? 'bg-indigo-600 text-white shadow-sm' : 'text-slate-500'}`}>
+                  <button type="button" onClick={() => setNewTrip({...newTrip, type: 'offer'})} className={`flex-1 py-2 rounded-lg text-xs font-black transition-all ${newTrip.type === 'offer' ? 'bg-indigo-600 text-white shadow-sm' : 'text-slate-500'}`}>
                     {newTrip.category === 'parcel' ? 'مسافر ناقل' : 'سائق'}
                   </button>
-                  <button type="button" onClick={() => setNewTrip({...newTrip, type: 'request'})} className={`flex-1 py-2 rounded-lg text-[11px] font-black transition-all ${newTrip.type === 'request' ? 'bg-indigo-600 text-white shadow-sm' : 'text-slate-500'}`}>
+                  <button type="button" onClick={() => setNewTrip({...newTrip, type: 'request'})} className={`flex-1 py-2 rounded-lg text-xs font-black transition-all ${newTrip.type === 'request' ? 'bg-indigo-600 text-white shadow-sm' : 'text-slate-500'}`}>
                     {newTrip.category === 'parcel' ? 'مرسل طرد' : 'راكب'}
                   </button>
                 </div>
@@ -1183,12 +1188,12 @@ export default function App() {
                 {/* نقطة الانطلاق */}
                 <div className="space-y-1.5">
                   <div className="flex justify-between items-center px-1">
-                    <label className="text-[11px] font-black text-slate-500">📍 نقطة الانطلاق</label>
-                    <button type="button" onClick={() => getMyCity((locationData) => setNewTrip({...newTrip, from: locationData.city, fromDetails: locationData.details}))} disabled={isLocating} className="text-[10px] font-bold text-indigo-600 dark:text-indigo-400 flex items-center gap-1 hover:underline bg-indigo-50 dark:bg-indigo-900/30 px-2 py-0.5 rounded-lg">
+                    <label className="text-xs font-black text-slate-500">📍 نقطة الانطلاق</label>
+                    <button type="button" onClick={() => getMyCity((locationData) => setNewTrip({...newTrip, from: locationData.city, fromDetails: locationData.details}))} disabled={isLocating} className="text-xs font-bold text-indigo-600 dark:text-indigo-400 flex items-center gap-1 hover:underline bg-indigo-50 dark:bg-indigo-900/30 px-2 py-0.5 rounded-lg">
                       {isLocating ? <Loader2 size={11} className="animate-spin"/> : <MapPin size={11}/>} تحديد تلقائي
                     </button>
                   </div>
-                  {locationError && <p className="text-[10px] text-rose-500 px-1">{locationError}</p>}
+                  {locationError && <p className="text-xs text-rose-500 px-1">{locationError}</p>}
                   
                   <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
                     <select required value={newTrip.from} onChange={e => setNewTrip({...newTrip, from: e.target.value})} className={`w-full p-3 rounded-xl border font-bold text-xs outline-none ${bgInput}`}>
@@ -1201,7 +1206,7 @@ export default function App() {
 
                 {/* نقطة الوصول */}
                 <div className="space-y-1.5">
-                  <label className="text-[11px] font-black text-slate-500 px-1">🏁 نقطة الوصول</label>
+                  <label className="text-xs font-black text-slate-500 px-1">🏁 نقطة الوصول</label>
                   <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
                     <select required value={newTrip.to} onChange={e => setNewTrip({...newTrip, to: e.target.value})} className={`w-full p-3 rounded-xl border font-bold text-xs outline-none ${bgInput}`}>
                       <option value="" disabled>الوجهة / المحافظة *</option>
@@ -1224,7 +1229,7 @@ export default function App() {
                       <Route size={14} />
                       <span>خط السير: المناطق التي ستمر عليها (اختياري)</span>
                       {newTrip.routeAreas?.length > 0 && (
-                        <span className="bg-indigo-600 text-white text-[10px] px-2 py-0.2 rounded-full">
+                        <span className="bg-indigo-600 text-white text-xs px-2 py-0.5 rounded-full">
                           {newTrip.routeAreas.length} منطقة
                         </span>
                       )}
@@ -1236,7 +1241,7 @@ export default function App() {
                     <div className="p-2.5 bg-slate-50/70 dark:bg-slate-900/50 border-t border-slate-200 dark:border-slate-700 space-y-2 animate-fade-in-up">
                       {newTrip.routeAreas?.length > 0 && (
                         <div className="flex justify-end">
-                          <button type="button" onClick={() => setNewTrip(prev => ({ ...prev, routeAreas: [] }))} className="text-[10px] font-bold text-rose-500 hover:underline">
+                          <button type="button" onClick={() => setNewTrip(prev => ({ ...prev, routeAreas: [] }))} className="text-xs font-bold text-rose-500 hover:underline">
                             مسح الكل
                           </button>
                         </div>
@@ -1257,7 +1262,7 @@ export default function App() {
                                   };
                                 });
                               }}
-                              className={`px-2.5 py-1.5 text-[10px] font-bold rounded-lg border transition-all flex items-center gap-1 ${
+                              className={`px-2.5 py-1.5 text-xs font-bold rounded-lg border transition-all flex items-center gap-1 ${
                                 isSelected 
                                   ? 'bg-indigo-600 text-white border-indigo-600 shadow-sm' 
                                   : 'bg-white dark:bg-slate-800 text-slate-600 dark:text-slate-300 border-slate-200 dark:border-slate-700 hover:border-indigo-400'
@@ -1276,26 +1281,26 @@ export default function App() {
                 {/* التاريخ والوقت والمقاعد والتكلفة */}
                 <div className="grid grid-cols-2 gap-2.5">
                   <div className="space-y-1">
-                    <label className="text-[10px] font-bold text-slate-500 px-1">تاريخ الرحلة *</label>
+                    <label className="text-xs font-bold text-slate-500 px-1">تاريخ الرحلة *</label>
                     <input type="date" required value={newTrip.date} onChange={e => setNewTrip({...newTrip, date: e.target.value})} className={`w-full p-2.5 rounded-xl border font-bold text-xs outline-none ${bgInput}`}/>
                   </div>
                   <div className="space-y-1">
-                    <label className="text-[10px] font-bold text-slate-500 px-1">وقت التحرك *</label>
+                    <label className="text-xs font-bold text-slate-500 px-1">وقت التحرك *</label>
                     <input type="time" required value={newTrip.time} onChange={e => setNewTrip({...newTrip, time: e.target.value})} className={`w-full p-2.5 rounded-xl border font-bold text-xs outline-none ${bgInput}`}/>
                   </div>
                   <div className="space-y-1">
-                    <label className="text-[10px] font-bold text-slate-500 px-1">{newTrip.category === 'parcel' ? 'عدد الطرود' : 'عدد المقاعد'}</label>
+                    <label className="text-xs font-bold text-slate-500 px-1">{newTrip.category === 'parcel' ? 'عدد الطرود' : 'عدد المقاعد'}</label>
                     <input type="number" min="1" required placeholder="العدد" value={newTrip.seats} onChange={e => setNewTrip({...newTrip, seats: e.target.value})} className={`w-full p-2.5 rounded-xl border font-bold text-xs outline-none ${bgInput}`}/>
                   </div>
                   <div className="space-y-1">
-                    <label className="text-[10px] font-bold text-slate-500 px-1">التكلفة للمقعد (جنيه) *</label>
+                    <label className="text-xs font-bold text-slate-500 px-1">التكلفة للمقعد (جنيه) *</label>
                     <input type="number" required placeholder="التكلفة (ج)" value={newTrip.cost} onChange={e => setNewTrip({...newTrip, cost: e.target.value})} className={`w-full p-2.5 rounded-xl border font-bold text-xs outline-none ${bgInput}`}/>
                   </div>
                 </div>
 
                 {/* طريقة التواصل المفضلة */}
                 <div className="space-y-1.5 pt-1">
-                  <label className="text-[11px] font-black text-slate-700 dark:text-slate-200 flex items-center gap-1 px-1">
+                  <label className="text-xs font-black text-slate-700 dark:text-slate-200 flex items-center gap-1 px-1">
                     <Phone size={13} className="text-indigo-500"/> طريقة التواصل على الكارت
                   </label>
                   <div className="grid grid-cols-2 gap-1.5">
@@ -1309,7 +1314,7 @@ export default function App() {
                         key={opt.id}
                         type="button"
                         onClick={() => setNewTrip({ ...newTrip, contactMethod: opt.id, allowPhoneContact: opt.id !== 'chat' })}
-                        className={`p-2 rounded-xl border text-[10px] font-black transition-all ${
+                        className={`p-2 rounded-xl border text-xs font-black transition-all ${
                           newTrip.contactMethod === opt.id 
                             ? 'bg-emerald-600 text-white border-emerald-600 shadow-sm' 
                             : 'bg-slate-50 dark:bg-slate-800 text-slate-600 dark:text-slate-300 border-slate-200 dark:border-slate-700'
@@ -1320,7 +1325,7 @@ export default function App() {
                     ))}
                   </div>
                   {newTrip.contactMethod !== 'chat' && !userData?.phone && (
-                    <p className="text-[10px] font-bold text-amber-500 px-1">
+                    <p className="text-xs font-bold text-amber-500 px-1">
                       ⚠️ لم تقم بإضافة رقم هاتفك في (حسابي) بعد! أضفه ليظهر للمستخدمين.
                     </p>
                   )}
@@ -1339,7 +1344,7 @@ export default function App() {
                       <Sparkles size={14} className="text-amber-500" />
                       <span>تفضيلات الرحلة وملاحظات إضافية (بنات فقط 🌸 / تكييف)</span>
                       {selectedPrefsCount > 0 && (
-                        <span className="bg-amber-500 text-slate-950 text-[10px] px-2 py-0.2 rounded-full">
+                        <span className="bg-amber-500 text-slate-950 text-xs px-2 py-0.5 rounded-full">
                           {selectedPrefsCount} مفعل
                         </span>
                       )}
@@ -1361,7 +1366,7 @@ export default function App() {
                           <span className="text-lg">👩</span>
                           <div>
                             <h4 className="text-xs font-black">رحلة سيدات (بنات فقط) 🌸</h4>
-                            <p className="text-[9px] opacity-80 font-bold">يظهر الكارت باللون الوردي ومكتوب عليه "بنات فقط"</p>
+                            <p className="text-xs opacity-80 font-bold">يظهر الكارت باللون الوردي ومكتوب عليه "بنات فقط"</p>
                           </div>
                         </div>
                         <div className={`w-5 h-5 rounded-md flex items-center justify-center border ${newTrip.preferences.femalesOnly ? 'bg-pink-500 border-pink-500 text-white' : 'border-slate-300 dark:border-slate-600'}`}>
@@ -1373,7 +1378,7 @@ export default function App() {
                         {Object.keys(newTrip.preferences).filter(k => k !== 'femalesOnly').map(key => {
                           const labels = { ac: 'تكييف ❄️', noSmoking: 'ممنوع التدخين 🚭', luggage: 'شنط سفر 🧳', families: 'عائلات 👨‍👩‍👧‍👦' };
                           return (
-                            <label key={key} className={`flex items-center gap-1.5 px-2.5 py-2 rounded-xl border cursor-pointer text-[11px] font-bold transition-colors ${newTrip.preferences[key] ? 'bg-indigo-600 text-white border-indigo-600' : 'bg-white dark:bg-slate-800 border-slate-200 dark:border-slate-700 text-slate-500'}`}>
+                            <label key={key} className={`flex items-center gap-1.5 px-2.5 py-2 rounded-xl border cursor-pointer text-xs font-bold transition-colors ${newTrip.preferences[key] ? 'bg-indigo-600 text-white border-indigo-600' : 'bg-white dark:bg-slate-800 border-slate-200 dark:border-slate-700 text-slate-500'}`}>
                               <input type="checkbox" className="hidden" checked={newTrip.preferences[key]} onChange={(e) => setNewTrip({...newTrip, preferences: {...newTrip.preferences, [key]: e.target.checked}})} />
                               {labels[key]}
                             </label>
@@ -1462,7 +1467,7 @@ export default function App() {
 
       {activeTab === 'inbox' && (
         <div className="pb-[100px] flex-1 w-full max-w-4xl mx-auto px-4 py-6 mt-4 relative z-10 animate-fade-in-up">
-          <div className={`rounded-[2rem] shadow-sm border min-h-[500px] flex flex-col ${bgCard}`}>
+          <div className={`rounded-3xl shadow-sm border min-h-[500px] flex flex-col ${bgCard}`}>
             {!isGuest ? (
               <div className="flex-1 overflow-y-auto p-4 sm:p-6">
                 <h2 className="font-black text-xl mb-4 p-2 text-slate-800 dark:text-white">رسائلي</h2>
@@ -1489,20 +1494,20 @@ export default function App() {
                                <div className="flex-1 overflow-hidden">
                                  <div className="flex items-center gap-1.5 flex-wrap">
                                    <h4 className={`font-black text-sm truncate ${textPrimary}`}>{chat?.otherPersonName}</h4>
-                                   {isSupport && <span className="text-[9px] font-black bg-indigo-600 text-white px-2 py-0.5 rounded-full">رسمي</span>}
+                                   {isSupport && <span className="text-xs font-black bg-indigo-600 text-white px-2 py-0.5 rounded-full">رسمي</span>}
                                    {reqStatus === 'pending' && (
-                                     <span className="text-[9px] font-black bg-amber-500 text-white px-2 py-0.5 rounded-full">
+                                     <span className="text-xs font-black bg-amber-600 text-white px-2 py-0.5 rounded-full">
                                        {chat.requestSenderId === user.uid ? 'طلب مرسل ⏳' : `طلب من ${chat.requestSenderName?.split(' ')[0] || chat.otherPersonName?.split(' ')[0]} 🔔`}
                                      </span>
                                    )}
                                    {['accepted', 'moving', 'arrived', 'in_progress_trip'].includes(reqStatus) && (
-                                     <span className="text-[9px] font-black bg-emerald-500 text-white px-2 py-0.5 rounded-full">
+                                     <span className="text-xs font-black bg-emerald-500 text-white px-2 py-0.5 rounded-full">
                                        رحلة جارية 🚗
                                      </span>
                                    )}
                                  </div>
                                  {chat?.tripInfo && !isSupport && (
-                                   <div className="flex items-center gap-2 mt-0.5 text-[10px] font-bold text-indigo-500 dark:text-indigo-400">
+                                   <div className="flex items-center gap-2 mt-0.5 text-xs font-bold text-indigo-500 dark:text-indigo-400">
                                      <span className="truncate">{chat.tripInfo}</span>
                                      {sentTimeText && (
                                        <span className="flex items-center gap-0.5 text-slate-400 shrink-0">
@@ -1522,7 +1527,7 @@ export default function App() {
                                   e.stopPropagation();
                                   setPublicProfileUserId(chat.otherPersonId);
                                 }}
-                                className="px-2.5 py-1.5 rounded-xl bg-slate-200/70 dark:bg-slate-700 text-[10px] font-black shrink-0 hover:bg-indigo-600 hover:text-white transition-colors"
+                                className="px-2.5 py-1.5 rounded-xl bg-slate-200/70 dark:bg-slate-700 text-xs font-black shrink-0 hover:bg-indigo-600 hover:text-white transition-colors"
                               >
                                 البروفايل
                               </button>
@@ -1547,28 +1552,28 @@ export default function App() {
         isScrolling ? 'translate-y-full opacity-0 pointer-events-none' : 'translate-y-0 opacity-100'
       }`}>
         <div className="flex justify-around items-center h-[70px] w-full max-w-md md:max-w-3xl mx-auto px-2 pb-2">
-          <button onClick={() => setActiveTab('home')} className={`flex flex-col items-center justify-center gap-1 w-20 transition-colors ${activeTab === 'home' ? 'text-indigo-600 dark:text-indigo-400' : textSecondary}`}><Home size={22} /><span className="text-[10px] font-bold">الرئيسية</span></button>
+          <button onClick={() => setActiveTab('home')} className={`flex flex-col items-center justify-center gap-1 w-20 transition-colors ${activeTab === 'home' ? 'text-indigo-600 dark:text-indigo-400' : textSecondary}`}><Home size={22} /><span className="text-xs font-bold">الرئيسية</span></button>
           <button onClick={() => setActiveTab('inbox')} className={`flex flex-col items-center justify-center gap-1 w-20 relative transition-colors ${activeTab === 'inbox' ? 'text-indigo-600 dark:text-indigo-400' : textSecondary}`}>
-            <div className="relative"><MessageCircle size={22} />{(myInbox || []).length > 0 && !isGuest && <span className="absolute -top-1 -right-1 w-2.5 h-2.5 bg-rose-500 rounded-full border-2 border-white dark:border-slate-900"></span>}</div><span className="text-[10px] font-bold">الرسائل</span>
+            <div className="relative"><MessageCircle size={22} />{(myInbox || []).length > 0 && !isGuest && <span className="absolute -top-1 -right-1 w-2.5 h-2.5 bg-rose-500 rounded-full border-2 border-white dark:border-slate-900"></span>}</div><span className="text-xs font-bold">الرسائل</span>
           </button>
-          <button onClick={() => setActiveTab('profile')} className={`flex flex-col items-center justify-center gap-1 w-20 transition-colors ${activeTab === 'profile' ? 'text-indigo-600 dark:text-indigo-400' : textSecondary}`}><User size={22} /><span className="text-[10px] font-bold">حسابي</span></button>
+          <button onClick={() => setActiveTab('profile')} className={`flex flex-col items-center justify-center gap-1 w-20 transition-colors ${activeTab === 'profile' ? 'text-indigo-600 dark:text-indigo-400' : textSecondary}`}><User size={22} /><span className="text-xs font-bold">حسابي</span></button>
         </div>
       </nav>
 
       {!user && (
         <div dir="rtl" className={`fixed inset-0 flex items-center justify-center p-4 z-[1000] overflow-y-auto ${bgMain}`}>
-          <div className={`${bgCard} p-6 sm:p-8 rounded-[2rem] shadow-xl max-w-sm w-full border relative my-auto`}>
-            <button
+          <div className={`${bgCard} p-6 sm:p-8 rounded-3xl shadow-xl max-w-sm w-full border relative my-auto`}>
+            <button aria-label="إغلاق"
               type="button"
               onClick={handleGuestLogin}
-              className="absolute top-4 left-4 p-2 rounded-full bg-slate-100 dark:bg-slate-800 text-slate-400 hover:text-indigo-500 transition-colors"
+              className="absolute top-4 left-4 p-2.5 rounded-full bg-slate-100 dark:bg-slate-800 text-slate-400 hover:text-indigo-500 transition-colors"
               title="تصفح كزائر"
             >
               <X size={18} />
             </button>
 
             <div className="mb-6 text-center">
-              <div className="bg-indigo-600 text-white w-14 h-14 rounded-[1.25rem] flex items-center justify-center mx-auto mb-3 transform -rotate-3 shadow-lg"><Car size={28} /></div>
+              <div className="bg-indigo-600 text-white w-14 h-14 rounded-2xl flex items-center justify-center mx-auto mb-3 transform -rotate-3 shadow-lg"><Car size={28} /></div>
               <h1 className="text-2xl font-black mb-1 text-indigo-600 dark:text-indigo-400">طريقنا</h1>
               <p className={`${textSecondary} text-xs font-bold mt-1`}>{isLoginMode ? 'سجل دخولك للمتابعة' : 'انضم إلينا الآن وحدد هويتك'}</p>
             </div>
@@ -1579,7 +1584,7 @@ export default function App() {
                   <input type="text" required placeholder="الاسم بالكامل" value={authForm.name} onChange={e => setAuthForm({...authForm, name: e.target.value})} className={`w-full border rounded-xl py-3 px-4 outline-none font-bold text-sm ${bgInput}`} />
                   
                   <div className="space-y-1">
-                    <label className="text-[11px] font-black text-slate-400 px-1">النوع:</label>
+                    <label className="text-xs font-black text-slate-400 px-1">النوع:</label>
                     <div className="grid grid-cols-2 gap-2">
                       {[
                         { id: 'male', label: 'ذكر 👨' },
@@ -1602,7 +1607,7 @@ export default function App() {
                   </div>
 
                   <div className="space-y-1">
-                    <label className="text-[11px] font-black text-slate-400 px-1">صفتك في التطبيق:</label>
+                    <label className="text-xs font-black text-slate-400 px-1">صفتك في التطبيق:</label>
                     <div className="grid grid-cols-3 gap-1.5">
                       {[
                         { id: 'driver', label: 'سائق سيارة 🚗' },
@@ -1613,7 +1618,7 @@ export default function App() {
                           key={r.id}
                           type="button"
                           onClick={() => setAuthForm({ ...authForm, accountRole: r.id })}
-                          className={`py-2.5 px-1 rounded-xl text-[11px] font-black border transition-all ${
+                          className={`py-2.5 px-1 rounded-xl text-xs font-black border transition-all ${
                             authForm.accountRole === r.id 
                               ? 'bg-emerald-600 text-white border-emerald-600 shadow-sm' 
                               : `${bgInput}`

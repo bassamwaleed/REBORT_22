@@ -182,7 +182,7 @@ const StationModal = ({ station, user, isAdmin, isGuest, isDarkMode, onClose, tr
 
   return (
     <div className="fixed inset-0 bg-slate-900/95 backdrop-blur-sm z-[400] flex justify-center items-end sm:items-center p-0 sm:p-4 pointer-events-auto">
-      <div className={`${bgCard} w-full sm:max-w-md h-[90vh] sm:h-[650px] rounded-t-[2rem] sm:rounded-[2rem] shadow-2xl flex flex-col overflow-hidden animate-fade-in-up border dark:border-slate-700`}>
+      <div className={`${bgCard} w-full sm:max-w-md h-[90vh] sm:h-[650px] rounded-t-[2rem] sm:rounded-3xl shadow-2xl flex flex-col overflow-hidden animate-fade-in-up border dark:border-slate-700`}>
         
         <div className="p-4 border-b flex flex-col bg-indigo-50/70 dark:bg-slate-800 dark:border-slate-700 shrink-0 relative">
           <div className="flex justify-between items-start w-full">
@@ -190,7 +190,7 @@ const StationModal = ({ station, user, isAdmin, isGuest, isDarkMode, onClose, tr
               <div className="p-2.5 bg-indigo-600 text-white rounded-xl shadow-sm"><BusFront size={20}/></div>
               <div>
                 <div className="flex items-center gap-1.5 flex-wrap">
-                  <span className={`text-[9px] font-black px-2 py-0.5 rounded-md border ${currentTypeObj.badgeClass}`}>
+                  <span className={`text-xs font-black px-2 py-0.5 rounded-md border ${currentTypeObj.badgeClass}`}>
                     {currentTypeObj.label}
                   </span>
                   {isAdmin && (
@@ -201,14 +201,14 @@ const StationModal = ({ station, user, isAdmin, isGuest, isDarkMode, onClose, tr
                 </div>
                 <h2 className={`text-base font-black mt-0.5 ${textPrimary}`}>{station.name}</h2>
                 <div className="flex items-center gap-2 mt-0.5 flex-wrap">
-                  <span className={`text-[11px] font-bold ${textSecondary}`}>
+                  <span className={`text-xs font-bold ${textSecondary}`}>
                     {station.governorate && station.governorate !== station.location ? `${station.governorate} - ${station.location}` : station.location}
                   </span>
                   <a 
                     href={station.mapUrl || `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(station.name + ' ' + station.location)}`} 
                     target="_blank" 
                     rel="noreferrer" 
-                    className="text-[10px] font-black flex items-center gap-0.5 text-rose-500 bg-rose-500/10 px-2 py-0.5 rounded-full hover:underline"
+                    className="text-xs font-black flex items-center gap-0.5 text-rose-500 bg-rose-500/10 px-2 py-0.5 rounded-full hover:underline"
                   >
                     <MapPinned size={10}/> الخريطة
                   </a>
@@ -217,26 +217,26 @@ const StationModal = ({ station, user, isAdmin, isGuest, isDarkMode, onClose, tr
             </div>
             <div className="flex items-center gap-1.5">
               {isAdmin && <button onClick={handleDeleteStation} className="p-2 bg-rose-100 text-rose-600 rounded-full hover:bg-rose-200 transition-colors shadow-sm"><Trash2 size={16}/></button>}
-              <button onClick={onClose} className="p-2 bg-white dark:bg-slate-700 rounded-full hover:bg-slate-200 transition-colors shadow-sm"><X size={18}/></button>
+              <button aria-label="إغلاق" onClick={onClose} className="p-2.5 bg-white dark:bg-slate-700 rounded-full hover:bg-slate-200 transition-colors shadow-sm"><X size={18}/></button>
             </div>
           </div>
 
           {/* عرض إرشاد التحويلة/التبديل للراكب إن وجد */}
           {station.transferHint && (
-            <div className="mt-2.5 p-2 rounded-xl bg-purple-500/10 border border-purple-500/25 text-[11px] font-bold text-purple-700 dark:text-purple-300 flex items-start gap-1.5">
-              <Compass size={14} className="shrink-0 mt-0.5 text-purple-500" />
+            <div className="mt-2.5 p-2 rounded-xl bg-indigo-500/10 border border-indigo-500/25 text-xs font-bold text-indigo-700 dark:text-indigo-300 flex items-start gap-1.5">
+              <Compass size={14} className="shrink-0 mt-0.5 text-indigo-500" />
               <span><strong>إرشاد التبديل والركوب:</strong> {station.transferHint}</span>
             </div>
           )}
 
           <div className="mt-2.5 flex items-center justify-between bg-white dark:bg-slate-900 p-2 rounded-xl shadow-sm border dark:border-slate-700">
-             <span className="text-[11px] font-bold text-slate-500 flex items-center gap-1.5">
+             <span className="text-xs font-bold text-slate-500 flex items-center gap-1.5">
                <span>حالة الزحام الآن:</span>
-               <span className="text-[9px] font-normal opacity-75">({getTimeAgo(station.crowdUpdatedAt)})</span>
+               <span className="text-xs font-normal opacity-75">({getTimeAgo(station.crowdUpdatedAt)})</span>
              </span>
              <div className="flex gap-1.5">
-               <button onClick={() => handleUpdateCrowdStatus('station', 'empty')} className={`text-[10px] font-black px-2.5 py-1 rounded-lg flex items-center gap-1 transition-colors ${station.crowdStatus === 'empty' ? 'bg-emerald-500 text-white shadow-sm' : 'bg-slate-100 text-slate-500 hover:bg-emerald-100 hover:text-emerald-600 dark:bg-slate-800'}`}><UserCheck size={12}/> رايق 🟢</button>
-               <button onClick={() => handleUpdateCrowdStatus('station', 'crowded')} className={`text-[10px] font-black px-2.5 py-1 rounded-lg flex items-center gap-1 transition-colors ${station.crowdStatus === 'crowded' ? 'bg-rose-500 text-white shadow-sm' : 'bg-slate-100 text-slate-500 hover:bg-rose-100 hover:text-rose-600 dark:bg-slate-800'}`}><Flame size={12}/> زحمة 🔴</button>
+               <button onClick={() => handleUpdateCrowdStatus('station', 'empty')} className={`text-xs font-black px-2.5 py-1 rounded-lg flex items-center gap-1 transition-colors ${station.crowdStatus === 'empty' ? 'bg-emerald-500 text-white shadow-sm' : 'bg-slate-100 text-slate-500 hover:bg-emerald-100 hover:text-emerald-600 dark:bg-slate-800'}`}><UserCheck size={12}/> رايق 🟢</button>
+               <button onClick={() => handleUpdateCrowdStatus('station', 'crowded')} className={`text-xs font-black px-2.5 py-1 rounded-lg flex items-center gap-1 transition-colors ${station.crowdStatus === 'crowded' ? 'bg-rose-500 text-white shadow-sm' : 'bg-slate-100 text-slate-500 hover:bg-rose-100 hover:text-rose-600 dark:bg-slate-800'}`}><Flame size={12}/> زحمة 🔴</button>
              </div>
           </div>
         </div>
@@ -245,7 +245,7 @@ const StationModal = ({ station, user, isAdmin, isGuest, isDarkMode, onClose, tr
           
           {isAdmin && isEditingStation && (
             <div className="mb-4 p-3.5 rounded-2xl border border-amber-300 dark:border-amber-700 bg-amber-50/50 dark:bg-amber-900/10 space-y-2.5 animate-fade-in-up">
-              <span className="text-[11px] font-black text-amber-600 flex items-center gap-1.5 mb-1"><Settings size={14}/> تعديل بيانات النقطة وإرشاد التبديل (أدمن)</span>
+              <span className="text-xs font-black text-amber-600 flex items-center gap-1.5 mb-1"><Settings size={14}/> تعديل بيانات النقطة وإرشاد التبديل (أدمن)</span>
               
               <div className="grid grid-cols-2 gap-1.5">
                 {NODE_TYPES.map(nt => (
@@ -253,7 +253,7 @@ const StationModal = ({ station, user, isAdmin, isGuest, isDarkMode, onClose, tr
                     key={nt.id}
                     type="button"
                     onClick={() => setEditStationType(nt.id)}
-                    className={`p-2 rounded-xl text-[10px] font-black border text-right flex items-center justify-between ${
+                    className={`p-2 rounded-xl text-xs font-black border text-right flex items-center justify-between ${
                       editStationType === nt.id ? 'bg-indigo-600 text-white border-indigo-600' : `${bgInput}`
                     }`}
                   >
@@ -299,7 +299,7 @@ const StationModal = ({ station, user, isAdmin, isGuest, isDarkMode, onClose, tr
               الخطوط والمواصلات المارة ({station.routes?.length || 0})
             </h3>
             {!isAddingRoute && (
-              <button onClick={() => setIsAddingRoute(true)} className="text-[11px] font-black bg-indigo-600 text-white px-3 py-1.5 rounded-xl flex items-center gap-1 hover:bg-indigo-700 transition-colors shadow-sm">
+              <button onClick={() => setIsAddingRoute(true)} className="text-xs font-black bg-indigo-600 text-white px-3 py-1.5 rounded-xl flex items-center gap-1 hover:bg-indigo-700 transition-colors shadow-sm">
                 <Plus size={13}/> أضف خط / تحويلة
               </button>
             )}
@@ -365,10 +365,10 @@ const StationModal = ({ station, user, isAdmin, isGuest, isDarkMode, onClose, tr
                 />
 
                 <div className="flex gap-2 pt-1">
-                  <button type="submit" disabled={isSubmitting} className="flex-1 bg-indigo-600 hover:bg-indigo-700 text-white py-2.5 rounded-xl text-[11px] font-black flex justify-center items-center gap-2 shadow-sm">
+                  <button type="submit" disabled={isSubmitting} className="flex-1 bg-indigo-600 hover:bg-indigo-700 text-white py-2.5 rounded-xl text-xs font-black flex justify-center items-center gap-2 shadow-sm">
                     {isSubmitting ? <Loader2 size={14} className="animate-spin"/> : (isAdmin ? 'حفظ وتغذية بيسو ✅' : 'إرسال للاعتماد 🚀')}
                   </button>
-                  <button type="button" onClick={() => setIsAddingRoute(false)} className="px-4 bg-slate-200 dark:bg-slate-700 text-slate-700 dark:text-slate-300 rounded-xl text-[11px] font-bold">إلغاء</button>
+                  <button type="button" onClick={() => setIsAddingRoute(false)} className="px-4 bg-slate-200 dark:bg-slate-700 text-slate-700 dark:text-slate-300 rounded-xl text-xs font-bold">إلغاء</button>
                 </div>
               </div>
             </form>
@@ -407,28 +407,28 @@ const StationModal = ({ station, user, isAdmin, isGuest, isDarkMode, onClose, tr
                         <div className="flex items-center gap-1.5 flex-wrap">
                           <h4 className={`font-black text-xs sm:text-sm truncate ${textPrimary}`}>{displayTitle}</h4>
                           {displaySubTitle && (
-                            <span className="text-[8px] sm:text-[9px] font-bold bg-slate-100 dark:bg-slate-800 text-slate-500 dark:text-slate-400 px-1.5 py-0.5 rounded-md">
+                            <span className="text-xs font-bold bg-slate-100 dark:bg-slate-800 text-slate-500 dark:text-slate-400 px-1.5 py-0.5 rounded-md">
                               {displaySubTitle}
                             </span>
                           )}
                         </div>
 
                         {route.boardingHint && (
-                          <p className="text-[10px] font-bold text-indigo-500 dark:text-indigo-400 mt-0.5">
+                          <p className="text-xs font-bold text-indigo-500 dark:text-indigo-400 mt-0.5">
                             📍 يركب من: {route.boardingHint}
                           </p>
                         )}
                         
                         <div className="flex items-center gap-2 mt-1">
                           <div className="flex gap-1">
-                            <button onClick={() => handleUpdateCrowdStatus('route', 'empty', originalIndex)} className={`text-[8px] sm:text-[9px] font-bold px-1.5 py-0.5 rounded transition-colors ${route.crowdStatus === 'empty' ? 'bg-emerald-500 text-white' : 'bg-slate-100 text-slate-500 dark:bg-slate-800'}`}>رايق</button>
-                            <button onClick={() => handleUpdateCrowdStatus('route', 'crowded', originalIndex)} className={`text-[8px] sm:text-[9px] font-bold px-1.5 py-0.5 rounded transition-colors ${route.crowdStatus === 'crowded' ? 'bg-rose-500 text-white' : 'bg-slate-100 text-slate-500 dark:bg-slate-800'}`}>زحمة</button>
+                            <button onClick={() => handleUpdateCrowdStatus('route', 'empty', originalIndex)} className={`text-xs font-bold px-1.5 py-0.5 rounded transition-colors ${route.crowdStatus === 'empty' ? 'bg-emerald-500 text-white' : 'bg-slate-100 text-slate-500 dark:bg-slate-800'}`}>رايق</button>
+                            <button onClick={() => handleUpdateCrowdStatus('route', 'crowded', originalIndex)} className={`text-xs font-bold px-1.5 py-0.5 rounded transition-colors ${route.crowdStatus === 'crowded' ? 'bg-rose-500 text-white' : 'bg-slate-100 text-slate-500 dark:bg-slate-800'}`}>زحمة</button>
                           </div>
 
                           {route.status === 'pending' ? (
-                            <span className="text-[8px] sm:text-[9px] font-bold text-amber-500 flex items-center gap-0.5"><AlertCircle size={10}/> مراجعة</span>
+                            <span className="text-xs font-bold text-amber-500 flex items-center gap-0.5"><AlertCircle size={10}/> مراجعة</span>
                           ) : route.crowdUpdatedAt ? (
-                            <span className="text-[8px] sm:text-[9px] font-bold text-slate-400">{getTimeAgo(route.crowdUpdatedAt)}</span>
+                            <span className="text-xs font-bold text-slate-400">{getTimeAgo(route.crowdUpdatedAt)}</span>
                           ) : null}
                         </div>
                       </div>
@@ -437,16 +437,16 @@ const StationModal = ({ station, user, isAdmin, isGuest, isDarkMode, onClose, tr
                     <div className="flex flex-col items-end gap-1 shrink-0">
                       {editingIndex === originalIndex ? (
                         <div className="flex items-center gap-1">
-                           <input type="number" autoFocus placeholder="الأجرة" value={editFareValue} onChange={(e) => setEditFareValue(e.target.value)} className={`w-14 p-1 text-center rounded-md border text-[11px] font-bold ${bgInput}`} />
+                           <input type="number" autoFocus placeholder="الأجرة" value={editFareValue} onChange={(e) => setEditFareValue(e.target.value)} className={`w-14 p-1 text-center rounded-md border text-xs font-bold ${bgInput}`} />
                            <button onClick={() => handleSaveEditFare(originalIndex)} className="p-1 bg-emerald-500 text-white rounded hover:bg-emerald-600"><Check size={12}/></button>
-                           <button onClick={() => setEditingIndex(-1)} className="p-1 bg-rose-500 text-white rounded hover:bg-rose-600"><X size={12}/></button>
+                           <button aria-label="إغلاق" onClick={() => setEditingIndex(-1)} className="p-2.5 bg-rose-500 text-white rounded hover:bg-rose-600"><X size={12}/></button>
                         </div>
                       ) : (
                         <div className="flex items-center gap-1.5">
                           <span className="font-black text-emerald-600 dark:text-emerald-400 text-xs sm:text-sm bg-emerald-500/10 px-2.5 py-1 rounded-xl border border-emerald-500/20">
                             {route.fare} ج
                           </span>
-                           {!isGuest && (
+                          {!isGuest && (
                             <button onClick={() => {setEditingIndex(originalIndex); setEditFareValue(route.fare);}} className="text-slate-400 hover:text-indigo-500 p-1 bg-slate-100 dark:bg-slate-800 rounded-lg transition-colors" title="تعديل الأجرة"><Edit3 size={12}/></button>
                           )}
                           {isAdmin && (
@@ -455,7 +455,7 @@ const StationModal = ({ station, user, isAdmin, isGuest, isDarkMode, onClose, tr
                         </div>
                       )}
                       {route.editRequest?.suggestedBy === user?.uid && !isAdmin && (
-                        <span className="text-[8px] text-amber-500 font-bold">اقتراحك ({route.editRequest.proposedFare}ج) قيد المراجعة</span>
+                        <span className="text-xs text-amber-500 font-bold">اقتراحك ({route.editRequest.proposedFare}ج) قيد المراجعة</span>
                       )}
                     </div>
                   </div>

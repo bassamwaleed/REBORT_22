@@ -27,7 +27,7 @@ const SquadTripCard = ({ trip, user, isAdmin, isDarkMode, setSelectedWeekendTrip
   };
 
   return (
-    <div className="relative rounded-[2rem] overflow-hidden shadow-md group cursor-pointer border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 mb-5 transition-transform hover:-translate-y-1" onClick={() => setSelectedWeekendTrip(trip)}>
+    <div className="relative rounded-3xl overflow-hidden shadow-md group cursor-pointer border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 mb-5 transition-transform hover:-translate-y-1" onClick={() => setSelectedWeekendTrip(trip)}>
       
       {(isAdmin || isOwner) && (
         <button onClick={handleDelete} className="absolute top-2 left-2 p-1.5 bg-rose-50 dark:bg-rose-900/30 text-rose-600 dark:text-rose-400 rounded-full hover:bg-rose-100 z-30 shadow-md transition-colors">
@@ -36,9 +36,9 @@ const SquadTripCard = ({ trip, user, isAdmin, isDarkMode, setSelectedWeekendTrip
       )}
       
       {/* غلاف الكارت */}
-      <div className="h-32 bg-gradient-to-br from-indigo-600 to-blue-500 relative p-4 flex flex-col justify-between">
+      <div className="h-32 bg-indigo-600 relative p-4 flex flex-col justify-between">
          <div className="flex justify-between items-start z-10">
-           <span className="bg-white/20 backdrop-blur-md px-3 py-1 rounded-full text-[10px] font-bold text-white flex items-center gap-1 border border-white/30">
+           <span className="bg-white/20 backdrop-blur-md px-3 py-1 rounded-full text-xs font-bold text-white flex items-center gap-1 border border-white/30">
              <Tent size={12}/> {trip?.squadTags || 'شلة شباب'}
            </span>
            <span className="font-black text-sm bg-amber-400 text-amber-900 px-3 py-1 rounded-xl shadow-md">
@@ -67,7 +67,7 @@ const SquadTripCard = ({ trip, user, isAdmin, isDarkMode, setSelectedWeekendTrip
                الكابتن: {trip?.userName?.split(' ')[0] || 'مستخدم'} 
                {trip?.verified && <ShieldCheck size={12} className="inline text-emerald-500 ml-1" title="موثق"/>}
              </p>
-             <p className={`text-[10px] ${textSecondary}`}>التحرك: {formatTripDateTime(trip?.date, trip?.time)}</p>
+             <p className={`text-xs ${textSecondary}`}>التحرك: {formatTripDateTime(trip?.date, trip?.time)}</p>
            </div>
          </div>
          
@@ -76,7 +76,7 @@ const SquadTripCard = ({ trip, user, isAdmin, isDarkMode, setSelectedWeekendTrip
               <span className={`text-xs font-black ${isFull ? 'text-rose-600' : 'text-emerald-600'}`}>
                 {isFull ? 'اكتمل العدد ⛔' : `متبقي ${availableSeats} مقاعد`}
               </span>
-              <span className={`text-[10px] ${textSecondary}`}>{members.length} مشتركين</span>
+              <span className={`text-xs ${textSecondary}`}>{members.length} مشتركين</span>
             </div>
             
             {/* الأعضاء المنضمين */}
@@ -89,13 +89,13 @@ const SquadTripCard = ({ trip, user, isAdmin, isDarkMode, setSelectedWeekendTrip
                     <div className="w-8 h-8 rounded-full border border-white dark:border-slate-800 bg-indigo-100 overflow-hidden shrink-0 shadow-sm">
                       {m?.photo ? <img src={m.photo} className="w-full h-full object-cover" alt="عضو"/> : <User size={14} className="m-auto mt-1.5 text-indigo-400"/>}
                     </div>
-                    <span className={`text-[8px] mt-1 font-bold truncate w-full text-center ${textSecondary}`}>{m?.name?.split(' ')[0]}</span>
+                    <span className={`text-xs mt-1 font-bold truncate w-full text-center ${textSecondary}`}>{m?.name?.split(' ')[0]}</span>
                   </div>
                 ))
               )}
               {members.length > 6 && (
                 <div className="flex flex-col items-center w-10">
-                  <div className="w-8 h-8 rounded-full border border-white dark:border-slate-800 bg-slate-200 flex items-center justify-center text-[10px] font-bold shrink-0 shadow-sm">
+                  <div className="w-8 h-8 rounded-full border border-white dark:border-slate-800 bg-slate-200 flex items-center justify-center text-xs font-bold shrink-0 shadow-sm">
                     +{members.length - 6}
                   </div>
                 </div>

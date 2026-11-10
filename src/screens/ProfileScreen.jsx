@@ -10,12 +10,50 @@ import { resizeAndConvertToBase64 } from '../utils/helpers';
 import TripCard from '../components/TripCard';
 
 const BONUS_MILESTONES = [
-  { id: 'كابتن مبادر 🌱', title: 'كابتن مبادر 🌱', target: 3, desc: 'أكمل 3 رحلات ناجحة عبر التطبيق للحصول على شارة المبادرة وزيادة ثقة الأعضاء بك.', color: 'from-emerald-500 to-teal-600' },
-  { id: 'كابتن نشيط ⭐', title: 'كابتن نشيط ⭐', target: 10, desc: 'أكمل 10 رحلات لتثبت التزامك ونشاطك المستمر في مجتمع طريقنا.', color: 'from-amber-500 to-orange-600' },
-  { id: 'كابتن خبير 🏆', title: 'كابتن خبير 🏆', target: 25, desc: 'أكمل 25 رحلة لتنضم لنخبة الكباتن والأعضاء الأكثر خبرة وموثوقية.', color: 'from-purple-600 to-indigo-600' },
-  { id: 'كابتن ذهبي 💎', title: 'كابتن ذهبي 💎', target: 50, desc: 'أكمل 50 رحلة واحصل على الشارة الماسية ومزايا الظهور المميز.', color: 'from-cyan-500 to-blue-600' },
-  { id: 'سفير طريقنا 👑', title: 'سفير طريقنا 👑', target: 100, desc: 'أكمل 100 رحلة لتصبح سفيراً رسمياً لتطبيق طريقنا في محافظتك.', color: 'from-indigo-600 to-rose-600' }
+  { id: 'كابتن مبادر 🌱', title: 'كابتن مبادر 🌱', target: 3, desc: 'أكمل 3 رحلات ناجحة عبر التطبيق للحصول على شارة المبادرة وزيادة ثقة الأعضاء بك.', color: 'bg-emerald-700' },
+  { id: 'كابتن نشيط ⭐', title: 'كابتن نشيط ⭐', target: 10, desc: 'أكمل 10 رحلات لتثبت التزامك ونشاطك المستمر في مجتمع طريقنا.', color: 'bg-indigo-600' },
+  { id: 'كابتن خبير 🏆', title: 'كابتن خبير 🏆', target: 25, desc: 'أكمل 25 رحلة لتنضم لنخبة الكباتن والأعضاء الأكثر خبرة وموثوقية.', color: 'bg-indigo-800' },
+  { id: 'كابتن ذهبي 💎', title: 'كابتن ذهبي 💎', target: 50, desc: 'أكمل 50 رحلة واحصل على الشارة الماسية ومزايا الظهور المميز.', color: 'bg-amber-700' },
+  { id: 'سفير طريقنا 👑', title: 'سفير طريقنا 👑', target: 100, desc: 'أكمل 100 رحلة لتصبح سفيراً رسمياً لتطبيق طريقنا في محافظتك.', color: 'bg-slate-800' }
 ];
+
+const ROLE_LABELS = {
+  driver: 'كابتن (لديه سيارة)',
+  passenger: 'راكب',
+  delivery: 'مندوب توصيل'
+};
+
+const MenuRow = ({ icon: Icon, tint, title, subtitle, onClick, badge, trailing, danger, divider, checked, isDarkMode }) => {
+  const Tag = onClick ? 'button' : 'div';
+  const textPrimary = isDarkMode ? 'text-white' : 'text-slate-900';
+  const textSecondary = isDarkMode ? 'text-slate-400' : 'text-slate-500';
+  return (
+    <Tag
+      {...(onClick ? { type: 'button', onClick } : {})}
+      {...(checked !== undefined ? { role: 'switch', 'aria-checked': checked } : {})}
+      className={`w-full min-h-[68px] px-4 py-3 flex items-center gap-3.5 text-right ${onClick ? 'transition-colors hover:bg-slate-50 dark:hover:bg-slate-800/50' : ''} ${divider ? 'border-t border-slate-100 dark:border-slate-800' : ''}`}
+    >
+      <span className={`w-11 h-11 rounded-xl flex items-center justify-center shrink-0 ${tint}`}>
+        <Icon size={21} />
+      </span>
+      <span className="flex-1 min-w-0">
+        <span className="flex items-center gap-2 flex-wrap">
+          <span className={`block text-sm font-black ${danger ? 'text-rose-600 dark:text-rose-400' : textPrimary}`}>{title}</span>
+          {badge}
+        </span>
+        {subtitle && <span className={`block text-xs mt-0.5 leading-relaxed ${textSecondary}`}>{subtitle}</span>}
+      </span>
+      {trailing !== undefined ? trailing : (onClick && !danger ? <ChevronLeft size={18} className="text-slate-400 shrink-0" /> : null)}
+    </Tag>
+  );
+};
+
+const MenuSection = ({ title, children, bgCard, isDarkMode }) => (
+  <section>
+    {title && <h3 className={`px-1 mb-2 text-xs font-black ${isDarkMode ? 'text-slate-400' : 'text-slate-500'}`}>{title}</h3>}
+    <div className={`rounded-2xl border overflow-hidden ${bgCard}`}>{children}</div>
+  </section>
+);
 
 const ProfileScreen = ({
   user, userData, setUserData, isGuest, isAdmin, isDarkMode,
@@ -58,12 +96,12 @@ const ProfileScreen = ({
   if (isGuest || !user) {
     return (
       <div className="flex-1 w-full max-w-2xl mx-auto px-4 py-12 flex flex-col items-center justify-center text-center">
-        <div className={`p-8 rounded-[2rem] border shadow-xl w-full max-w-md ${bgCard}`}>
+        <div className={`p-8 rounded-3xl border shadow-xl w-full max-w-md ${bgCard}`}>
           <div className="w-16 h-16 rounded-2xl bg-indigo-600/10 text-indigo-500 flex items-center justify-center mx-auto mb-4">
             <Lock size={32} />
           </div>
           <h2 className={`text-xl font-black mb-2 ${textPrimary}`}>أنت تتصفح كزائر</h2>
-          <p className={`text-xs font-bold mb-6 leading-relaxed ${textSecondary}`}>
+          <p className={`text-sm font-bold mb-6 leading-relaxed ${textSecondary}`}>
             سجل حسابك الآن مجاناً لتتمكن من نشر رحلات، التواصل مع الكباتن، توثيق حسابك، والحصول على شارات البونص والمكافآت!
           </p>
           <button
@@ -178,6 +216,9 @@ const ProfileScreen = ({
     }
   };
 
+  const hasReadyBonus = BONUS_MILESTONES.some(m => completedCount >= m.target && !claimedBadges.includes(m.id));
+  const verifyState = userData?.isVerified ? 'verified' : userData?.verificationStatus === 'pending' ? 'pending' : 'none';
+
   return (
     <div className="flex-1 w-full max-w-5xl mx-auto px-3 sm:px-6 py-4 pb-28 animate-fade-in-up">
       
@@ -185,20 +226,20 @@ const ProfileScreen = ({
         
         {/* العمود الأيمن: كارت الهوية + بطاقة تقدم البونص السريعة + لوحة الأدمن (متوازن تماماً على اللابتوب) */}
         <div className="lg:col-span-5 space-y-3.5">
-          <div className={`p-5 sm:p-6 rounded-[2rem] border shadow-sm relative overflow-hidden ${bgCard}`}>
-            <div className="absolute top-0 left-0 right-0 h-24 bg-gradient-to-r from-indigo-600 via-violet-600 to-indigo-700 opacity-90"></div>
+          <div className={`p-5 sm:p-6 rounded-3xl border shadow-sm relative overflow-hidden ${bgCard}`}>
+            <div className="absolute top-0 left-0 right-0 h-24 bg-indigo-600 opacity-90"></div>
             
             <div className="relative z-10 flex flex-col items-center text-center mt-6">
               <div className="relative group">
                 {userData?.photoURL ? (
-                  <img src={userData.photoURL} className="w-24 h-24 rounded-[1.75rem] object-cover border-4 border-white dark:border-slate-900 shadow-lg" alt="Profile" />
+                  <img src={userData.photoURL} className="w-24 h-24 rounded-3xl object-cover border-4 border-white dark:border-slate-900 shadow-lg" alt="Profile" />
                 ) : (
-                  <div className="w-24 h-24 rounded-[1.75rem] bg-indigo-100 dark:bg-slate-800 text-indigo-600 dark:text-indigo-400 flex items-center justify-center font-black text-3xl border-4 border-white dark:border-slate-900 shadow-lg">
+                  <div className="w-24 h-24 rounded-3xl bg-indigo-100 dark:bg-slate-800 text-indigo-600 dark:text-indigo-400 flex items-center justify-center font-black text-3xl border-4 border-white dark:border-slate-900 shadow-lg">
                     {(userData?.name || 'م').charAt(0)}
                   </div>
                 )}
-                <label className="absolute -bottom-1 -right-1 p-2 bg-indigo-600 hover:bg-indigo-700 text-white rounded-xl shadow-md cursor-pointer transition-transform active:scale-90">
-                  {isUploadingPhoto ? <Clock size={14} className="animate-spin" /> : <Camera size={14} />}
+                <label aria-label="تغيير الصورة الشخصية" className="absolute -bottom-1 -right-1 w-10 h-10 flex items-center justify-center bg-indigo-600 hover:bg-indigo-700 text-white rounded-xl shadow-md cursor-pointer transition-transform active:scale-90">
+                  {isUploadingPhoto ? <Clock size={16} className="animate-spin" /> : <Camera size={16} />}
                   <input type="file" accept="image/*" className="hidden" onChange={handlePhotoChange} disabled={isUploadingPhoto} />
                 </label>
               </div>
@@ -206,15 +247,21 @@ const ProfileScreen = ({
               <div className="mt-3 flex items-center justify-center gap-1.5 flex-wrap">
                 <h2 className={`text-lg font-black ${textPrimary}`}>{userData?.name || 'مستخدم طريقنا'}</h2>
                 {userData?.isVerified && (
-                  <span className="inline-flex items-center gap-1 text-[10px] font-black bg-emerald-500/15 text-emerald-500 border border-emerald-500/30 px-2 py-0.5 rounded-full">
+                  <span className="inline-flex items-center gap-1 text-xs font-black bg-emerald-500/15 text-emerald-500 border border-emerald-500/30 px-2 py-0.5 rounded-full">
                     <ShieldCheck size={13} /> موثق
                   </span>
                 )}
               </div>
 
               {userData?.customBadge && (
-                <span className="mt-1.5 text-[11px] font-black px-3 py-0.5 rounded-full bg-amber-400/20 text-amber-500 border border-amber-400/40">
+                <span className="mt-1.5 text-xs font-black px-3 py-0.5 rounded-full bg-amber-400/20 text-amber-500 border border-amber-400/40">
                   {userData.customBadge}
+                </span>
+              )}
+
+              {userData?.accountRole && ROLE_LABELS[userData.accountRole] && (
+                <span className={`mt-2 text-xs font-bold px-3 py-1 rounded-full ${isDarkMode ? 'bg-slate-800 text-slate-300' : 'bg-slate-100 text-slate-600'}`}>
+                  {ROLE_LABELS[userData.accountRole]}
                 </span>
               )}
 
@@ -225,15 +272,15 @@ const ProfileScreen = ({
                     <Star size={15} className="fill-amber-400 text-amber-400" />
                     {Number(userData?.rating || 0).toFixed(1)}
                   </span>
-                  <span className={`text-[10px] font-bold block mt-0.5 ${textSecondary}`}>التقييم العام</span>
+                  <span className={`text-xs font-bold block mt-0.5 ${textSecondary}`}>التقييم العام</span>
                 </div>
                 <div className="text-center border-x dark:border-slate-800">
                   <span className="font-black text-base text-emerald-500 block">{completedCount}</span>
-                  <span className={`text-[10px] font-bold block mt-0.5 ${textSecondary}`}>رحلة مكتملة</span>
+                  <span className={`text-xs font-bold block mt-0.5 ${textSecondary}`}>رحلة مكتملة</span>
                 </div>
                 <div className="text-center">
                   <span className="font-black text-base text-indigo-500 block">{reviewsList.length}</span>
-                  <span className={`text-[10px] font-bold block mt-0.5 ${textSecondary}`}>آراء العملاء</span>
+                  <span className={`text-xs font-bold block mt-0.5 ${textSecondary}`}>آراء العملاء</span>
                 </div>
               </div>
             </div>
@@ -242,23 +289,23 @@ const ProfileScreen = ({
           {/* بطاقة شريط التقدم نحو شارة البونص التالية (تملأ الفراغ على اللابتوب بشكل رائع) */}
           <div 
             onClick={() => setActiveModal('bonus')}
-            className={`p-4 rounded-[1.5rem] border cursor-pointer hover:border-amber-500/60 transition-all ${bgCard}`}
+            className={`p-4 rounded-2xl border cursor-pointer hover:border-amber-500/60 transition-all ${bgCard}`}
           >
             <div className="flex items-center justify-between mb-2">
               <span className="text-xs font-black flex items-center gap-1.5 text-amber-500">
                 <Award size={16} /> الهدف القادم: {nextMilestone.title}
               </span>
-              <span className={`text-[11px] font-black ${textSecondary}`}>
+              <span className={`text-xs font-black ${textSecondary}`}>
                 {completedCount} / {nextMilestone.target} رحلة
               </span>
             </div>
             <div className="w-full h-2 bg-slate-200 dark:bg-slate-800 rounded-full overflow-hidden">
               <div 
-                className={`h-full bg-gradient-to-r ${nextMilestone.color} transition-all duration-500`} 
+                className={`h-full ${nextMilestone.color} transition-all duration-500`} 
                 style={{ width: `${nextProgress}%` }}
               />
             </div>
-            <p className={`text-[10px] font-bold mt-2 ${textSecondary}`}>
+            <p className={`text-xs font-bold mt-2 ${textSecondary}`}>
               {completedCount >= nextMilestone.target 
                 ? '🎉 لقد حققت الهدف! اضغط هنا للمطالبة بشارتك من الإدارة' 
                 : `أكمل ${nextMilestone.target - completedCount} رحلات إضافية للمطالبة بهذه الشارة!`}
@@ -269,7 +316,7 @@ const ProfileScreen = ({
           {isAdmin && (
             <button
               onClick={() => setShowAdminPanel(true)}
-              className="w-full p-4 rounded-2xl bg-gradient-to-r from-amber-500 via-orange-500 to-rose-500 text-white font-black text-sm shadow-lg flex items-center justify-between hover:opacity-95 transition-all active:scale-98"
+              className="w-full p-4 rounded-2xl bg-slate-900 dark:bg-slate-800 text-white font-black text-sm shadow-lg flex items-center justify-between hover:opacity-95 transition-all active:scale-[0.98]"
             >
               <div className="flex items-center gap-2.5">
                 <Crown size={20} />
@@ -280,158 +327,75 @@ const ProfileScreen = ({
           )}
         </div>
 
-        {/* العمود الأيسر: قائمة الخيارات المنظمة والرايقة */}
-        <div className="lg:col-span-7 space-y-3">
-          
-          {/* 1. خانه إعدادات الحساب الشاملة */}
-          <button
-            onClick={() => setActiveModal('settings')}
-            className={`w-full p-4 rounded-2xl border flex items-center justify-between transition-all hover:border-indigo-500 ${bgCard}`}
-          >
-            <div className="flex items-center gap-3.5 text-right">
-              <div className="w-11 h-11 rounded-2xl bg-indigo-500/10 text-indigo-500 flex items-center justify-center shrink-0">
-                <Settings size={22} />
-              </div>
-              <div>
-                <h3 className={`font-black text-sm ${textPrimary}`}>إعدادات الحساب والبيانات الشخصية ⚙️</h3>
-                <p className={`text-[11px] font-bold mt-0.5 ${textSecondary}`}>
-                  الاسم، الهاتف، النوع (ذكر/أنثى)، نوع الخدمة (سائق/راكب/توصيل)، السيارة، والمظهر
-                </p>
-              </div>
-            </div>
-            <ChevronLeft size={18} className="text-slate-400 shrink-0" />
-          </button>
+        {/* العمود الأيسر: قائمة مجمّعة في 3 أقسام */}
+        <div className="lg:col-span-7 space-y-5">
 
-          {/* 2. معاينة صفحتي العامة وآراء الناس عني */}
-          <button
-            onClick={() => onOpenPublicProfile && onOpenPublicProfile(user.uid)}
-            className={`w-full p-4 rounded-2xl border flex items-center justify-between transition-all hover:border-indigo-500 ${bgCard}`}
-          >
-            <div className="flex items-center gap-3.5 text-right">
-              <div className="w-11 h-11 rounded-2xl bg-cyan-500/10 text-cyan-500 flex items-center justify-center shrink-0">
-                <Eye size={22} />
-              </div>
-              <div>
-                <h3 className={`font-black text-sm ${textPrimary}`}>صفحتي العامة وآراء العملاء عني 🌟</h3>
-                <p className={`text-[11px] font-bold mt-0.5 ${textSecondary}`}>
-                  شاهد كيف يظهر بروفايلك وتقييماتك وتعليقات الناس للآخرين
-                </p>
-              </div>
-            </div>
-            <ChevronLeft size={18} className="text-slate-400 shrink-0" />
-          </button>
+          <MenuSection title="حسابي" bgCard={bgCard} isDarkMode={isDarkMode}>
+            <MenuRow
+              isDarkMode={isDarkMode} icon={Settings} tint="bg-indigo-500/10 text-indigo-500"
+              title="إعدادات الحساب" subtitle="الاسم، الهاتف، نوع الحساب، السيارة"
+              onClick={() => setActiveModal('settings')}
+            />
+            <MenuRow
+              divider isDarkMode={isDarkMode} icon={Eye} tint="bg-indigo-500/10 text-indigo-500"
+              title="صفحتي العامة" subtitle="شاهد بروفايلك وآراء الأعضاء كما يراها الآخرون"
+              onClick={() => onOpenPublicProfile && onOpenPublicProfile(user.uid)}
+            />
+            <MenuRow
+              divider isDarkMode={isDarkMode} icon={ShieldCheck}
+              tint={verifyState === 'verified' ? 'bg-emerald-500 text-white' : verifyState === 'pending' ? 'bg-amber-600 text-white' : 'bg-indigo-500/10 text-indigo-500'}
+              title={verifyState === 'verified' ? 'حسابك موثق' : verifyState === 'pending' ? 'طلب التوثيق قيد المراجعة' : 'وثّق حسابك'}
+              subtitle={verifyState === 'verified' ? 'تظهر علامة الأمان لجميع الأعضاء' : verifyState === 'pending' ? 'تتم مراجعة مستنداتك من قِبل الإدارة' : 'ارفع بطاقتك الشخصية لزيادة الثقة والأمان'}
+              onClick={verifyState === 'none' ? () => setShowVerifyModal(true) : undefined}
+              trailing={
+                verifyState === 'none'
+                  ? <span className="px-3.5 py-2 bg-indigo-600 text-white rounded-xl text-xs font-black shrink-0">وثّق الآن</span>
+                  : verifyState === 'pending'
+                  ? <span className="px-3 py-1.5 rounded-full text-xs font-black bg-amber-500/15 text-amber-700 dark:text-amber-400 shrink-0">قيد المراجعة</span>
+                  : <CheckCircle2 size={22} className="text-emerald-500 shrink-0" />
+              }
+            />
+          </MenuSection>
 
-          {/* 3. توثيق الحساب */}
-          <div 
-            onClick={() => !userData?.isVerified && userData?.verificationStatus !== 'pending' && setShowVerifyModal(true)}
-            className={`p-4 rounded-2xl border flex items-center justify-between cursor-pointer transition-all ${
-              userData?.isVerified 
-                ? (isDarkMode ? 'bg-emerald-950/25 border-emerald-800/60' : 'bg-emerald-50 border-emerald-200')
-                : userData?.verificationStatus === 'pending'
-                ? (isDarkMode ? 'bg-amber-950/25 border-amber-800/60' : 'bg-amber-50 border-amber-200')
-                : `${bgCard} hover:border-indigo-500`
-            }`}
-          >
-            <div className="flex items-center gap-3.5">
-              <div className={`w-11 h-11 rounded-2xl flex items-center justify-center shrink-0 ${
-                userData?.isVerified ? 'bg-emerald-500 text-white' : userData?.verificationStatus === 'pending' ? 'bg-amber-500 text-white' : 'bg-indigo-500/10 text-indigo-500'
-              }`}>
-                <ShieldCheck size={22} />
-              </div>
-              <div>
-                <h3 className={`font-black text-sm ${textPrimary}`}>
-                  {userData?.isVerified ? 'حسابك موثق رسمياً ✅' : userData?.verificationStatus === 'pending' ? 'طلب التوثيق قيد المراجعة ⏳' : 'توثيق الحساب بالبطاقة الشخصية 🛡️'}
-                </h3>
-                <p className={`text-[11px] font-bold mt-0.5 ${textSecondary}`}>
-                  {userData?.isVerified 
-                    ? 'تظهر علامة الأمان الخضراء في صفحتك لجميع الأعضاء' 
-                    : userData?.verificationStatus === 'pending'
-                    ? 'تتم مراجعة مستنداتك من قِبل الإدارة حالياً'
-                    : 'وثّق حسابك الآن لزيادة الثقة والأمان في رحلاتك'}
-                </p>
-              </div>
-            </div>
-            {!userData?.isVerified && userData?.verificationStatus !== 'pending' && (
-              <span className="px-3 py-1.5 bg-indigo-600 text-white rounded-xl text-xs font-black shrink-0">وثّق الآن</span>
-            )}
+          <MenuSection title="نشاطي" bgCard={bgCard} isDarkMode={isDarkMode}>
+            <MenuRow
+              isDarkMode={isDarkMode} icon={Car} tint="bg-emerald-500/10 text-emerald-500"
+              title={`رحلاتي وإعلاناتي (${myTrips.length})`} subtitle="إدارة ما نشرته من رحلات وأمانات"
+              onClick={() => setActiveModal('my_trips')}
+            />
+            <MenuRow
+              divider isDarkMode={isDarkMode} icon={Award} tint="bg-amber-500/15 text-amber-500"
+              title="جوائز وبونص طريقنا" subtitle={`أكملت ${completedCount} رحلة — اطلب شارتك عند إكمال كل مرحلة`}
+              onClick={() => setActiveModal('bonus')}
+              badge={hasReadyBonus ? <span className="text-xs font-black bg-rose-500 text-white px-2 py-0.5 rounded-full">مكافأة جاهزة</span> : null}
+            />
+          </MenuSection>
+
+          <MenuSection title="التطبيق" bgCard={bgCard} isDarkMode={isDarkMode}>
+            <MenuRow
+              isDarkMode={isDarkMode} icon={isDarkMode ? Moon : Sun}
+              tint={isDarkMode ? 'bg-indigo-500/15 text-indigo-400' : 'bg-amber-500/15 text-amber-500'}
+              title="المظهر الليلي" subtitle={isDarkMode ? 'مفعّل' : 'غير مفعّل'}
+              onClick={toggleTheme} checked={isDarkMode}
+              trailing={
+                <span aria-hidden="true" className={`relative w-11 h-6 rounded-full shrink-0 transition-colors ${isDarkMode ? 'bg-indigo-600' : 'bg-slate-300'}`}>
+                  <span className="absolute top-0.5 w-5 h-5 rounded-full bg-white shadow transition-all" style={{ right: isDarkMode ? 22 : 2 }} />
+                </span>
+              }
+            />
+            <MenuRow
+              divider isDarkMode={isDarkMode} icon={Info} tint="bg-indigo-500/10 text-indigo-500"
+              title="عن طريقنا" subtitle="الفكرة، الأمان، والمساعد بيسو"
+              onClick={() => setActiveModal('about')}
+            />
+          </MenuSection>
+
+          <div className={`rounded-2xl border overflow-hidden ${isDarkMode ? 'border-rose-900/50 bg-slate-900' : 'border-rose-200/70 bg-white'}`}>
+            <MenuRow
+              danger isDarkMode={isDarkMode} icon={LogOut} tint="bg-rose-500/10 text-rose-500"
+              title="تسجيل الخروج" onClick={handleLogout}
+            />
           </div>
-
-          {/* 4. صفحة البونص والمكافآت مع زر المطالبة */}
-          <button
-            onClick={() => setActiveModal('bonus')}
-            className={`w-full p-4 rounded-2xl border flex items-center justify-between transition-all hover:border-amber-500 ${bgCard}`}
-          >
-            <div className="flex items-center gap-3.5 text-right">
-              <div className="w-11 h-11 rounded-2xl bg-amber-500/15 text-amber-500 flex items-center justify-center shrink-0">
-                <Award size={22} />
-              </div>
-              <div>
-                <div className="flex items-center gap-2">
-                  <h3 className={`font-black text-sm ${textPrimary}`}>جوائز وبونص "طريقنا" 🏆</h3>
-                  {BONUS_MILESTONES.some(m => completedCount >= m.target && !claimedBadges.includes(m.id)) && (
-                    <span className="text-[10px] font-black bg-rose-500 text-white px-2 py-0.5 rounded-full animate-pulse">
-                      مكافأة جاهزة! 🎁
-                    </span>
-                  )}
-                </div>
-                <p className={`text-[11px] font-bold mt-0.5 ${textSecondary}`}>
-                  تقدمك الحالي ({completedCount} رحلة) • طالب بشارتك عند إكمال كل مرحلة
-                </p>
-              </div>
-            </div>
-            <ChevronLeft size={18} className="text-slate-400 shrink-0" />
-          </button>
-
-          {/* 5. إعلاناتي ورحلاتي المنشورة */}
-          <button
-            onClick={() => setActiveModal('my_trips')}
-            className={`w-full p-4 rounded-2xl border flex items-center justify-between transition-all hover:border-indigo-500 ${bgCard}`}
-          >
-            <div className="flex items-center gap-3.5 text-right">
-              <div className="w-11 h-11 rounded-2xl bg-emerald-500/10 text-emerald-500 flex items-center justify-center shrink-0">
-                <Car size={22} />
-              </div>
-              <div>
-                <h3 className={`font-black text-sm ${textPrimary}`}>رحلاتي وإعلاناتي المنشورة ({myTrips.length})</h3>
-                <p className={`text-[11px] font-bold mt-0.5 ${textSecondary}`}>
-                  إدارة ومتابعة الرحلات والأمانات التي قمت بنشرها
-                </p>
-              </div>
-            </div>
-            <ChevronLeft size={18} className="text-slate-400 shrink-0" />
-          </button>
-
-          {/* 6. صفحة عن التطبيق المفصلة */}
-          <button
-            onClick={() => setActiveModal('about')}
-            className={`w-full p-4 rounded-2xl border flex items-center justify-between transition-all hover:border-indigo-500 ${bgCard}`}
-          >
-            <div className="flex items-center gap-3.5 text-right">
-              <div className="w-11 h-11 rounded-2xl bg-violet-500/10 text-violet-500 flex items-center justify-center shrink-0">
-                <Info size={22} />
-              </div>
-              <div>
-                <h3 className={`font-black text-sm ${textPrimary}`}>عن تطبيق "طريقنا" ومميزاته 💡</h3>
-                <p className={`text-[11px] font-bold mt-0.5 ${textSecondary}`}>
-                  تعرف على رؤية التطبيق، قواعد الأمان، المساعد الذكي بيسو، وكيف يعمل
-                </p>
-              </div>
-            </div>
-            <ChevronLeft size={18} className="text-slate-400 shrink-0" />
-          </button>
-
-          {/* 7. تسجيل الخروج */}
-          <button
-            onClick={handleLogout}
-            className={`w-full p-4 rounded-2xl border flex items-center justify-between transition-all hover:bg-rose-50 dark:hover:bg-rose-950/30 border-rose-200/70 dark:border-rose-900/50 text-rose-500`}
-          >
-            <div className="flex items-center gap-3.5">
-              <div className="w-11 h-11 rounded-2xl bg-rose-500/10 flex items-center justify-center shrink-0">
-                <LogOut size={20} />
-              </div>
-              <span className="font-black text-sm">تسجيل الخروج من الحساب</span>
-            </div>
-          </button>
 
         </div>
       </div>
@@ -441,12 +405,12 @@ const ProfileScreen = ({
       {/* 1. نافذة إعدادات الحساب الموحدة */}
       {activeModal === 'settings' && (
         <div className="fixed inset-0 bg-slate-950/85 backdrop-blur-md z-[1100] flex justify-center items-end sm:items-center p-0 sm:p-4" onClick={() => setActiveModal(null)}>
-          <div onClick={e => e.stopPropagation()} className={`${bgCard} w-full sm:max-w-lg max-h-[88dvh] rounded-t-[2rem] sm:rounded-[2rem] shadow-2xl flex flex-col overflow-hidden border dark:border-slate-800 animate-fade-in-up`}>
+          <div onClick={e => e.stopPropagation()} className={`${bgCard} w-full sm:max-w-lg max-h-[88dvh] rounded-t-[2rem] sm:rounded-3xl shadow-2xl flex flex-col overflow-hidden border dark:border-slate-800 animate-fade-in-up`}>
             <div className="p-4 border-b dark:border-slate-800 flex justify-between items-center bg-slate-50 dark:bg-slate-800/60">
               <h3 className={`font-black text-base flex items-center gap-2 ${textPrimary}`}>
                 <Settings size={19} className="text-indigo-500" /> إعدادات الحساب والبيانات الشخصية
               </h3>
-              <button onClick={() => setActiveModal(null)} className="p-1.5 rounded-full bg-slate-200 dark:bg-slate-700"><X size={18}/></button>
+              <button onClick={() => setActiveModal(null)} aria-label="إغلاق" className="p-2.5.5 rounded-full bg-slate-200 dark:bg-slate-700"><X size={18}/></button>
             </div>
 
             <form onSubmit={handleSaveAccountSettings} className="flex-1 overflow-y-auto p-5 space-y-4 [&::-webkit-scrollbar]:hidden">
@@ -485,7 +449,7 @@ const ProfileScreen = ({
                       key={g.id}
                       type="button"
                       onClick={() => setSettingsForm({ ...settingsForm, gender: g.id })}
-                      className={`py-3 rounded-xl text-xs font-black border transition-all flex items-center justify-center gap-1.5 ${
+                      className={`py-3.5 rounded-xl text-sm font-black border transition-all flex items-center justify-center gap-1.5 ${
                         settingsForm.gender === g.id 
                           ? 'bg-indigo-600 text-white border-indigo-600 shadow-md' 
                           : `${bgInput}`
@@ -534,14 +498,14 @@ const ProfileScreen = ({
                       placeholder="نوع وموديل السيارة (مثال: نيسان صني)"
                       value={settingsForm.carModel}
                       onChange={e => setSettingsForm({ ...settingsForm, carModel: e.target.value })}
-                      className={`p-3 rounded-xl border text-xs font-bold outline-none ${bgInput}`}
+                      className={`p-3.5 rounded-xl border text-sm font-bold outline-none ${bgInput}`}
                     />
                     <input
                       type="text"
                       placeholder="لون السيارة (مثال: فضي)"
                       value={settingsForm.carColor}
                       onChange={e => setSettingsForm({ ...settingsForm, carColor: e.target.value })}
-                      className={`p-3 rounded-xl border text-xs font-bold outline-none ${bgInput}`}
+                      className={`p-3.5 rounded-xl border text-sm font-bold outline-none ${bgInput}`}
                     />
                   </div>
                 </div>
@@ -578,20 +542,20 @@ const ProfileScreen = ({
       {/* 2. نافذة جوائز وبونص "طريقنا" */}
       {activeModal === 'bonus' && (
         <div className="fixed inset-0 bg-slate-950/85 backdrop-blur-md z-[1100] flex justify-center items-end sm:items-center p-0 sm:p-4" onClick={() => setActiveModal(null)}>
-          <div onClick={e => e.stopPropagation()} className={`${bgCard} w-full sm:max-w-xl max-h-[88dvh] rounded-t-[2rem] sm:rounded-[2rem] shadow-2xl flex flex-col overflow-hidden border dark:border-slate-800 animate-fade-in-up`}>
-            <div className="p-4 sm:p-5 bg-gradient-to-r from-amber-500 via-orange-500 to-indigo-600 text-white flex justify-between items-center">
+          <div onClick={e => e.stopPropagation()} className={`${bgCard} w-full sm:max-w-xl max-h-[88dvh] rounded-t-[2rem] sm:rounded-3xl shadow-2xl flex flex-col overflow-hidden border dark:border-slate-800 animate-fade-in-up`}>
+            <div className="p-4 sm:p-5 bg-indigo-600 text-white flex justify-between items-center">
               <div className="flex items-center gap-3">
                 <div className="p-2.5 bg-white/20 rounded-2xl backdrop-blur-sm">
                   <Award size={24} />
                 </div>
                 <div>
                   <h3 className="font-black text-base sm:text-lg">برنامج البونص وشارات التميز 🏆</h3>
-                  <p className="text-[11px] font-bold text-amber-100">
+                  <p className="text-xs font-bold text-amber-100">
                     رصيدك الحالي: ({completedCount}) رحلة مكتملة • طالب بشارتك فور إكمال الهدف!
                   </p>
                 </div>
               </div>
-              <button onClick={() => setActiveModal(null)} className="p-1.5 rounded-full bg-white/20 hover:bg-rose-500"><X size={18}/></button>
+              <button onClick={() => setActiveModal(null)} aria-label="إغلاق" className="p-2.5.5 rounded-full bg-white/20 hover:bg-rose-500"><X size={18}/></button>
             </div>
 
             <div className="flex-1 overflow-y-auto p-4 sm:p-5 space-y-3.5 [&::-webkit-scrollbar]:hidden">
@@ -612,10 +576,10 @@ const ProfileScreen = ({
                     <div className="flex items-start justify-between gap-3">
                       <div className="flex-1">
                         <div className="flex items-center gap-2 flex-wrap">
-                          <span className={`text-xs font-black px-3 py-1 rounded-full bg-gradient-to-r ${m.color} text-white shadow-sm`}>
+                          <span className={`text-xs font-black px-3 py-1 rounded-full ${m.color} text-white shadow-sm`}>
                             {m.title}
                           </span>
-                          <span className={`text-[11px] font-black ${isUnlocked ? 'text-emerald-500' : textSecondary}`}>
+                          <span className={`text-xs font-black ${isUnlocked ? 'text-emerald-500' : textSecondary}`}>
                             ({Math.min(completedCount, m.target)} / {m.target} رحلة)
                           </span>
                         </div>
@@ -626,12 +590,12 @@ const ProfileScreen = ({
 
                       <div className="shrink-0">
                         {isAlreadyGranted ? (
-                          <span className="px-3 py-2 rounded-xl bg-emerald-500 text-white text-[11px] font-black flex items-center gap-1 shadow-sm">
+                          <span className="px-3 py-2 rounded-xl bg-emerald-500 text-white text-xs font-black flex items-center gap-1 shadow-sm">
                             <CheckCircle2 size={14} /> مفعّلة بحسابك
                           </span>
                         ) : isUnlocked ? (
                           isClaimedPending ? (
-                            <span className="px-3 py-2 rounded-xl bg-amber-500/20 text-amber-500 border border-amber-500/40 text-[11px] font-black flex items-center gap-1">
+                            <span className="px-3 py-2 rounded-xl bg-amber-500/20 text-amber-500 border border-amber-500/40 text-xs font-black flex items-center gap-1">
                               <Clock size={13} /> قيد مراجعة الإدارة ⏳
                             </span>
                           ) : (
@@ -639,14 +603,14 @@ const ProfileScreen = ({
                               type="button"
                               disabled={claimingBadgeId === m.id}
                               onClick={() => handleClaimBonusBadge(m)}
-                              className="px-3.5 py-2 rounded-xl bg-gradient-to-r from-amber-500 to-orange-600 hover:from-amber-600 hover:to-orange-700 text-white text-xs font-black shadow-md flex items-center gap-1.5 animate-bounce active:scale-95 transition-transform"
+                              className="px-3.5 py-2 rounded-xl bg-indigo-600 hover:bg-indigo-700 text-white text-xs font-black shadow-md flex items-center gap-1.5 active:scale-95 transition-transform"
                             >
                               <Gift size={14} />
                               <span>مطالبة الإدارة 🎁</span>
                             </button>
                           )
                         ) : (
-                          <span className={`px-2.5 py-1.5 rounded-xl border text-[10px] font-bold ${isDarkMode ? 'border-slate-700 text-slate-500' : 'border-slate-200 text-slate-400'}`}>
+                          <span className={`px-2.5 py-1.5 rounded-xl border text-xs font-bold ${isDarkMode ? 'border-slate-700 text-slate-500' : 'border-slate-200 text-slate-400'}`}>
                             متبقي {m.target - completedCount} رحلات
                           </span>
                         )}
@@ -655,7 +619,7 @@ const ProfileScreen = ({
 
                     <div className="w-full h-2 bg-slate-200 dark:bg-slate-700 rounded-full overflow-hidden mt-3">
                       <div 
-                        className={`h-full bg-gradient-to-r ${m.color} transition-all duration-500`} 
+                        className={`h-full ${m.color} transition-all duration-500`} 
                         style={{ width: `${progress}%` }}
                       />
                     </div>
@@ -670,8 +634,8 @@ const ProfileScreen = ({
       {/* 3. نافذة "عن تطبيق طريقنا" */}
       {activeModal === 'about' && (
         <div className="fixed inset-0 bg-slate-950/85 backdrop-blur-md z-[1100] flex justify-center items-end sm:items-center p-0 sm:p-4" onClick={() => setActiveModal(null)}>
-          <div onClick={e => e.stopPropagation()} className={`${bgCard} w-full sm:max-w-2xl max-h-[88dvh] rounded-t-[2rem] sm:rounded-[2rem] shadow-2xl flex flex-col overflow-hidden border dark:border-slate-800 animate-fade-in-up`}>
-            <div className="p-5 bg-gradient-to-r from-indigo-600 via-violet-600 to-indigo-700 text-white flex justify-between items-center">
+          <div onClick={e => e.stopPropagation()} className={`${bgCard} w-full sm:max-w-2xl max-h-[88dvh] rounded-t-[2rem] sm:rounded-3xl shadow-2xl flex flex-col overflow-hidden border dark:border-slate-800 animate-fade-in-up`}>
+            <div className="p-5 bg-indigo-600 text-white flex justify-between items-center">
               <div className="flex items-center gap-3">
                 <div className="p-2.5 bg-white/20 rounded-2xl backdrop-blur-sm">
                   <Car size={24} />
@@ -681,7 +645,7 @@ const ProfileScreen = ({
                   <p className="text-xs font-bold text-indigo-100">منصتك الذكية لمشاركة المشاوير، توصيل الأمانات، ودليل مواقف مصر</p>
                 </div>
               </div>
-              <button onClick={() => setActiveModal(null)} className="p-1.5 rounded-full bg-white/20 hover:bg-rose-500"><X size={18}/></button>
+              <button onClick={() => setActiveModal(null)} aria-label="إغلاق" className="p-2.5.5 rounded-full bg-white/20 hover:bg-rose-500"><X size={18}/></button>
             </div>
 
             <div className="flex-1 overflow-y-auto p-5 space-y-4 text-right [&::-webkit-scrollbar]:hidden">
@@ -699,7 +663,7 @@ const ProfileScreen = ({
                   <h5 className="font-black text-xs text-emerald-500 flex items-center gap-1.5 mb-1">
                     <Car size={16}/> 1. مشاركة السفريات والمشاوير
                   </h5>
-                  <p className={`text-[11px] font-bold leading-relaxed ${textSecondary}`}>
+                  <p className={`text-xs font-bold leading-relaxed ${textSecondary}`}>
                     سواء كنت كابتن لديك مقاعد فارغة في سيارتك أو راكباً تبحث عن توصيلة مريحة ومباشرة من منطقتك، يعرض لك التطبيق أقرب الرحلات المطابقة لمنطقتك وخط سيرك مع إمكانية تخصيص رحلات (بنات فقط 🌸) أو عائلات.
                   </p>
                 </div>
@@ -708,7 +672,7 @@ const ProfileScreen = ({
                   <h5 className="font-black text-xs text-amber-500 flex items-center gap-1.5 mb-1">
                     <Package size={16}/> 2. توصيل الأمانات والطرود
                   </h5>
-                  <p className={`text-[11px] font-bold leading-relaxed ${textSecondary}`}>
+                  <p className={`text-xs font-bold leading-relaxed ${textSecondary}`}>
                     أرسل أو استلم أي طرد أو أمانة في نفس اليوم بين المدن والمحافظات مع مسافرين أو مناديب توصيل متجهين لنفس وجهتك بتكلفة اقتصادية وسرعة فائقة.
                   </p>
                 </div>
@@ -717,7 +681,7 @@ const ProfileScreen = ({
                   <h5 className="font-black text-xs text-indigo-500 flex items-center gap-1.5 mb-1">
                     <Bot size={16}/> 3. مواقف مصر والمساعد الذكي "بيسو"
                   </h5>
-                  <p className={`text-[11px] font-bold leading-relaxed ${textSecondary}`}>
+                  <p className={`text-xs font-bold leading-relaxed ${textSecondary}`}>
                     دليل تفاعلي لمواقف الميكروباصات والأتوبيسات في مصر مع تحديث مباشر لحالة الزحام (رايق 🟢 / زحمة 🔴) والتعريفة، مدعوماً بالمساعد الذكي "بيسو" الذي يقترح عليك أكثر من طريقة مواصلات لأي مكان في مصر.
                   </p>
                 </div>
@@ -726,7 +690,7 @@ const ProfileScreen = ({
                   <h5 className="font-black text-xs text-rose-500 flex items-center gap-1.5 mb-1">
                     <ShieldCheck size={16}/> 4. التوثيق والأمان والتقييمات
                   </h5>
-                  <p className={`text-[11px] font-bold leading-relaxed ${textSecondary}`}>
+                  <p className={`text-xs font-bold leading-relaxed ${textSecondary}`}>
                     نظام توثيق رسمي بالبطاقة الشخصية ورخصة القيادة، مع شريط تتبع حي للرحلة ومشاركة مسار المشوار مع أهلك للأمان، بالإضافة لصفحة بروفايل عامة تعرض تقييمات وآراء الأعضاء بكل شفافية.
                   </p>
                 </div>
@@ -739,10 +703,10 @@ const ProfileScreen = ({
       {/* 4. نافذة رحلاتي وإعلاناتي */}
       {activeModal === 'my_trips' && (
         <div className="fixed inset-0 bg-slate-950/85 backdrop-blur-md z-[1100] flex justify-center items-end sm:items-center p-0 sm:p-4" onClick={() => setActiveModal(null)}>
-          <div onClick={e => e.stopPropagation()} className={`${bgCard} w-full sm:max-w-2xl max-h-[88dvh] rounded-t-[2rem] sm:rounded-[2rem] shadow-2xl flex flex-col overflow-hidden border dark:border-slate-800 animate-fade-in-up`}>
+          <div onClick={e => e.stopPropagation()} className={`${bgCard} w-full sm:max-w-2xl max-h-[88dvh] rounded-t-[2rem] sm:rounded-3xl shadow-2xl flex flex-col overflow-hidden border dark:border-slate-800 animate-fade-in-up`}>
             <div className="p-4 border-b dark:border-slate-800 flex justify-between items-center">
               <h3 className={`font-black text-base ${textPrimary}`}>رحلاتي وإعلاناتي المنشورة ({myTrips.length})</h3>
-              <button onClick={() => setActiveModal(null)} className="p-1.5 rounded-full bg-slate-200 dark:bg-slate-700"><X size={18}/></button>
+              <button onClick={() => setActiveModal(null)} aria-label="إغلاق" className="p-2.5.5 rounded-full bg-slate-200 dark:bg-slate-700"><X size={18}/></button>
             </div>
             <div className="flex-1 overflow-y-auto p-4 space-y-3 [&::-webkit-scrollbar]:hidden">
               {myTrips.length === 0 ? (

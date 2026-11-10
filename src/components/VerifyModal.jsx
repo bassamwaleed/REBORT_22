@@ -64,13 +64,13 @@ const VerifyModal = ({ user, isDarkMode, onClose, triggerToast, setUserData }) =
 
   return (
     <div className="fixed inset-0 bg-slate-900/90 backdrop-blur-sm z-[500] flex justify-center items-end sm:items-center p-0 sm:p-4 pointer-events-auto">
-      <div className={`${bgCard} w-full sm:max-w-md h-[85vh] sm:h-auto sm:max-h-[90vh] rounded-t-[2rem] sm:rounded-[2rem] shadow-2xl flex flex-col overflow-hidden animate-fade-in-up border dark:border-slate-700`}>
+      <div className={`${bgCard} w-full sm:max-w-md h-[85vh] sm:h-auto sm:max-h-[90vh] rounded-t-[2rem] sm:rounded-3xl shadow-2xl flex flex-col overflow-hidden animate-fade-in-up border dark:border-slate-700`}>
         
         <div className="p-4 border-b flex justify-between items-center bg-slate-50 dark:bg-slate-800 dark:border-slate-700 shrink-0">
           <h2 className="text-lg font-black flex items-center gap-2 text-indigo-600 dark:text-indigo-400">
             <ShieldCheck size={24}/> توثيق الحساب
           </h2>
-          <button onClick={onClose} className="p-2 bg-slate-200 dark:bg-slate-700 rounded-full hover:bg-slate-300 transition-colors">
+          <button aria-label="إغلاق" onClick={onClose} className="p-2.5 bg-slate-200 dark:bg-slate-700 rounded-full hover:bg-slate-300 transition-colors">
             <X size={20} className={textPrimary}/>
           </button>
         </div>

@@ -499,9 +499,9 @@ const BesoAssistantModal = ({ stations = [], isDarkMode, onClose, onSelectStatio
       <div 
         dir="rtl"
         onClick={(e) => e.stopPropagation()} 
-        className={`fixed bottom-[82px] left-3 right-3 sm:left-6 sm:right-auto sm:w-[410px] h-[66dvh] max-h-[550px] min-h-[350px] z-[200] ${bgCard} backdrop-blur-xl rounded-[1.75rem] shadow-[0_12px_45px_rgba(0,0,0,0.45)] flex flex-col overflow-hidden border animate-fade-in-up`}
+        className={`fixed bottom-[82px] left-3 right-3 sm:left-6 sm:right-auto sm:w-[410px] h-[66dvh] max-h-[550px] min-h-[350px] z-[200] ${bgCard} backdrop-blur-xl rounded-3xl shadow-[0_12px_45px_rgba(0,0,0,0.45)] flex flex-col overflow-hidden border animate-fade-in-up`}
       >
-        <div className="px-4 py-3 bg-gradient-to-r from-indigo-600 via-violet-600 to-indigo-700 text-white flex items-center justify-between shadow-sm shrink-0">
+        <div className="px-4 py-3 bg-indigo-600 text-white flex items-center justify-between shadow-sm shrink-0">
           <div className="flex items-center gap-2.5">
             <div className="w-9 h-9 rounded-xl bg-white/20 backdrop-blur-md flex items-center justify-center border border-white/30 relative shrink-0">
               <Bot size={20} className="text-white" />
@@ -510,12 +510,12 @@ const BesoAssistantModal = ({ stations = [], isDarkMode, onClose, onSelectStatio
             <div>
               <div className="flex items-center gap-1.5">
                 <h3 className="font-black text-sm">المساعد الذكي "بيسو"</h3>
-                <span className="text-[9px] font-black bg-amber-400 text-slate-950 px-1.5 py-0.2 rounded-full flex items-center gap-0.5"><Sparkles size={9}/> Live GIS</span>
+                <span className="text-xs font-black bg-amber-400 text-slate-950 px-1.5 py-0.5 rounded-full flex items-center gap-0.5"><Sparkles size={9}/> Live GIS</span>
               </div>
-              <p className="text-[10px] text-indigo-100 font-bold">يربط المواقف والنقاط التبادلية لحظياً 🧠</p>
+              <p className="text-xs text-indigo-100 font-bold">يربط المواقف والنقاط التبادلية لحظياً 🧠</p>
             </div>
           </div>
-          <button onClick={onClose} className="p-1.5 bg-white/15 hover:bg-rose-500 rounded-full transition-colors"><X size={18} /></button>
+          <button aria-label="إغلاق" onClick={onClose} className="p-2.5 bg-white/15 hover:bg-rose-500 rounded-full transition-colors"><X size={18} /></button>
         </div>
 
         <div className={`flex-1 min-h-0 overflow-y-auto p-3.5 space-y-3 [&::-webkit-scrollbar]:hidden ${isDarkMode ? 'bg-slate-950/50' : 'bg-slate-50/70'}`}>
@@ -542,7 +542,7 @@ const BesoAssistantModal = ({ stations = [], isDarkMode, onClose, onSelectStatio
                           setCorrectionText('');
                         }
                       }}
-                      className={`text-[10px] font-black flex items-center gap-1 px-2 py-1.5 rounded-lg border transition-all ${
+                      className={`text-xs font-black flex items-center gap-1 px-2 py-1.5 rounded-lg border transition-all ${
                         isEditingThis ? 'bg-amber-500 text-slate-950 border-amber-400' : (isDarkMode ? 'bg-slate-800/80 border-slate-700 text-amber-400' : 'bg-amber-50 border-amber-200 text-amber-700')
                       }`}
                     >
@@ -552,16 +552,16 @@ const BesoAssistantModal = ({ stations = [], isDarkMode, onClose, onSelectStatio
 
                   {isBeso && isEditingThis && (
                     <form onSubmit={(e) => handleSubmitCorrection(e, msg)} className={`w-full p-3 rounded-2xl border-2 border-amber-500/40 space-y-2 animate-fade-in-up ${isDarkMode ? 'bg-slate-900 text-white' : 'bg-amber-50 text-slate-900'}`}>
-                      <span className="text-[11px] font-black text-amber-500 flex items-center gap-1"><PlusCircle size={13}/> تعليم بيسو خط أو تحويلة جديدة:</span>
+                      <span className="text-xs font-black text-amber-500 flex items-center gap-1"><PlusCircle size={13}/> تعليم بيسو خط أو تحويلة جديدة:</span>
                       {correctionSuccessMsg ? (
-                        <div className="p-2.5 rounded-xl bg-emerald-500/15 border border-emerald-500/30 text-emerald-500 text-[11px] font-black">{correctionSuccessMsg}</div>
+                        <div className="p-2.5 rounded-xl bg-emerald-500/15 border border-emerald-500/30 text-emerald-500 text-xs font-black">{correctionSuccessMsg}</div>
                       ) : (
                         <>
-                          <input type="text" required value={correctionPlace} onChange={(e) => setCorrectionPlace(e.target.value)} placeholder="الكلمات المفتاحية (مثال: الصحراوي - أكتوبر)" className={`w-full px-3 py-2 rounded-xl border text-[11px] font-bold outline-none ${bgInput}`}/>
-                          <textarea rows={2} required value={correctionText} onChange={(e) => setCorrectionText(e.target.value)} placeholder="اكتب التحويلة بالتفصيل (مثال: انزل تحت محور 26 يوليو واطلع اركب من فوق للحصري)..." className={`w-full px-3 py-2 rounded-xl border text-[11px] font-bold outline-none resize-none ${bgInput}`}/>
+                          <input type="text" required value={correctionPlace} onChange={(e) => setCorrectionPlace(e.target.value)} placeholder="الكلمات المفتاحية (مثال: الصحراوي - أكتوبر)" className={`w-full px-3 py-2 rounded-xl border text-xs font-bold outline-none ${bgInput}`}/>
+                          <textarea rows={2} required value={correctionText} onChange={(e) => setCorrectionText(e.target.value)} placeholder="اكتب التحويلة بالتفصيل (مثال: انزل تحت محور 26 يوليو واطلع اركب من فوق للحصري)..." className={`w-full px-3 py-2 rounded-xl border text-xs font-bold outline-none resize-none ${bgInput}`}/>
                           <div className="flex gap-1.5">
-                            <button type="submit" disabled={isSubmittingCorrection} className="flex-1 py-2 bg-amber-500 hover:bg-amber-600 text-slate-950 rounded-xl text-[11px] font-black">{isSubmittingCorrection ? 'جاري الحفظ...' : 'حفظ في ذاكرة بيسو'}</button>
-                            <button type="button" onClick={() => setCorrectingMsgId(null)} className="px-3 py-2 rounded-xl bg-slate-200 dark:bg-slate-800 text-[11px] font-bold">إلغاء</button>
+                            <button type="submit" disabled={isSubmittingCorrection} className="flex-1 py-2 bg-amber-500 hover:bg-amber-600 text-slate-950 rounded-xl text-xs font-black">{isSubmittingCorrection ? 'جاري الحفظ...' : 'حفظ في ذاكرة بيسو'}</button>
+                            <button type="button" onClick={() => setCorrectingMsgId(null)} className="px-3 py-2 rounded-xl bg-slate-200 dark:bg-slate-800 text-xs font-bold">إلغاء</button>
                           </div>
                         </>
                       )}
@@ -570,14 +570,14 @@ const BesoAssistantModal = ({ stations = [], isDarkMode, onClose, onSelectStatio
 
                   {isBeso && msg.matchedStations && msg.matchedStations.length > 0 && (
                     <div className="w-full space-y-1.5 mt-0.5">
-                      <span className="text-[10px] font-black text-indigo-400 px-1 flex items-center gap-1"><Compass size={11}/> النقاط المرتبطة بالمسار (اضغط لفتح التفاصيل):</span>
+                      <span className="text-xs font-black text-indigo-400 px-1 flex items-center gap-1"><Compass size={11}/> النقاط المرتبطة بالمسار (اضغط لفتح التفاصيل):</span>
                       {msg.matchedStations.map((st) => (
                         <button key={st.id} onClick={() => { onClose(); onSelectStation(st); }} className={`w-full p-2 rounded-xl border flex items-center justify-between hover:border-indigo-500 ${isDarkMode ? 'bg-slate-900 border-slate-700 text-white' : 'bg-indigo-50/70 border-indigo-200 text-slate-900'}`}>
                           <div className="flex items-center gap-2">
-                            <div className={`p-1.5 rounded-lg text-white ${st.nodeType === 'hub' ? 'bg-purple-600' : 'bg-indigo-600'}`}><BusFront size={13}/></div>
+                            <div className={`p-1.5 rounded-lg text-white ${st.nodeType === 'hub' ? 'bg-amber-600' : 'bg-indigo-600'}`}><BusFront size={13}/></div>
                             <div className="text-right">
-                              <h4 className="text-[11px] font-black">{st.name}</h4>
-                              <p className="text-[9px] text-slate-400 font-bold">
+                              <h4 className="text-xs font-black">{st.name}</h4>
+                              <p className="text-xs text-slate-400 font-bold">
                                 {st.nodeType === 'hub' ? 'نقطة تبادلية 🔄' : 'موقف 🚏'} • {st.location}
                               </p>
                             </div>
@@ -596,7 +596,7 @@ const BesoAssistantModal = ({ stations = [], isDarkMode, onClose, onSelectStatio
 
         <div className={`px-2.5 py-1.5 border-t shrink-0 flex gap-1.5 overflow-x-auto [&::-webkit-scrollbar]:hidden ${isDarkMode ? 'bg-slate-900 border-slate-800' : 'bg-white border-slate-200'}`}>
           {quickQuestions.map((q, idx) => (
-            <button key={idx} onClick={() => handleSend(q)} className={`shrink-0 text-[10px] font-black px-2.5 py-1 rounded-full border ${isDarkMode ? 'bg-slate-800 border-slate-700 text-indigo-300 hover:bg-indigo-600 hover:text-white' : 'bg-indigo-50 border-indigo-200 text-indigo-700 hover:bg-indigo-600 hover:text-white'}`}>
+            <button key={idx} onClick={() => handleSend(q)} className={`shrink-0 text-xs font-black px-2.5 py-1 rounded-full border ${isDarkMode ? 'bg-slate-800 border-slate-700 text-indigo-300 hover:bg-indigo-600 hover:text-white' : 'bg-indigo-50 border-indigo-200 text-indigo-700 hover:bg-indigo-600 hover:text-white'}`}>
               {q}
             </button>
           ))}

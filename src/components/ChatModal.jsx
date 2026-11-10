@@ -286,10 +286,10 @@ const ChatModal = ({ baseChatData, user, userData, isDarkMode, onClose, triggerT
 
   return (
     <div className="fixed inset-0 bg-slate-900/95 backdrop-blur-md z-[400] flex justify-center items-end sm:items-center p-0 sm:p-4 pointer-events-auto">
-      <div className={`bg-white dark:bg-slate-900 w-full h-[92vh] sm:h-[680px] sm:max-w-md md:max-w-2xl rounded-t-[2rem] sm:rounded-[2rem] shadow-2xl flex flex-col overflow-hidden animate-fade-in-up relative border dark:border-slate-700`}>
+      <div className={`bg-white dark:bg-slate-900 w-full h-[92vh] sm:h-[680px] sm:max-w-md md:max-w-2xl rounded-t-[2rem] sm:rounded-3xl shadow-2xl flex flex-col overflow-hidden animate-fade-in-up relative border dark:border-slate-700`}>
         
         {/* الهيدر */}
-        <div className={`text-white p-4 flex items-center justify-between shadow-md z-20 ${isSupportChat ? 'bg-gradient-to-r from-amber-600 to-indigo-700' : liveChatInfo?.isGroup ? 'bg-purple-600' : 'bg-indigo-600'}`}>
+        <div className={`text-white p-4 flex items-center justify-between shadow-md z-20 ${isSupportChat ? 'bg-slate-800' : liveChatInfo?.isGroup ? 'bg-indigo-800' : 'bg-indigo-600'}`}>
           <div className="flex items-center gap-3 overflow-hidden">
             <button onClick={onClose} className="p-2 rounded-full hover:bg-black/20 transition-colors shrink-0"><ChevronLeft size={24} /></button>
             
@@ -306,7 +306,7 @@ const ChatModal = ({ baseChatData, user, userData, isDarkMode, onClose, triggerT
                   <h3 className="font-black text-sm truncate">{liveChatInfo?.otherPersonName || 'مستخدم'}</h3>
                   {liveChatInfo?.otherPersonVerified && <ShieldCheck size={14} className="text-emerald-300 shrink-0" title="موثق"/>}
                 </div>
-                <span className="text-[10px] text-indigo-100 font-bold truncate opacity-90">
+                <span className="text-xs text-indigo-100 font-bold truncate opacity-90">
                   {isSupportChat ? 'محادثة رسمية مع إدارة التطبيق 🛡️' : `${liveChatInfo?.tripInfo || 'محادثة'} • اضغط لعرض البروفايل`}
                 </span>
               </div>
@@ -327,7 +327,7 @@ const ChatModal = ({ baseChatData, user, userData, isDarkMode, onClose, triggerT
                   href={`https://wa.me/2${otherUserPhone.startsWith('0') ? otherUserPhone : '0' + otherUserPhone}`} 
                   target="_blank" 
                   rel="noreferrer"
-                  className="px-2.5 py-1.5 bg-emerald-600 hover:bg-emerald-700 rounded-full text-white font-bold text-[10px] transition-colors shadow-sm"
+                  className="px-2.5 py-1.5 bg-emerald-600 hover:bg-emerald-700 rounded-full text-white font-bold text-xs transition-colors shadow-sm"
                   title="واتساب"
                 >
                   واتساب
@@ -339,7 +339,7 @@ const ChatModal = ({ baseChatData, user, userData, isDarkMode, onClose, triggerT
               showBlockConfirm ? (
                 <div className="flex items-center gap-1 bg-black/30 p-1 rounded-full animate-fade-in-up">
                   <button onClick={() => onActionClick('block')} className="p-1.5 bg-rose-500 text-white rounded-full hover:bg-rose-600" title="تأكيد الحظر"><Check size={14}/></button>
-                  <button onClick={() => setShowBlockConfirm(false)} className="p-1.5 bg-white/20 text-white rounded-full hover:bg-white/30" title="تراجع"><X size={14}/></button>
+                  <button aria-label="إغلاق" onClick={() => setShowBlockConfirm(false)} className="p-2.5 bg-white/20 text-white rounded-full hover:bg-white/30" title="تراجع"><X size={14}/></button>
                 </div>
               ) : (
                 <button onClick={() => setShowBlockConfirm(true)} className="p-2 bg-black/20 hover:bg-rose-600 rounded-full text-white transition-colors text-xs" title="حظر المستخدم">
@@ -377,28 +377,28 @@ const ChatModal = ({ baseChatData, user, userData, isDarkMode, onClose, triggerT
               
               {/* شريط عرض اسم المرسل ووقت إرسال الطلب وتفاصيل المقاعد/السعر */}
               {reqStatus !== 'none' && (
-                <div className="flex flex-wrap items-center justify-between gap-2 px-3 py-1.5 rounded-xl bg-indigo-500/10 border border-indigo-500/20 text-[11px] font-bold">
+                <div className="flex flex-wrap items-center justify-between gap-2 px-3 py-1.5 rounded-xl bg-indigo-500/10 border border-indigo-500/20 text-xs font-bold">
                   <div className="flex items-center gap-1.5 flex-wrap">
                     <span className="text-indigo-600 dark:text-indigo-300">
                       👤 المرسل: <strong className="font-black">{senderFullName}</strong>
                     </span>
                     {liveChatInfo?.requestedSeats > 1 && (
-                      <span className="bg-indigo-600 text-white text-[9px] font-black px-2 py-0.5 rounded-full">
+                      <span className="bg-indigo-600 text-white text-xs font-black px-2 py-0.5 rounded-full">
                         {liveChatInfo.requestedSeats} مقاعد
                       </span>
                     )}
                     {liveChatInfo?.agreedPrice ? (
-                      <span className="bg-emerald-500/20 text-emerald-600 dark:text-emerald-300 text-[9px] font-black px-2 py-0.5 rounded-full">
+                      <span className="bg-emerald-500/20 text-emerald-600 dark:text-emerald-300 text-xs font-black px-2 py-0.5 rounded-full">
                         السعر المتفق عليه: {liveChatInfo.agreedPrice} ج
                       </span>
                     ) : hasCustomPriceProposal ? (
-                      <span className="bg-amber-500/20 text-amber-600 dark:text-amber-300 text-[9px] font-black px-2 py-0.5 rounded-full">
+                      <span className="bg-amber-500/20 text-amber-600 dark:text-amber-300 text-xs font-black px-2 py-0.5 rounded-full">
                         عرض مقترح: {liveChatInfo.proposedPrice} ج (بدلاً من {originalTripPrice} ج)
                       </span>
                     ) : null}
                   </div>
                   {sentTimeFormatted && (
-                    <span className="text-slate-500 dark:text-slate-400 flex items-center gap-1 shrink-0 text-[10px]">
+                    <span className="text-slate-500 dark:text-slate-400 flex items-center gap-1 shrink-0 text-xs">
                       <Clock size={11} className="text-indigo-500" /> {sentTimeFormatted}
                     </span>
                   )}
@@ -444,7 +444,7 @@ const ChatModal = ({ baseChatData, user, userData, isDarkMode, onClose, triggerT
 
                       <div className="grid grid-cols-2 gap-2">
                         <div className="space-y-1">
-                          <label className="text-[10px] font-bold text-slate-400 block">عدد المقاعد المطلوبة (المتاح: {maxAvailableSeats})</label>
+                          <label className="text-xs font-bold text-slate-400 block">عدد المقاعد المطلوبة (المتاح: {maxAvailableSeats})</label>
                           <div className="flex items-center gap-1">
                             {[1, 2, 3, 4].filter(n => n <= maxAvailableSeats).map(num => (
                               <button
@@ -464,7 +464,7 @@ const ChatModal = ({ baseChatData, user, userData, isDarkMode, onClose, triggerT
                         </div>
 
                         <div className="space-y-1">
-                          <label className="text-[10px] font-bold text-slate-400 block">السعر المقترح للمقعد (ج)</label>
+                          <label className="text-xs font-bold text-slate-400 block">السعر المقترح للمقعد (ج)</label>
                           <input
                             type="number"
                             min="1"
@@ -478,13 +478,13 @@ const ChatModal = ({ baseChatData, user, userData, isDarkMode, onClose, triggerT
 
                       {quickPriceSuggestions.length > 0 && (
                         <div className="flex items-center gap-1.5 flex-wrap">
-                          <span className="text-[10px] font-bold text-slate-400">اقتراح سريع:</span>
+                          <span className="text-xs font-bold text-slate-400">اقتراح سريع:</span>
                           {quickPriceSuggestions.map(p => (
                             <button
                               key={p}
                               type="button"
                               onClick={() => setNegotiatedPrice(String(p))}
-                              className={`px-2 py-0.5 rounded-md text-[10px] font-black border ${
+                              className={`px-2 py-0.5 rounded-md text-xs font-black border ${
                                 Number(negotiatedPrice) === p
                                   ? 'bg-amber-500 text-slate-950 border-amber-500'
                                   : 'bg-slate-100 dark:bg-slate-800 text-slate-500 border-slate-200 dark:border-slate-700'
@@ -541,7 +541,7 @@ const ChatModal = ({ baseChatData, user, userData, isDarkMode, onClose, triggerT
               )}
               
               {reqStatus === 'accepted' && isActualDriver && ( <button onClick={() => onActionClick('start_moving')} className="w-full bg-indigo-600 text-white font-bold py-3 rounded-xl text-sm active:scale-95 transition-transform shadow-md">أنا في الطريق نحو العميل 🚙</button> )}
-              {reqStatus === 'moving' && isActualDriver && ( <button onClick={() => onActionClick('arrive')} className="w-full bg-orange-500 text-white font-bold py-3 rounded-xl text-sm active:scale-95 transition-transform shadow-md">إبلاغ بالوصول لنقطة الالتقاء 📍</button> )}
+              {reqStatus === 'moving' && isActualDriver && ( <button onClick={() => onActionClick('arrive')} className="w-full bg-amber-600 text-white font-bold py-3 rounded-xl text-sm active:scale-95 transition-transform shadow-md">إبلاغ بالوصول لنقطة الالتقاء 📍</button> )}
               {reqStatus === 'arrived' && isActualDriver && ( <button onClick={() => onActionClick('start_trip')} className="w-full bg-emerald-500 text-white font-bold py-3 rounded-xl text-sm active:scale-95 transition-transform shadow-md">بدء الرحلة رسمياً 🛣️</button> )}
               {reqStatus === 'in_progress_trip' && isActualDriver && ( <button onClick={() => onActionClick('complete')} className="w-full bg-rose-600 text-white font-bold py-3 rounded-xl text-sm active:scale-95 transition-transform shadow-md">إنهاء الرحلة بنجاح ✅</button> )}
               
@@ -549,7 +549,7 @@ const ChatModal = ({ baseChatData, user, userData, isDarkMode, onClose, triggerT
                 <div className="flex justify-between items-center px-3 py-2 bg-emerald-50 dark:bg-emerald-900/20 rounded-xl border border-emerald-200 dark:border-emerald-800/50">
                   <span className="text-xs font-bold text-emerald-600 dark:text-emerald-400 flex items-center gap-1.5"><ShieldAlert size={15}/> الطلب مؤكد، رحلة آمنة!</span>
                   {reqStatus === 'accepted' && (
-                    <button onClick={() => onActionClick('cancel_request')} className="text-[11px] font-bold text-rose-500 hover:underline">إلغاء الحجز</button>
+                    <button onClick={() => onActionClick('cancel_request')} className="text-xs font-bold text-rose-500 hover:underline">إلغاء الحجز</button>
                   )}
                 </div>
               )}
@@ -619,15 +619,15 @@ const ChatModal = ({ baseChatData, user, userData, isDarkMode, onClose, triggerT
             <div className="flex flex-col items-center justify-center h-full text-slate-400"><MessageCircle size={40} className="mb-3 opacity-50"/><p className="text-sm font-bold">ابدأ المحادثة لتنسيق تفاصيل المشوار!</p></div> 
           ) : messages.map(msg => {
             const isMe = user && (msg.senderId === user.uid || (liveChatInfo?.actingAsAdmin && msg.senderId === 'admin_support'));
-            if (msg.isSystem) return (<div key={msg.id} className="flex justify-center my-3"><span className="text-[10px] font-bold px-4 py-2 bg-indigo-100 dark:bg-indigo-900/50 text-indigo-700 dark:text-indigo-300 rounded-full border border-indigo-200 dark:border-indigo-800/50 text-center">{msg.text || ''}</span></div>);
+            if (msg.isSystem) return (<div key={msg.id} className="flex justify-center my-3"><span className="text-xs font-bold px-4 py-2 bg-indigo-100 dark:bg-indigo-900/50 text-indigo-700 dark:text-indigo-300 rounded-full border border-indigo-200 dark:border-indigo-800/50 text-center">{msg.text || ''}</span></div>);
             return (
               <div key={msg.id} className={`flex ${isMe ? 'justify-end' : 'justify-start'}`}>
                 {!isMe && liveChatInfo?.isGroup && ( <div className="w-6 h-6 rounded-full bg-slate-300 ml-2 overflow-hidden shrink-0 mt-auto">{msg.senderPhoto ? <img src={msg.senderPhoto} alt="u"/> : <User size={12} className="m-auto mt-1 text-slate-500"/>}</div> )}
                 <div className="flex flex-col max-w-[80%]">
-                  {!isMe && (liveChatInfo?.isGroup || isSupportChat) && <span className="text-[9px] font-bold text-indigo-500 mr-2 mb-0.5">{msg.senderName || 'مستخدم'}</span>}
+                  {!isMe && (liveChatInfo?.isGroup || isSupportChat) && <span className="text-xs font-bold text-indigo-500 mr-2 mb-0.5">{msg.senderName || 'مستخدم'}</span>}
                   <div className={`p-3.5 rounded-2xl text-sm shadow-sm leading-relaxed ${isMe ? 'bg-indigo-600 text-white rounded-tl-sm' : 'bg-white dark:bg-slate-800 text-slate-800 dark:text-white rounded-tr-sm border dark:border-slate-700'}`}>
                     {msg.text || ''}
-                    <div className={`text-[9px] mt-1.5 text-left w-full font-medium ${isMe ? 'text-indigo-200' : 'text-slate-400'}`}>
+                    <div className={`text-xs mt-1.5 text-left w-full font-medium ${isMe ? 'text-indigo-200' : 'text-slate-400'}`}>
                       {msg.createdAt ? (() => { try { const d = new Date(safeMillis(msg.createdAt)); return isNaN(d.getTime()) ? 'الآن' : d.toLocaleTimeString('ar-EG', {hour:'2-digit', minute:'2-digit'}); } catch(e) { return 'الآن'; } })() : ''}
                     </div>
                   </div>
@@ -648,7 +648,7 @@ const ChatModal = ({ baseChatData, user, userData, isDarkMode, onClose, triggerT
                     key={i}
                     type="button"
                     onClick={() => sendTextMessage(reply)}
-                    className={`shrink-0 text-[11px] font-bold px-3 py-1.5 rounded-full border transition-all active:scale-95 ${isDarkMode ? 'bg-slate-700/60 border-slate-600 text-slate-200 hover:bg-indigo-600 hover:text-white hover:border-indigo-500' : 'bg-slate-50 border-slate-200 text-slate-600 hover:bg-indigo-50 hover:text-indigo-600 hover:border-indigo-200'}`}
+                    className={`shrink-0 text-xs font-bold px-3 py-1.5 rounded-full border transition-all active:scale-95 ${isDarkMode ? 'bg-slate-700/60 border-slate-600 text-slate-200 hover:bg-indigo-600 hover:text-white hover:border-indigo-500' : 'bg-slate-50 border-slate-200 text-slate-600 hover:bg-indigo-50 hover:text-indigo-600 hover:border-indigo-200'}`}
                   >
                     {reply}
                   </button>

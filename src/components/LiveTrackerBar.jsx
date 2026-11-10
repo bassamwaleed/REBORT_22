@@ -106,12 +106,12 @@ export default function LiveTrackerBar({ activeTrackers, isDarkMode, setActiveCh
     pulseIcon = <Check size={16} className="text-white" />;
   } else if (reqStatus === 'moving') {
     statusText = 'الكابتن في الطريق 🚙';
-    statusColor = 'text-blue-200';
+    statusColor = 'text-indigo-200';
     pulseIcon = <Car size={16} className="animate-pulse text-white" />;
   } else if (reqStatus === 'arrived') {
     statusText = 'الكابتن وصل 📍';
-    statusColor = 'text-orange-200';
-    pulseIcon = <MapPin size={16} className="animate-bounce text-white" />;
+    statusColor = 'text-amber-200';
+    pulseIcon = <MapPin size={16} className="animate-pulse text-white" />;
   } else if (reqStatus === 'in_progress_trip') {
     statusText = 'الرحلة جارية 🛣️';
     statusColor = 'text-emerald-300';
@@ -138,13 +138,13 @@ export default function LiveTrackerBar({ activeTrackers, isDarkMode, setActiveCh
           className="bg-indigo-600 text-white px-3.5 py-2 rounded-full shadow-xl flex items-center gap-1.5 hover:scale-105 transition-transform border border-white/25"
         >
           {pulseIcon}
-          <span className="text-[11px] font-black whitespace-nowrap">
+          <span className="text-xs font-black whitespace-nowrap">
             {activeTrackers.length > 1
               ? `${activeTrackers.length} طلبات نشطة`
               : `${otherPersonDisplayName.split(' ')[0]} • ${data.tripInfo || 'تتبع'}`}
           </span>
           {pendingCount > 0 && (
-            <span className="bg-rose-500 text-white text-[9px] font-black px-1.5 py-0.2 rounded-full animate-pulse">
+            <span className="bg-rose-500 text-white text-xs font-black px-1.5 py-0.5 rounded-full">
               {pendingCount}
             </span>
           )}
@@ -172,7 +172,7 @@ export default function LiveTrackerBar({ activeTrackers, isDarkMode, setActiveCh
                       key={tData?.chatId || idx}
                       type="button"
                       onClick={(e) => { e.stopPropagation(); setSelectedIndex(idx); }}
-                      className={`px-2 py-0.5 rounded-lg text-[9px] font-black flex items-center gap-1 shrink-0 transition-all ${
+                      className={`px-2 py-0.5 rounded-lg text-xs font-black flex items-center gap-1 shrink-0 transition-all ${
                         isSelected
                           ? 'bg-white text-indigo-700 shadow-sm'
                           : 'bg-white/15 text-white/80 hover:bg-white/25'
@@ -187,7 +187,7 @@ export default function LiveTrackerBar({ activeTrackers, isDarkMode, setActiveCh
                 })}
               </div>
 
-              <div className="flex items-center gap-0.5 shrink-0 bg-black/20 px-1.5 py-0.5 rounded-md text-white text-[9px] font-black">
+              <div className="flex items-center gap-0.5 shrink-0 bg-black/20 px-1.5 py-0.5 rounded-md text-white text-xs font-black">
                 <button type="button" onClick={() => setSelectedIndex(prev => (prev === 0 ? activeTrackers.length - 1 : prev - 1))}><ChevronRight size={11} /></button>
                 <span>{selectedIndex + 1}/{activeTrackers.length}</span>
                 <button type="button" onClick={() => setSelectedIndex(prev => (prev + 1) % activeTrackers.length)}><ChevronLeft size={11} /></button>
@@ -204,24 +204,24 @@ export default function LiveTrackerBar({ activeTrackers, isDarkMode, setActiveCh
               <div className="flex flex-col min-w-0">
                 <div className="flex items-center gap-1 flex-wrap">
                   <span className="font-black text-xs text-white truncate">{otherPersonDisplayName}</span>
-                  <span className="text-[9px] font-bold bg-white/15 text-white px-1.5 py-0.2 rounded truncate">
+                  <span className="text-xs font-bold bg-white/15 text-white px-1.5 py-0.5 rounded truncate">
                     {data.tripInfo || 'رحلة'}
                   </span>
                   {requestedSeats > 1 && (
-                    <span className="text-[8px] font-black bg-amber-400 text-slate-950 px-1.5 py-0.2 rounded-full">
+                    <span className="text-xs font-black bg-amber-400 text-slate-950 px-1.5 py-0.5 rounded-full">
                       {requestedSeats} مقاعد
                     </span>
                   )}
                 </div>
-                <div className="flex items-center gap-1.5 text-[10px] font-bold mt-0.5 truncate">
+                <div className="flex items-center gap-1.5 text-xs font-bold mt-0.5 truncate">
                   <span className={`truncate ${isDarkMode ? 'text-indigo-300' : statusColor}`}>{statusText}</span>
                   {sentTimeStr && (
-                    <span className="text-[9px] text-amber-300 flex items-center gap-0.5 shrink-0">
+                    <span className="text-xs text-amber-300 flex items-center gap-0.5 shrink-0">
                       • <Clock size={9} /> {sentTimeStr}
                     </span>
                   )}
                   {['in_progress_trip', 'moving'].includes(reqStatus) && (
-                    <span className="text-[9px] font-mono text-indigo-200 shrink-0">({liveTimer})</span>
+                    <span className="text-xs font-mono text-indigo-200 shrink-0">({liveTimer})</span>
                   )}
                 </div>
               </div>
@@ -255,61 +255,61 @@ export default function LiveTrackerBar({ activeTrackers, isDarkMode, setActiveCh
           <div className="flex gap-1.5 relative z-10 pt-2 border-t border-white/10 mt-2">
             {showCancelConfirm ? (
               <div className="w-full flex items-center gap-1.5 bg-rose-500/15 px-2 py-1 rounded-xl">
-                <span className="text-[10px] font-bold text-white flex-1">إلغاء طلب ({otherPersonDisplayName.split(' ')[0]})؟</span>
-                <button onClick={() => handleTripAction(data, 'cancel_request')} className="bg-rose-500 text-white px-2.5 py-1 rounded-lg text-[10px] font-bold">نعم</button>
-                <button onClick={() => setShowCancelConfirm(false)} className="bg-white/20 text-white px-2.5 py-1 rounded-lg text-[10px] font-bold">لا</button>
+                <span className="text-xs font-bold text-white flex-1">إلغاء طلب ({otherPersonDisplayName.split(' ')[0]})؟</span>
+                <button onClick={() => handleTripAction(data, 'cancel_request')} className="bg-rose-500 text-white px-2.5 py-1 rounded-lg text-xs font-bold">نعم</button>
+                <button onClick={() => setShowCancelConfirm(false)} className="bg-white/20 text-white px-2.5 py-1 rounded-lg text-xs font-bold">لا</button>
               </div>
             ) : (
               <>
                 {reqStatus === 'pending' && !isRequestSender && (
                   <>
-                    <button onClick={() => handleTripAction(data, 'accept')} className="flex-1 bg-emerald-500 hover:bg-emerald-600 text-white py-1.5 px-1.5 rounded-xl text-[10px] font-black flex items-center justify-center gap-1 shadow-sm">
+                    <button onClick={() => handleTripAction(data, 'accept')} className="flex-1 bg-emerald-500 hover:bg-emerald-600 text-white py-1.5 px-1.5 rounded-xl text-xs font-black flex items-center justify-center gap-1 shadow-sm">
                       <Check size={12} /> {hasNegotiationOffer ? `قبول بـ ${proposedPrice} ج` : `قبول (${senderDisplayName.split(' ')[0]})`}
                     </button>
                     {hasNegotiationOffer && originalPrice > 0 && (
-                      <button onClick={() => handleTripAction(data, 'accept_original_price')} className="flex-1 bg-amber-500 hover:bg-amber-600 text-slate-950 py-1.5 px-1.5 rounded-xl text-[10px] font-black flex items-center justify-center gap-1 shadow-sm">
+                      <button onClick={() => handleTripAction(data, 'accept_original_price')} className="flex-1 bg-amber-500 hover:bg-amber-600 text-slate-950 py-1.5 px-1.5 rounded-xl text-xs font-black flex items-center justify-center gap-1 shadow-sm">
                         الأصلي ({originalPrice} ج) 🔒
                       </button>
                     )}
-                    <button onClick={() => handleTripAction(data, 'reject')} className="px-3 bg-rose-500 hover:bg-rose-600 text-white py-1.5 rounded-xl text-[10px] font-black flex items-center justify-center gap-1">
+                    <button onClick={() => handleTripAction(data, 'reject')} className="px-3 bg-rose-500 hover:bg-rose-600 text-white py-1.5 rounded-xl text-xs font-black flex items-center justify-center gap-1">
                       <X size={12} /> رفض
                     </button>
                   </>
                 )}
 
                 {reqStatus === 'pending' && isRequestSender && (
-                  <button onClick={() => setShowCancelConfirm(true)} className="w-full bg-white/20 hover:bg-white/30 text-white py-1.5 rounded-xl text-[11px] font-black flex justify-center items-center gap-1">
+                  <button onClick={() => setShowCancelConfirm(true)} className="w-full bg-white/20 hover:bg-white/30 text-white py-1.5 rounded-xl text-xs font-black flex justify-center items-center gap-1">
                     <X size={12} /> إلغاء الطلب المرسل لـ ({otherPersonDisplayName.split(' ')[0]})
                   </button>
                 )}
 
                 {reqStatus === 'accepted' && isActualDriver && (
-                  <button onClick={() => handleTripAction(data, 'start_moving')} className={`w-full py-1.5 rounded-xl text-[11px] font-black shadow-sm ${isDarkMode ? 'bg-indigo-500 text-white' : 'bg-white text-indigo-600'}`}>
+                  <button onClick={() => handleTripAction(data, 'start_moving')} className={`w-full py-1.5 rounded-xl text-xs font-black shadow-sm ${isDarkMode ? 'bg-indigo-500 text-white' : 'bg-white text-indigo-600'}`}>
                     أنا في الطريق نحو ({otherPersonDisplayName.split(' ')[0]}) 🚙
                   </button>
                 )}
                 {reqStatus === 'moving' && isActualDriver && (
-                  <button onClick={() => handleTripAction(data, 'arrive')} className="w-full bg-orange-500 text-white py-1.5 rounded-xl text-[11px] font-black shadow-sm">
+                  <button onClick={() => handleTripAction(data, 'arrive')} className="w-full bg-amber-600 text-white py-1.5 rounded-xl text-xs font-black shadow-sm">
                     وصلت لنقطة الالتقاء 📍
                   </button>
                 )}
                 {reqStatus === 'arrived' && isActualDriver && (
-                  <button onClick={() => handleTripAction(data, 'start_trip')} className="w-full bg-emerald-500 text-white py-1.5 rounded-xl text-[11px] font-black shadow-sm">
+                  <button onClick={() => handleTripAction(data, 'start_trip')} className="w-full bg-emerald-500 text-white py-1.5 rounded-xl text-xs font-black shadow-sm">
                     بدء الرحلة رسمياً 🛣️
                   </button>
                 )}
                 {reqStatus === 'in_progress_trip' && isActualDriver && (
-                  <button onClick={() => handleTripAction(data, 'complete')} className="w-full bg-rose-600 text-white py-1.5 rounded-xl text-[11px] font-black shadow-sm">
+                  <button onClick={() => handleTripAction(data, 'complete')} className="w-full bg-rose-600 text-white py-1.5 rounded-xl text-xs font-black shadow-sm">
                     إنهاء الرحلة بنجاح ✅
                   </button>
                 )}
 
                 {['accepted'].includes(reqStatus) && !isActualDriver && (
-                  <button onClick={() => setShowCancelConfirm(true)} className="bg-rose-500/80 text-white px-2.5 py-1.5 rounded-xl text-[11px] font-black flex justify-center items-center" title="إلغاء"><X size={14} /></button>
+                  <button onClick={() => setShowCancelConfirm(true)} className="bg-rose-500/80 text-white px-2.5 py-1.5 rounded-xl text-xs font-black flex justify-center items-center" title="إلغاء"><X size={14} /></button>
                 )}
 
                 {!isActualDriver && ['accepted', 'moving', 'arrived', 'in_progress_trip'].includes(reqStatus) && (
-                  <button onClick={handleShareSafety} className={`flex-1 py-1.5 rounded-xl text-[11px] font-black flex justify-center items-center gap-1.5 ${isDarkMode ? 'bg-slate-800 text-white border border-slate-700' : 'bg-indigo-700 text-white'}`}>
+                  <button onClick={handleShareSafety} className={`flex-1 py-1.5 rounded-xl text-xs font-black flex justify-center items-center gap-1.5 ${isDarkMode ? 'bg-slate-800 text-white border border-slate-700' : 'bg-indigo-700 text-white'}`}>
                     <Share2 size={12} /> مشاركة للأمان
                   </button>
                 )}
